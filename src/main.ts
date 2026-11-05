@@ -1,25 +1,33 @@
 import { backend, isTauriEnvironment } from "./backend";
 import { BradbitCodeMirror } from "./editor/codemirror";
+import { renderMarkdownPreview } from "./editor/preview";
 import { t } from "./i18n";
 import {
   AppSettings,
   FileTreeNode,
   MenuCommand,
+  MenuUiState,
   OpenedFolder,
   OpenTab,
   RecentProject,
 } from "./types";
+import { copyTextToClipboard } from "./workspace/clipboard";
+import { createDocumentHeader } from "./workspace/documentHeader";
+import { MenuSyncQueue } from "./workspace/menuSync";
 import {
   buildMenuUiState,
   closeTabInState,
   countWordsAndChars,
   DEFAULT_SETTINGS,
   filterTreeNodes,
+  isMarkdownPath,
   isTabDirty,
   markTabSaved,
   openFileInTabs,
   renamePathInTabs,
+  resolveProjectLink,
   TabListState,
+  toggleTabViewMode,
   updateTabContent,
 } from "./workspace/state";
 
@@ -30,8 +38,14 @@ type ModalState =
   | { kind: "confirm-delete"; targetPath: string; error?: string }
   | { kind: "confirm-unsaved"; tabPath: string; tabName: string };
 
-/** Shortcuts handled by the native macOS menu when running inside Tauri. */
-const NATIVE_MENU_KEYS = new Set(["b", "s", "o", "n", "w", ",", "f"]);
+/** Shortcuts owned by the native menu when running inside Tauri. */
+const NATIVE_MENU_KEYS = new Set(["b", "i", "s", "o", "n", "w", ",", "f"]);
+
+function isNativeMenuShortcut(key: string, shift: boolean, alt: boolean): boolean {
+  if (key === "e") return shift;
+  if (key === "p") return alt;
+  return NATIVE_MENU_KEYS.has(key);
+}
 
 class BradbitApp {
   private settings: AppSettings = { ...DEFAULT_SETTINGS };
@@ -43,6 +57,21 @@ class BradbitApp {
   private sidebarWidth = 260;
   private modal: ModalState = { kind: "none" };
   private statusNotice = "";
+  private menuQueue = new MenuSyncQueue<MenuUiState>(
+    () => {
+      const activeTab = this.getActiveTab();
+      return buildMenuUiState({
+        settings: this.settings,
+        hasFolder: this.folder !== null,
+        hasActiveTab: activeTab !== null,
+        isMarkdown: activeTab ? isMarkdownPath(activeTab.path) : false,
+        previewMode: activeTab?.viewMode === "preview",
+        sidebarVisible: this.sidebarVisible,
+      });
+    },
+    (state) => backend.refreshMenu(state),
+    (err) => console.error("No se pudo actualizar el menú nativo", err),
+  );
 
   private rootEl: HTMLElement;
   private cmHostEl: HTMLElement | null = null;
@@ -266,24 +295,48 @@ class BradbitApp {
     this.render();
   }
 
-  private async syncMenu(): Promise<void> {
-    const activeTab = this.getActiveTab();
-    const state = buildMenuUiState({
-      settings: this.settings,
-      hasFolder: this.folder !== null,
-      hasActiveTab: activeTab !== null,
-      sidebarVisible: this.sidebarVisible,
-    });
-    try {
-      await backend.refreshMenu(state);
-    } catch (err) {
-      console.error("No se pudo actualizar el menú nativo", err);
-    }
+  private syncMenu(): void {
+    this.menuQueue.request();
   }
 
   private toggleSidebar(): void {
     this.sidebarVisible = !this.sidebarVisible;
     this.render();
+  }
+
+  private togglePreview(): void {
+    const active = this.getActiveTab();
+    if (!active || !isMarkdownPath(active.path)) return;
+    this.tabState = toggleTabViewMode(this.tabState, active.path);
+    this.render();
+    if (this.getActiveTab()?.viewMode === "edit") {
+      this.editor?.focus();
+    }
+  }
+
+  private ensureEditMode(): void {
+    if (this.getActiveTab()?.viewMode === "preview") {
+      this.togglePreview();
+    }
+  }
+
+  private async copyActiveDocument(): Promise<boolean> {
+    const active = this.getActiveTab();
+    if (!active) return false;
+    const copied = await copyTextToClipboard(active.content);
+    if (!copied) {
+      this.showStatusNotice(t(this.settings.language, "copyError"));
+    }
+    return copied;
+  }
+
+  private showStatusNotice(message: string): void {
+    this.statusNotice = message;
+    const active = this.getActiveTab();
+    const statusBar = this.rootEl.querySelector(".statusbar");
+    if (statusBar) {
+      statusBar.replaceWith(this.renderStatusbar(this.settings.language, active));
+    }
   }
 
   private performUndo(): void {
@@ -347,6 +400,14 @@ class BradbitApp {
       case "edit.redo":
         this.performRedo();
         break;
+      case "edit.bold":
+        this.ensureEditMode();
+        this.editor?.toggleBold();
+        break;
+      case "edit.italic":
+        this.ensureEditMode();
+        this.editor?.toggleItalic();
+        break;
       case "edit.find":
         this.editor?.openFindPanel();
         break;
@@ -355,6 +416,9 @@ class BradbitApp {
         break;
       case "view.toggleSidebar":
         this.toggleSidebar();
+        break;
+      case "view.togglePreview":
+        this.togglePreview();
         break;
       case "view.wordWrap":
         await this.updateSettings({ wordWrap: !this.settings.wordWrap });
@@ -375,36 +439,40 @@ class BradbitApp {
         return;
       }
       if (!mod) return;
+      if (e.defaultPrevented) return;
 
-      const key = e.key.toLowerCase();
-      if (isTauriEnvironment() && NATIVE_MENU_KEYS.has(key)) {
+      const letter = /^Key[A-Z]$/.test(e.code) ? e.code.slice(3).toLowerCase() : e.key.toLowerCase();
+      if (isTauriEnvironment() && isNativeMenuShortcut(letter, e.shiftKey, e.altKey)) {
         // On macOS the native menu owns these accelerators. Preventing the
         // webview default avoids running the command twice.
         e.preventDefault();
         return;
       }
-      if (key === "b") {
+      if (letter === "e" && e.shiftKey) {
         e.preventDefault();
         this.toggleSidebar();
-      } else if (key === "s") {
+      } else if (letter === "s") {
         e.preventDefault();
         void this.saveActiveTab();
-      } else if (key === "o") {
+      } else if (letter === "o") {
         e.preventDefault();
         void this.handleOpenFolderDialog();
-      } else if (key === "n" && this.folder) {
+      } else if (letter === "n" && this.folder) {
         e.preventDefault();
         this.openEntryModal("new-file");
-      } else if (key === "w" && this.tabState.activeTabPath) {
+      } else if (letter === "w" && this.tabState.activeTabPath) {
         e.preventDefault();
         this.requestCloseTab(this.tabState.activeTabPath);
-      } else if (key === ",") {
+      } else if (letter === ",") {
         e.preventDefault();
         this.modal = { kind: "settings" };
         this.render();
-      } else if (key === "f" && this.getActiveTab()) {
+      } else if (letter === "f" && this.getActiveTab()) {
         e.preventDefault();
         this.editor?.openFindPanel();
+      } else if (letter === "p" && e.altKey && this.getActiveTab()) {
+        e.preventDefault();
+        this.togglePreview();
       }
     });
   }
@@ -475,7 +543,7 @@ class BradbitApp {
     }
 
     // Keep native menu labels, check marks and enabled items aligned with the UI.
-    void this.syncMenu();
+    this.syncMenu();
   }
 
   /**
@@ -512,7 +580,7 @@ class BradbitApp {
     if (this.folder) {
       const toggleBtn = document.createElement("button");
       toggleBtn.className = "icon-btn";
-      toggleBtn.title = `${t(lang, "toggleSidebar")} (⌘B)`;
+      toggleBtn.title = `${t(lang, "toggleSidebar")} (⌘⇧E)`;
       toggleBtn.textContent = "☰";
       toggleBtn.onclick = () => this.toggleSidebar();
       left.appendChild(toggleBtn);
@@ -885,10 +953,30 @@ class BradbitApp {
       col.appendChild(tabsBar);
     }
 
+    if (activeTab) {
+      col.appendChild(
+        createDocumentHeader({
+          tab: activeTab,
+          language: lang,
+          onTogglePreview: () => this.togglePreview(),
+          onCopy: () => this.copyActiveDocument(),
+        }),
+      );
+    }
+
     const surface = document.createElement("div");
     surface.className = "editor-surface";
 
-    if (activeTab && this.cmHostEl) {
+    if (activeTab && isMarkdownPath(activeTab.path) && activeTab.viewMode === "preview") {
+      const preview = document.createElement("div");
+      preview.className = "markdown-preview";
+      const inner = document.createElement("div");
+      inner.className = "markdown-preview-inner";
+      inner.innerHTML = renderMarkdownPreview(activeTab.content);
+      preview.appendChild(inner);
+      preview.addEventListener("click", (e) => this.handlePreviewClick(e, activeTab));
+      surface.appendChild(preview);
+    } else if (activeTab && this.cmHostEl) {
       surface.appendChild(this.cmHostEl);
     } else {
       const empty = document.createElement("div");
@@ -903,6 +991,28 @@ class BradbitApp {
 
     col.appendChild(surface);
     return col;
+  }
+
+  private handlePreviewClick(event: MouseEvent, activeTab: OpenTab): void {
+    const anchor = (event.target as HTMLElement).closest("a");
+    if (!anchor) return;
+    const href = anchor.getAttribute("href");
+    if (!href) return;
+    if (href.startsWith("#")) return;
+
+    event.preventDefault();
+    if (/^(https?:|mailto:)/i.test(href)) {
+      void backend.openExternalUrl(href).catch((err) => {
+        console.error("No se pudo abrir el enlace", err);
+        this.showStatusNotice(t(this.settings.language, "linkOpenError"));
+      });
+      return;
+    }
+
+    const resolved = resolveProjectLink(activeTab.path, href);
+    if (resolved) {
+      void this.openFileFromTree(resolved, true);
+    }
   }
 
   private renderStatusbar(lang: AppSettings["language"], activeTab: OpenTab | null): HTMLElement {
@@ -922,6 +1032,13 @@ class BradbitApp {
       dirtySpan.className = `status-pill ${dirty ? "dirty" : "saved"}`;
       dirtySpan.textContent = dirty ? `● ${t(lang, "unsaved")}` : `✓ ${t(lang, "saved")}`;
       left.appendChild(dirtySpan);
+
+      if (this.statusNotice) {
+        const noticeSpan = document.createElement("span");
+        noticeSpan.className = "status-notice";
+        noticeSpan.textContent = this.statusNotice;
+        left.appendChild(noticeSpan);
+      }
     } else if (this.statusNotice) {
       const noticeSpan = document.createElement("span");
       noticeSpan.textContent = this.statusNotice;

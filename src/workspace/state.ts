@@ -88,6 +88,7 @@ export function openFileInTabs(
     preview: !pin,
     cursorLine: 1,
     cursorCol: 1,
+    viewMode: "edit",
   };
 
   if (!pin) {
@@ -201,19 +202,66 @@ export function countWordsAndChars(text: string): { words: number; chars: number
   };
 }
 
+export function isMarkdownPath(path: string): boolean {
+  return /\.(md|mdx)$/i.test(path);
+}
+
+export function toggleTabViewMode(state: TabListState, path: string): TabListState {
+  return {
+    ...state,
+    tabs: state.tabs.map((tab) => {
+      if (tab.path !== path || !isMarkdownPath(tab.path)) return tab;
+      return {
+        ...tab,
+        viewMode: tab.viewMode === "preview" ? "edit" : "preview",
+      };
+    }),
+  };
+}
+
+/**
+ * Resolves a relative link from a Markdown preview against the folder of the
+ * document that contains it. Returns null for absolute URLs, anchors or paths
+ * that escape the project root.
+ */
+export function resolveProjectLink(basePath: string, href: string): string | null {
+  const clean = href.split("#")[0].split("?")[0].trim();
+  if (!clean || clean.startsWith("/") || /^[a-z][a-z0-9+.-]*:/i.test(clean)) {
+    return null;
+  }
+
+  const baseParts = basePath.split("/").slice(0, -1);
+  const stack: string[] = [];
+  for (const part of [...baseParts, ...clean.split("/")]) {
+    if (!part || part === ".") continue;
+    if (part === "..") {
+      if (stack.length === 0) return null;
+      stack.pop();
+      continue;
+    }
+    stack.push(part);
+  }
+  return stack.length > 0 ? stack.join("/") : null;
+}
+
 export function buildMenuUiState(params: {
   settings: AppSettings;
   hasFolder: boolean;
   hasActiveTab: boolean;
+  isMarkdown: boolean;
+  previewMode: boolean;
   sidebarVisible: boolean;
 }): MenuUiState {
   return {
     language: params.settings.language,
     hasFolder: params.hasFolder,
     hasActiveTab: params.hasActiveTab,
+    isMarkdown: params.isMarkdown,
+    previewMode: params.previewMode,
     sidebarVisible: params.sidebarVisible,
     wordWrap: params.settings.wordWrap,
     lineNumbers: params.settings.lineNumbers,
   };
 }
+
 
