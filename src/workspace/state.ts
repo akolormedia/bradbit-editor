@@ -206,6 +206,10 @@ export function isMarkdownPath(path: string): boolean {
   return /\.(md|mdx)$/i.test(path);
 }
 
+export function isFountainPath(path: string): boolean {
+  return /\.(fountain|spmd)$/i.test(path);
+}
+
 export function toggleTabViewMode(state: TabListState, path: string): TabListState {
   return {
     ...state,
@@ -249,6 +253,7 @@ export function buildMenuUiState(params: {
   hasFolder: boolean;
   hasActiveTab: boolean;
   isMarkdown: boolean;
+  isFountain: boolean;
   previewMode: boolean;
   sidebarVisible: boolean;
 }): MenuUiState {
@@ -257,6 +262,7 @@ export function buildMenuUiState(params: {
     hasFolder: params.hasFolder,
     hasActiveTab: params.hasActiveTab,
     isMarkdown: params.isMarkdown,
+    isFountain: params.isFountain,
     previewMode: params.previewMode,
     sidebarVisible: params.sidebarVisible,
     wordWrap: params.settings.wordWrap,

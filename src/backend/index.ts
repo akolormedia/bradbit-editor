@@ -356,4 +356,19 @@ export const backend = {
     }
     window.open(url, "_blank", "noopener,noreferrer");
   },
+
+  async exportFountainPdf(
+    rootPath: string,
+    relPath: string,
+    content: string,
+  ): Promise<string> {
+    if (!isTauriEnvironment()) {
+      throw new Error("La exportación a PDF requiere la app de escritorio");
+    }
+    return tauriInvoke<string>("export_fountain_pdf", {
+      root: rootPath,
+      relPath,
+      content,
+    });
+  },
 };

@@ -1,3 +1,4 @@
+pub mod fountain;
 pub mod fs_ops;
 pub mod menu;
 pub mod settings;
@@ -5,6 +6,7 @@ pub mod settings;
 use fs_ops::{FileTreeNode, OpenedFolder};
 use menu::{MenuContext, MenuUiState};
 use settings::{AppSettings, RecentProject};
+use tauri_plugin_opener::OpenerExt;
 
 #[tauri::command]
 fn load_settings() -> Result<AppSettings, String> {
@@ -32,6 +34,20 @@ fn refresh_menu(app: tauri::AppHandle, state: MenuUiState) -> Result<(), String>
     let native_menu = menu::build_menu(&app, &state).map_err(|err| err.to_string())?;
     app.set_menu(native_menu).map_err(|err| err.to_string())?;
     Ok(())
+}
+
+#[tauri::command]
+fn export_fountain_pdf(
+    app: tauri::AppHandle,
+    root: String,
+    rel_path: String,
+    content: String,
+) -> Result<String, String> {
+    let output = fountain::export_to_project(&root, &rel_path, &content)?;
+    app.opener()
+        .open_path(&output, None::<&str>)
+        .map_err(|e| format!("PDF guardado en {} pero no se pudo abrir: {}", output, e))?;
+    Ok(output)
 }
 
 #[tauri::command]
@@ -98,6 +114,7 @@ pub fn run() {
             list_recent_projects,
             remove_recent_project,
             refresh_menu,
+            export_fountain_pdf,
             open_folder,
             list_directory_tree,
             read_text_file,
