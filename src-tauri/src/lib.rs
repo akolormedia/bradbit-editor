@@ -1,6 +1,7 @@
 pub mod fountain;
 pub mod fs_ops;
 pub mod menu;
+pub mod search;
 pub mod settings;
 
 use fs_ops::{FileTreeNode, OpenedFolder};
@@ -48,6 +49,16 @@ fn export_fountain_pdf(
         .open_path(&output, None::<&str>)
         .map_err(|e| format!("PDF guardado en {} pero no se pudo abrir: {}", output, e))?;
     Ok(output)
+}
+
+#[tauri::command]
+fn search_in_folder(
+    root: String,
+    query: String,
+    max_results: usize,
+    include_config: bool,
+) -> Result<Vec<search::SearchMatch>, String> {
+    search::search_in_folder(&root, &query, max_results, include_config)
 }
 
 #[tauri::command]
@@ -115,6 +126,7 @@ pub fn run() {
             remove_recent_project,
             refresh_menu,
             export_fountain_pdf,
+            search_in_folder,
             open_folder,
             list_directory_tree,
             read_text_file,

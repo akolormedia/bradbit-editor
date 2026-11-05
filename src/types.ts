@@ -60,3 +60,10 @@ export interface MenuCommand {
   id: string;
   path?: string;
 }
+
+export interface SearchMatch {
+  path: string;
+  line: number;
+  column: number;
+  snippet: string;
+}
