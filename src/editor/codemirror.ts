@@ -20,6 +20,8 @@ import {
 } from "@codemirror/language";
 import { tags } from "@lezer/highlight";
 import { AppSettings } from "../types";
+import { isMarkdownPath } from "../workspace/state";
+import { computeWrapEdit } from "./markdownFormat";
 
 /**
  * Lightweight Fountain stream highlighter for Story 1.1 (expanded in Story 1.2)
@@ -271,6 +273,25 @@ export class BradbitCodeMirror {
     cmRedo(this.view);
   }
 
+  public toggleBold(): void {
+    this.applyWrap("**");
+  }
+
+  public toggleItalic(): void {
+    this.applyWrap("*");
+  }
+
+  private applyWrap(marker: string): void {
+    if (!this.view) return;
+    const { from, to } = this.view.state.selection.main;
+    const edit = computeWrapEdit(this.view.state.doc.toString(), from, to, marker);
+    this.view.dispatch({
+      changes: edit.changes,
+      selection: edit.selection,
+    });
+    this.view.focus();
+  }
+
   public focus(): void {
     this.view?.focus();
   }
@@ -310,6 +331,24 @@ export class BradbitCodeMirror {
               return true;
             },
           },
+          ...(isMarkdownPath(path)
+            ? [
+                {
+                  key: "Mod-b",
+                  run: () => {
+                    this.toggleBold();
+                    return true;
+                  },
+                },
+                {
+                  key: "Mod-i",
+                  run: () => {
+                    this.toggleItalic();
+                    return true;
+                  },
+                },
+              ]
+            : []),
           indentWithTab,
           ...searchKeymap,
           ...historyKeymap,

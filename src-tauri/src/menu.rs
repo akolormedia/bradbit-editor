@@ -16,6 +16,8 @@ pub struct MenuUiState {
     pub language: String,
     pub has_folder: bool,
     pub has_active_tab: bool,
+    pub is_markdown: bool,
+    pub preview_mode: bool,
     pub sidebar_visible: bool,
     pub word_wrap: bool,
     pub line_numbers: bool,
@@ -27,6 +29,8 @@ impl Default for MenuUiState {
             language: "es".to_string(),
             has_folder: false,
             has_active_tab: false,
+            is_markdown: false,
+            preview_mode: false,
             sidebar_visible: true,
             word_wrap: true,
             line_numbers: false,
@@ -73,10 +77,13 @@ struct MenuLabels {
     copy: &'static str,
     paste: &'static str,
     select_all: &'static str,
+    bold: &'static str,
+    italic: &'static str,
     find: &'static str,
     find_replace: &'static str,
     view: &'static str,
     toggle_sidebar: &'static str,
+    preview: &'static str,
     word_wrap: &'static str,
     line_numbers: &'static str,
     fullscreen: &'static str,
@@ -110,10 +117,13 @@ impl MenuLabels {
                 copy: "Copy",
                 paste: "Paste",
                 select_all: "Select All",
+                bold: "Bold",
+                italic: "Italic",
                 find: "Find…",
                 find_replace: "Find and Replace…",
                 view: "View",
                 toggle_sidebar: "Toggle Explorer",
+                preview: "Preview",
                 word_wrap: "Word Wrap",
                 line_numbers: "Line Numbers",
                 fullscreen: "Enter Full Screen",
@@ -144,10 +154,13 @@ impl MenuLabels {
                 copy: "Copiar",
                 paste: "Pegar",
                 select_all: "Seleccionar todo",
+                bold: "Negrita",
+                italic: "Cursiva",
                 find: "Buscar…",
                 find_replace: "Buscar y reemplazar…",
                 view: "Visualización",
                 toggle_sidebar: "Mostrar u ocultar archivos",
+                preview: "Vista previa",
                 word_wrap: "Ajuste de línea",
                 line_numbers: "Números de línea",
                 fullscreen: "Pantalla completa",
@@ -178,9 +191,12 @@ pub fn is_known_command(id: &str) -> bool {
             | "file.closeTab"
             | "edit.undo"
             | "edit.redo"
+            | "edit.bold"
+            | "edit.italic"
             | "edit.find"
             | "edit.findReplace"
             | "view.toggleSidebar"
+            | "view.togglePreview"
             | "view.wordWrap"
             | "view.lineNumbers"
     )
@@ -194,8 +210,32 @@ pub fn command_enabled(state: &MenuUiState, id: &str) -> bool {
         "file.newFile" | "view.toggleSidebar" => state.has_folder,
         "file.save" | "file.closeTab" | "edit.undo" | "edit.redo" | "edit.find"
         | "edit.findReplace" => state.has_active_tab,
+        "edit.bold" | "edit.italic" | "view.togglePreview" => {
+            state.has_active_tab && state.is_markdown
+        }
         "view.wordWrap" | "view.lineNumbers" => true,
         _ => false,
+    }
+}
+
+/// Maps a macOS key equivalent (ignoring the Command modifier) to a native
+/// menu command. Kept pure so the shortcut contract is unit-testable.
+pub fn shortcut_command(key: &str, shift: bool, option: bool) -> Option<&'static str> {
+    match (key, shift, option) {
+        ("z", false, false) => Some("edit.undo"),
+        ("z", true, false) => Some("edit.redo"),
+        ("b", false, false) => Some("edit.bold"),
+        ("i", false, false) => Some("edit.italic"),
+        ("f", false, false) => Some("edit.find"),
+        ("f", false, true) => Some("edit.findReplace"),
+        ("p", false, true) => Some("view.togglePreview"),
+        ("e", true, false) => Some("view.toggleSidebar"),
+        ("s", false, false) => Some("file.save"),
+        ("o", false, false) => Some("file.openFolder"),
+        ("n", false, false) => Some("file.newFile"),
+        ("w", false, false) => Some("file.closeTab"),
+        (",", false, false) => Some("app.settings"),
+        _ => None,
     }
 }
 
@@ -298,6 +338,16 @@ pub fn build_menu<R: Runtime>(
         .accelerator("Shift+CmdOrCtrl+Z")
         .enabled(state.has_active_tab)
         .build(app)?;
+    let bold = MenuItemBuilder::new(labels.bold)
+        .id("edit.bold")
+        .accelerator("CmdOrCtrl+B")
+        .enabled(state.has_active_tab && state.is_markdown)
+        .build(app)?;
+    let italic = MenuItemBuilder::new(labels.italic)
+        .id("edit.italic")
+        .accelerator("CmdOrCtrl+I")
+        .enabled(state.has_active_tab && state.is_markdown)
+        .build(app)?;
     let cut = PredefinedMenuItem::cut(app, Some(labels.cut))?;
     let copy = PredefinedMenuItem::copy(app, Some(labels.copy))?;
     let paste = PredefinedMenuItem::paste(app, Some(labels.paste))?;
@@ -317,6 +367,9 @@ pub fn build_menu<R: Runtime>(
         .item(&undo)
         .item(&redo)
         .separator()
+        .item(&bold)
+        .item(&italic)
+        .separator()
         .item(&cut)
         .item(&copy)
         .item(&paste)
@@ -329,9 +382,15 @@ pub fn build_menu<R: Runtime>(
 
     let toggle_sidebar = CheckMenuItemBuilder::new(labels.toggle_sidebar)
         .id("view.toggleSidebar")
-        .accelerator("CmdOrCtrl+B")
+        .accelerator("Shift+CmdOrCtrl+E")
         .checked(state.sidebar_visible)
         .enabled(state.has_folder)
+        .build(app)?;
+    let toggle_preview = CheckMenuItemBuilder::new(labels.preview)
+        .id("view.togglePreview")
+        .accelerator("Alt+CmdOrCtrl+P")
+        .checked(state.has_active_tab && state.is_markdown && state.preview_mode)
+        .enabled(state.has_active_tab && state.is_markdown)
         .build(app)?;
     let word_wrap = CheckMenuItemBuilder::new(labels.word_wrap)
         .id("view.wordWrap")
@@ -346,6 +405,7 @@ pub fn build_menu<R: Runtime>(
     let view_menu = SubmenuBuilder::new(app, labels.view)
         .item(&toggle_sidebar)
         .separator()
+        .item(&toggle_preview)
         .item(&word_wrap)
         .item(&line_numbers)
         .separator()
@@ -395,18 +455,8 @@ pub fn install_shortcut_monitor<R: Runtime>(app: &AppHandle<R>) {
         let key = characters.to_string().to_lowercase();
         let shift = modifiers.contains(NSEventModifierFlags::Shift);
         let option = modifiers.contains(NSEventModifierFlags::Option);
-        let id = match (key.as_str(), shift, option) {
-            ("z", false, false) => "edit.undo",
-            ("z", true, false) => "edit.redo",
-            ("f", false, false) => "edit.find",
-            ("f", false, true) => "edit.findReplace",
-            ("b", false, false) => "view.toggleSidebar",
-            ("s", false, false) => "file.save",
-            ("o", false, false) => "file.openFolder",
-            ("n", false, false) => "file.newFile",
-            ("w", false, false) => "file.closeTab",
-            (",", false, false) => "app.settings",
-            _ => return event.as_ptr(),
+        let Some(id) = shortcut_command(&key, shift, option) else {
+            return event.as_ptr();
         };
 
         let state = app
@@ -486,6 +536,9 @@ mod tests {
     fn known_commands_exclude_predefined_items() {
         assert!(is_known_command("file.save"));
         assert!(is_known_command("edit.findReplace"));
+        assert!(is_known_command("edit.bold"));
+        assert!(is_known_command("edit.italic"));
+        assert!(is_known_command("view.togglePreview"));
         assert!(is_known_command("view.lineNumbers"));
         assert!(!is_known_command("copy"));
         assert!(!is_known_command("file.recent.0"));
@@ -500,9 +553,15 @@ mod tests {
         assert_eq!(es.file, "Archivo");
         assert_eq!(es.edit, "Edición");
         assert_eq!(es.view, "Visualización");
+        assert_eq!(es.bold, "Negrita");
+        assert_eq!(es.italic, "Cursiva");
+        assert_eq!(es.preview, "Vista previa");
         assert_eq!(en.file, "File");
         assert_eq!(en.edit, "Edit");
         assert_eq!(en.view, "View");
+        assert_eq!(en.bold, "Bold");
+        assert_eq!(en.italic, "Italic");
+        assert_eq!(en.preview, "Preview");
     }
 
     #[test]
@@ -511,6 +570,8 @@ mod tests {
         assert_eq!(state.language, "es");
         assert!(!state.has_folder);
         assert!(!state.has_active_tab);
+        assert!(!state.is_markdown);
+        assert!(!state.preview_mode);
         assert!(state.sidebar_visible);
     }
 
@@ -522,6 +583,8 @@ mod tests {
         assert!(!command_enabled(&state, "file.newFile"));
         assert!(!command_enabled(&state, "file.save"));
         assert!(!command_enabled(&state, "view.toggleSidebar"));
+        assert!(!command_enabled(&state, "edit.bold"));
+        assert!(!command_enabled(&state, "view.togglePreview"));
 
         state.has_folder = true;
         assert!(command_enabled(&state, "file.newFile"));
@@ -532,6 +595,34 @@ mod tests {
         assert!(command_enabled(&state, "file.save"));
         assert!(command_enabled(&state, "file.closeTab"));
         assert!(command_enabled(&state, "edit.find"));
+        assert!(!command_enabled(&state, "edit.bold"));
+        assert!(!command_enabled(&state, "view.togglePreview"));
+
+        state.is_markdown = true;
+        assert!(command_enabled(&state, "edit.bold"));
+        assert!(command_enabled(&state, "edit.italic"));
+        assert!(command_enabled(&state, "view.togglePreview"));
         assert!(!command_enabled(&state, "unknown.command"));
+    }
+
+    #[test]
+    fn shortcut_map_uses_markdown_and_writing_shortcuts() {
+        assert_eq!(shortcut_command("b", false, false), Some("edit.bold"));
+        assert_eq!(shortcut_command("i", false, false), Some("edit.italic"));
+        assert_eq!(
+            shortcut_command("e", true, false),
+            Some("view.toggleSidebar")
+        );
+        assert_eq!(
+            shortcut_command("p", false, true),
+            Some("view.togglePreview")
+        );
+        assert_eq!(shortcut_command("z", false, false), Some("edit.undo"));
+        assert_eq!(shortcut_command("z", true, false), Some("edit.redo"));
+        assert_eq!(shortcut_command("s", false, false), Some("file.save"));
+        assert_eq!(shortcut_command("f", false, true), Some("edit.findReplace"));
+        assert_eq!(shortcut_command("b", true, false), None);
+        assert_eq!(shortcut_command("e", false, false), None);
+        assert_eq!(shortcut_command("p", false, false), None);
     }
 }

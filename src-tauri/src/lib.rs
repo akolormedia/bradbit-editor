@@ -75,6 +75,7 @@ fn delete_entry(root: String, rel_path: String) -> Result<(), String> {
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_opener::init())
         .manage(MenuContext::default())
         .setup(|app| {
             let settings = settings::load_settings().unwrap_or_default();

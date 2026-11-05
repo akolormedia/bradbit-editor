@@ -31,6 +31,8 @@ export interface RecentProject {
   lastOpened: string;
 }
 
+export type TabViewMode = "edit" | "preview";
+
 export interface OpenTab {
   path: string;
   name: string;
@@ -39,12 +41,15 @@ export interface OpenTab {
   preview: boolean;
   cursorLine: number;
   cursorCol: number;
+  viewMode: TabViewMode;
 }
 
 export interface MenuUiState {
   language: Language;
   hasFolder: boolean;
   hasActiveTab: boolean;
+  isMarkdown: boolean;
+  previewMode: boolean;
   sidebarVisible: boolean;
   wordWrap: boolean;
   lineNumbers: boolean;

@@ -5,11 +5,14 @@ import {
   countWordsAndChars,
   DEFAULT_SETTINGS,
   filterTreeNodes,
+  isMarkdownPath,
   isTabDirty,
   markTabSaved,
   openFileInTabs,
   renamePathInTabs,
+  resolveProjectLink,
   TabListState,
+  toggleTabViewMode,
   updateTabContent,
 } from "./state";
 import { FileTreeNode } from "../types";
@@ -106,15 +109,73 @@ describe("workspace tab state (Story 1.1)", () => {
       settings: { ...DEFAULT_SETTINGS, language: "en", lineNumbers: true },
       hasFolder: true,
       hasActiveTab: false,
+      isMarkdown: false,
+      previewMode: false,
       sidebarVisible: false,
     });
     expect(menuState).toEqual({
       language: "en",
       hasFolder: true,
       hasActiveTab: false,
+      isMarkdown: false,
+      previewMode: false,
       sidebarVisible: false,
       wordWrap: true,
       lineNumbers: true,
     });
+  });
+
+  it("toggles preview mode per Markdown tab and ignores non-Markdown files (T-1.2.1)", () => {
+    let state: TabListState = { tabs: [], activeTabPath: null };
+    state = openFileInTabs(
+      state,
+      { path: "biblia/premisa.md", name: "premisa.md", content: "# Premisa" },
+      true,
+    );
+    state = openFileInTabs(
+      state,
+      { path: "guion/acto-1.fountain", name: "acto-1.fountain", content: "INT. CASA" },
+      true,
+    );
+
+    expect(state.tabs[0].viewMode).toBe("edit");
+    state = toggleTabViewMode(state, "biblia/premisa.md");
+    expect(state.tabs[0].viewMode).toBe("preview");
+    expect(state.tabs[1].viewMode).toBe("edit");
+
+    // Non-Markdown tabs never switch to preview.
+    state = toggleTabViewMode(state, "guion/acto-1.fountain");
+    expect(state.tabs[1].viewMode).toBe("edit");
+
+    // Each tab remembers its own view mode.
+    state = { ...state, activeTabPath: "guion/acto-1.fountain" };
+    state = { ...state, activeTabPath: "biblia/premisa.md" };
+    expect(state.tabs[0].viewMode).toBe("preview");
+
+    state = toggleTabViewMode(state, "biblia/premisa.md");
+    expect(state.tabs[0].viewMode).toBe("edit");
+  });
+
+  it("detects Markdown and MDX paths case-insensitively (T-1.2.1)", () => {
+    expect(isMarkdownPath("biblia/premisa.md")).toBe(true);
+    expect(isMarkdownPath("notas/ideas.MDX")).toBe(true);
+    expect(isMarkdownPath("guion/acto.fountain")).toBe(false);
+    expect(isMarkdownPath("README.txt")).toBe(false);
+  });
+
+  it("resolves relative preview links against the document folder (T-1.2.1)", () => {
+    expect(resolveProjectLink("biblia/personajes/ana.md", "../premisa.md")).toBe(
+      "biblia/premisa.md",
+    );
+    expect(resolveProjectLink("notas/ideas.md", "guion/acto-1.fountain")).toBe(
+      "notas/guion/acto-1.fountain",
+    );
+    expect(resolveProjectLink("README.md", "biblia/premisa.md#intro")).toBe(
+      "biblia/premisa.md",
+    );
+    expect(resolveProjectLink("README.md", "https://example.com")).toBeNull();
+    expect(resolveProjectLink("README.md", "#seccion")).toBeNull();
+    expect(resolveProjectLink("README.md", "/etc/passwd")).toBeNull();
+    expect(resolveProjectLink("README.md", "../../fuera.md")).toBeNull();
   });
 });

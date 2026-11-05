@@ -347,4 +347,13 @@ export const backend = {
     const { listen } = await import("@tauri-apps/api/event");
     return listen<MenuCommand>("bradbit-menu", (event) => handler(event.payload));
   },
+
+  async openExternalUrl(url: string): Promise<void> {
+    if (isTauriEnvironment()) {
+      const { openUrl } = await import("@tauri-apps/plugin-opener");
+      await openUrl(url);
+      return;
+    }
+    window.open(url, "_blank", "noopener,noreferrer");
+  },
 };
