@@ -1,4 +1,12 @@
-import { AppSettings, FileTreeNode, MenuCommand, MenuUiState, OpenedFolder, RecentProject } from "../types";
+import {
+  AppSettings,
+  FileTreeNode,
+  MenuCommand,
+  MenuUiState,
+  OpenedFolder,
+  RecentProject,
+  SearchMatch,
+} from "../types";
 import { DEFAULT_SETTINGS, isAlwaysHiddenEntry, isConfigEntry } from "../workspace/state";
 
 declare global {
@@ -371,4 +379,58 @@ export const backend = {
       content,
     });
   },
+
+  async searchInFolder(
+    rootPath: string,
+    query: string,
+    maxResults = 200,
+    includeConfig = false,
+  ): Promise<SearchMatch[]> {
+    if (isTauriEnvironment()) {
+      return tauriInvoke<SearchMatch[]>("search_in_folder", {
+        root: rootPath,
+        query,
+        maxResults,
+        includeConfig,
+      });
+    }
+
+    const needle = query.trim().toLowerCase();
+    if (needle.length === 0) return [];
+    const results: SearchMatch[] = [];
+    for (const [path, content] of Object.entries(activeVirtualFs.files)) {
+      if (!includeConfig && isConfigSearchPath(path)) continue;
+      const lines = content.split(/\r?\n/);
+      for (let index = 0; index < lines.length; index += 1) {
+        const line = lines[index];
+        const matchIndex = line.toLowerCase().indexOf(needle);
+        if (matchIndex < 0) continue;
+        results.push({
+          path,
+          line: index + 1,
+          column: line.slice(0, matchIndex).length + 1,
+          snippet: line.trim().slice(0, 240),
+        });
+        if (results.length >= maxResults) break;
+      }
+      if (results.length >= maxResults) break;
+    }
+    return results.sort((a, b) =>
+      a.path < b.path ? -1 : a.path > b.path ? 1 : a.line - b.line,
+    );
+  },
 };
+
+function isConfigSearchPath(path: string): boolean {
+  return (
+    path.startsWith(".opencode/") ||
+    path.startsWith(".bradbit/") ||
+    path.startsWith(".narra/") ||
+    path === "AGENTS.md" ||
+    path === "CLAUDE.md" ||
+    path === ".gitignore" ||
+    path.endsWith("/AGENTS.md") ||
+    path.endsWith("/CLAUDE.md") ||
+    path.endsWith("/.gitignore")
+  );
+}

@@ -72,6 +72,7 @@ struct MenuLabels {
     new_file: &'static str,
     save: &'static str,
     export_pdf: &'static str,
+    quick_open: &'static str,
     close_tab: &'static str,
     edit: &'static str,
     undo: &'static str,
@@ -84,6 +85,7 @@ struct MenuLabels {
     italic: &'static str,
     find: &'static str,
     find_replace: &'static str,
+    find_in_project: &'static str,
     view: &'static str,
     toggle_sidebar: &'static str,
     preview: &'static str,
@@ -113,6 +115,7 @@ impl MenuLabels {
                 new_file: "New File",
                 save: "Save",
                 export_pdf: "Export PDF…",
+                quick_open: "Quick Open…",
                 close_tab: "Close Tab",
                 edit: "Edit",
                 undo: "Undo",
@@ -125,6 +128,7 @@ impl MenuLabels {
                 italic: "Italic",
                 find: "Find…",
                 find_replace: "Find and Replace…",
+                find_in_project: "Find in Project…",
                 view: "View",
                 toggle_sidebar: "Toggle Explorer",
                 preview: "Preview",
@@ -151,6 +155,7 @@ impl MenuLabels {
                 new_file: "Nuevo archivo",
                 save: "Guardar",
                 export_pdf: "Exportar PDF…",
+                quick_open: "Apertura rápida…",
                 close_tab: "Cerrar pestaña",
                 edit: "Edición",
                 undo: "Deshacer",
@@ -163,6 +168,7 @@ impl MenuLabels {
                 italic: "Cursiva",
                 find: "Buscar…",
                 find_replace: "Buscar y reemplazar…",
+                find_in_project: "Buscar en proyecto…",
                 view: "Visualización",
                 toggle_sidebar: "Mostrar u ocultar archivos",
                 preview: "Vista previa",
@@ -194,6 +200,7 @@ pub fn is_known_command(id: &str) -> bool {
             | "file.newFile"
             | "file.save"
             | "file.exportPdf"
+            | "file.quickOpen"
             | "file.closeTab"
             | "edit.undo"
             | "edit.redo"
@@ -201,6 +208,7 @@ pub fn is_known_command(id: &str) -> bool {
             | "edit.italic"
             | "edit.find"
             | "edit.findReplace"
+            | "edit.findInProject"
             | "view.toggleSidebar"
             | "view.togglePreview"
             | "view.wordWrap"
@@ -213,7 +221,9 @@ pub fn is_known_command(id: &str) -> bool {
 pub fn command_enabled(state: &MenuUiState, id: &str) -> bool {
     match id {
         "app.settings" | "file.openFolder" => true,
-        "file.newFile" | "view.toggleSidebar" => state.has_folder,
+        "file.newFile" | "file.quickOpen" | "edit.findInProject" | "view.toggleSidebar" => {
+            state.has_folder
+        }
         "file.save" | "file.closeTab" | "edit.undo" | "edit.redo" | "edit.find"
         | "edit.findReplace" => state.has_active_tab,
         "file.exportPdf" => state.has_active_tab && state.is_fountain,
@@ -234,7 +244,9 @@ pub fn shortcut_command(key: &str, shift: bool, option: bool) -> Option<&'static
         ("b", false, false) => Some("edit.bold"),
         ("i", false, false) => Some("edit.italic"),
         ("f", false, false) => Some("edit.find"),
+        ("f", true, false) => Some("edit.findInProject"),
         ("f", false, true) => Some("edit.findReplace"),
+        ("p", false, false) => Some("file.quickOpen"),
         ("p", false, true) => Some("view.togglePreview"),
         ("e", true, false) => Some("view.toggleSidebar"),
         ("s", false, false) => Some("file.save"),
@@ -304,6 +316,11 @@ pub fn build_menu<R: Runtime>(
         .accelerator("CmdOrCtrl+N")
         .enabled(state.has_folder)
         .build(app)?;
+    let quick_open = MenuItemBuilder::new(labels.quick_open)
+        .id("file.quickOpen")
+        .accelerator("CmdOrCtrl+P")
+        .enabled(state.has_folder)
+        .build(app)?;
     let save = MenuItemBuilder::new(labels.save)
         .id("file.save")
         .accelerator("CmdOrCtrl+S")
@@ -333,6 +350,8 @@ pub fn build_menu<R: Runtime>(
         file_menu = file_menu.item(&recent_submenu);
     }
     let file_menu = file_menu
+        .separator()
+        .item(&quick_open)
         .separator()
         .item(&new_file)
         .item(&save)
@@ -376,6 +395,11 @@ pub fn build_menu<R: Runtime>(
         .accelerator("Alt+CmdOrCtrl+F")
         .enabled(state.has_active_tab)
         .build(app)?;
+    let find_in_project = MenuItemBuilder::new(labels.find_in_project)
+        .id("edit.findInProject")
+        .accelerator("Shift+CmdOrCtrl+F")
+        .enabled(state.has_folder)
+        .build(app)?;
 
     let edit_menu = SubmenuBuilder::new(app, labels.edit)
         .item(&undo)
@@ -391,6 +415,7 @@ pub fn build_menu<R: Runtime>(
         .separator()
         .item(&find)
         .item(&find_replace)
+        .item(&find_in_project)
         .build()?;
     menu = menu.item(&edit_menu);
 
@@ -550,6 +575,8 @@ mod tests {
     fn known_commands_exclude_predefined_items() {
         assert!(is_known_command("file.save"));
         assert!(is_known_command("file.exportPdf"));
+        assert!(is_known_command("file.quickOpen"));
+        assert!(is_known_command("edit.findInProject"));
         assert!(is_known_command("edit.findReplace"));
         assert!(is_known_command("edit.bold"));
         assert!(is_known_command("edit.italic"));
@@ -572,6 +599,8 @@ mod tests {
         assert_eq!(es.italic, "Cursiva");
         assert_eq!(es.preview, "Vista previa");
         assert_eq!(es.export_pdf, "Exportar PDF…");
+        assert_eq!(es.quick_open, "Apertura rápida…");
+        assert_eq!(es.find_in_project, "Buscar en proyecto…");
         assert_eq!(en.file, "File");
         assert_eq!(en.edit, "Edit");
         assert_eq!(en.view, "View");
@@ -579,6 +608,8 @@ mod tests {
         assert_eq!(en.italic, "Italic");
         assert_eq!(en.preview, "Preview");
         assert_eq!(en.export_pdf, "Export PDF…");
+        assert_eq!(en.quick_open, "Quick Open…");
+        assert_eq!(en.find_in_project, "Find in Project…");
     }
 
     #[test]
@@ -600,12 +631,16 @@ mod tests {
         assert!(command_enabled(&state, "app.settings"));
         assert!(!command_enabled(&state, "file.newFile"));
         assert!(!command_enabled(&state, "file.save"));
+        assert!(!command_enabled(&state, "file.quickOpen"));
+        assert!(!command_enabled(&state, "edit.findInProject"));
         assert!(!command_enabled(&state, "view.toggleSidebar"));
         assert!(!command_enabled(&state, "edit.bold"));
         assert!(!command_enabled(&state, "view.togglePreview"));
 
         state.has_folder = true;
         assert!(command_enabled(&state, "file.newFile"));
+        assert!(command_enabled(&state, "file.quickOpen"));
+        assert!(command_enabled(&state, "edit.findInProject"));
         assert!(command_enabled(&state, "view.toggleSidebar"));
         assert!(!command_enabled(&state, "file.save"));
 
@@ -645,7 +680,12 @@ mod tests {
         assert_eq!(shortcut_command("s", false, false), Some("file.save"));
         assert_eq!(shortcut_command("e", false, false), Some("file.exportPdf"));
         assert_eq!(shortcut_command("f", false, true), Some("edit.findReplace"));
+        assert_eq!(
+            shortcut_command("f", true, false),
+            Some("edit.findInProject")
+        );
+        assert_eq!(shortcut_command("p", false, false), Some("file.quickOpen"));
         assert_eq!(shortcut_command("b", true, false), None);
-        assert_eq!(shortcut_command("p", false, false), None);
+        assert_eq!(shortcut_command("p", true, false), None);
     }
 }

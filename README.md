@@ -5,8 +5,8 @@ Editor de texto de escritorio agnóstico para escritura creativa (`.md`, `.mdx`,
 ## Características (Stories 1.1–1.2)
 
 - **Menú nativo de macOS (`Story 1.1.1`):** La barra superior del sistema incluye **Bradbit Editor, Archivo, Edición, Visualización y Ventana**:
-  - *Archivo:* Abrir carpeta (`⌘O`), Abrir reciente, Nuevo archivo (`⌘N`), Guardar (`⌘S`), Exportar PDF (`⌘E`) y Cerrar pestaña (`⌘W`).
-  - *Edición:* Deshacer/Rehacer conectados al historial de cada pestaña, Negrita (`⌘B`) y Cursiva (`⌘I`) en Markdown/MDX, Cortar/Copiar/Pegar/Seleccionar todo, Buscar (`⌘F`) y Buscar y reemplazar (`⌥⌘F`).
+  - *Archivo:* Abrir carpeta (`⌘O`), Abrir reciente, Apertura rápida (`⌘P`), Nuevo archivo (`⌘N`), Guardar (`⌘S`), Exportar PDF (`⌘E`) y Cerrar pestaña (`⌘W`).
+  - *Edición:* Deshacer/Rehacer conectados al historial de cada pestaña, Negrita (`⌘B`) y Cursiva (`⌘I`) en Markdown/MDX, Cortar/Copiar/Pegar/Seleccionar todo, Buscar (`⌘F`), Buscar y reemplazar (`⌥⌘F`) y Buscar en proyecto (`⌘⇧F`).
   - *Visualización:* Mostrar/ocultar explorador (`⌘⇧E`), Vista previa (`⌘⌥P`), Ajuste de línea, Números de línea y Pantalla completa.
   - *Ventana:* Minimizar, Zoom y Traer todo al frente.
   - Los ítems se habilitan, deshabilitan y marcan según el estado real, y las etiquetas cambian con el idioma.
@@ -20,6 +20,10 @@ Editor de texto de escritorio agnóstico para escritura creativa (`.md`, `.mdx`,
   - En Markdown/MDX: encabezados (`#`, `##`, `###`…) clicables que saltan a la línea exacta.
   - En Fountain: secciones (`# Acto`) y escenas (`INT.`, `EXT.`, `I/E.`, `.forzada`) con jerarquía y conteo estimado de páginas (`~N páginas`).
   - Se actualiza automáticamente al escribir y funciona también desde la vista previa (al hacer clic vuelve a edición y salta a la línea).
+- **Búsqueda y navegación rápida (`T-1.2.4`):**
+  - **Apertura rápida (`⌘P`):** paleta que filtra cualquier archivo del proyecto por nombre o ruta y lo abre con Enter.
+  - **Buscar en proyecto (`⌘⇧F`):** búsqueda de texto en todos los archivos con resultados `ruta:línea` y fragmento; Enter abre el archivo en la línea exacta.
+  - Ambas paletas respetan el ajuste *Mostrar archivos de configuración* y funcionan con navegación por teclado (`↑↓`, Enter, Esc).
 - **Pestañas inteligentes:**
   - Un clic abre en modo *preview* (cursiva); doble clic o editar fija la pestaña.
   - Indicador de cambios sin guardar (`•`), cierre seguro con confirmación (`⌘W`) y guardado atómico en disco (`⌘S`).

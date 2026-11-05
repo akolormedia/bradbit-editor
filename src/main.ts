@@ -10,11 +10,14 @@ import {
   OpenedFolder,
   OpenTab,
   RecentProject,
+  SearchMatch,
 } from "./types";
 import { copyTextToClipboard } from "./workspace/clipboard";
 import { createDocumentHeader } from "./workspace/documentHeader";
 import { MenuSyncQueue } from "./workspace/menuSync";
 import { extractOutline, OutlineItem } from "./workspace/outline";
+import { flattenFileTree } from "./workspace/quickOpen";
+import { SearchPalette } from "./workspace/searchPalette";
 import {
   buildMenuUiState,
   closeTabInState,
@@ -36,6 +39,8 @@ import {
 type ModalState =
   | { kind: "none" }
   | { kind: "settings" }
+  | { kind: "quick-open" }
+  | { kind: "global-search" }
   | { kind: "entry-input"; mode: "new-file" | "new-folder" | "rename"; targetPath: string; value: string; error?: string }
   | { kind: "confirm-delete"; targetPath: string; error?: string }
   | { kind: "confirm-unsaved"; tabPath: string; tabName: string };
@@ -43,9 +48,9 @@ type ModalState =
 /** Shortcuts owned by the native menu when running inside Tauri. */
 const NATIVE_MENU_KEYS = new Set(["b", "i", "s", "o", "n", "w", ",", "f"]);
 
-function isNativeMenuShortcut(key: string, _shift: boolean, alt: boolean): boolean {
+function isNativeMenuShortcut(key: string, _shift: boolean, _alt: boolean): boolean {
   if (key === "e") return true;
-  if (key === "p") return alt;
+  if (key === "p") return true;
   return NATIVE_MENU_KEYS.has(key);
 }
 
@@ -325,6 +330,38 @@ class BradbitApp {
     }
   }
 
+  private openQuickOpen(): void {
+    if (!this.folder) return;
+    this.modal = { kind: "quick-open" };
+    this.render();
+  }
+
+  private openGlobalSearch(): void {
+    if (!this.folder) return;
+    this.modal = { kind: "global-search" };
+    this.render();
+  }
+
+  private closeModal(): void {
+    this.modal = { kind: "none" };
+    this.render();
+  }
+
+  private openQuickFile(path: string): void {
+    this.modal = { kind: "none" };
+    void this.openFileFromTree(path, true);
+  }
+
+  private openSearchMatch(match: SearchMatch): void {
+    this.modal = { kind: "none" };
+    void this.openFileAtLine(match.path, match.line);
+  }
+
+  private async openFileAtLine(path: string, line: number): Promise<void> {
+    await this.openFileFromTree(path, true);
+    this.editor?.gotoLine(line);
+  }
+
   private async copyActiveDocument(): Promise<boolean> {
     const active = this.getActiveTab();
     if (!active) return false;
@@ -416,6 +453,9 @@ class BradbitApp {
       case "file.exportPdf":
         await this.exportActiveFountainPdf();
         break;
+      case "file.quickOpen":
+        this.openQuickOpen();
+        break;
       case "file.closeTab":
         if (this.tabState.activeTabPath) {
           this.requestCloseTab(this.tabState.activeTabPath);
@@ -440,6 +480,9 @@ class BradbitApp {
         break;
       case "edit.findReplace":
         this.editor?.openReplacePanel();
+        break;
+      case "edit.findInProject":
+        this.openGlobalSearch();
         break;
       case "view.toggleSidebar":
         this.toggleSidebar();
@@ -494,12 +537,18 @@ class BradbitApp {
         e.preventDefault();
         this.modal = { kind: "settings" };
         this.render();
+      } else if (letter === "f" && e.shiftKey) {
+        e.preventDefault();
+        this.openGlobalSearch();
       } else if (letter === "f" && this.getActiveTab()) {
         e.preventDefault();
         this.editor?.openFindPanel();
       } else if (letter === "p" && e.altKey && this.getActiveTab()) {
         e.preventDefault();
         this.togglePreview();
+      } else if (letter === "p") {
+        e.preventDefault();
+        this.openQuickOpen();
       }
     });
   }
@@ -1340,6 +1389,38 @@ class BradbitApp {
       footer.appendChild(closeBtn);
 
       dialog.append(langRow, themeRow, fontRow, wrapRow, lnRow, cfgRow, footer);
+    } else if (this.modal.kind === "quick-open" || this.modal.kind === "global-search") {
+      backdrop.classList.add("palette-backdrop");
+      dialog.classList.add("search-palette-dialog");
+
+      const files = this.folder
+        ? flattenFileTree(filterTreeNodes(this.folder.tree, this.settings.showConfigFiles))
+        : [];
+      const palette =
+        this.modal.kind === "quick-open"
+          ? new SearchPalette({
+              mode: "files",
+              language: lang,
+              files,
+              onOpenFile: (path) => this.openQuickFile(path),
+              onClose: () => this.closeModal(),
+            })
+          : new SearchPalette({
+              mode: "content",
+              language: lang,
+              search: (query) =>
+                this.folder
+                  ? backend.searchInFolder(
+                      this.folder.rootPath,
+                      query,
+                      200,
+                      this.settings.showConfigFiles,
+                    )
+                  : Promise.resolve([]),
+              onOpenMatch: (match) => this.openSearchMatch(match),
+              onClose: () => this.closeModal(),
+            });
+      dialog.appendChild(palette.element());
     } else if (this.modal.kind === "entry-input") {
       const modalState = this.modal;
       const h3 = document.createElement("h3");
