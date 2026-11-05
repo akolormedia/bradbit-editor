@@ -189,10 +189,124 @@ body,
   gap: 2px;
 }
 
+.sidebar-tabs {
+  display: flex;
+  gap: 4px;
+  padding: 6px 8px;
+  border-bottom: 1px solid var(--border-color);
+  flex-shrink: 0;
+}
+
+.sidebar-tab {
+  flex: 1;
+  padding: 5px 8px;
+  border: none;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--text-muted);
+  font-family: var(--font-ui);
+  font-size: 11.5px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.12s, color 0.12s;
+}
+
+.sidebar-tab:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+
+.sidebar-tab.active {
+  background: var(--bg-active);
+  color: var(--text-primary);
+}
+
 .tree-container {
   flex: 1;
   overflow-y: auto;
   padding: 6px 4px 16px 4px;
+}
+
+.outline-container {
+  flex: 1;
+  overflow-y: auto;
+  padding: 6px 6px 20px 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.outline-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  padding: 5px 8px;
+  border: none;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--text-secondary);
+  font-family: var(--font-ui);
+  font-size: 12px;
+  text-align: left;
+  cursor: pointer;
+  overflow: hidden;
+  white-space: nowrap;
+}
+
+.outline-item:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+
+.outline-icon {
+  flex-shrink: 0;
+  font-size: 10.5px;
+  opacity: 0.75;
+}
+
+.outline-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.outline-level-1 {
+  padding-left: 8px;
+}
+
+.outline-level-2 {
+  padding-left: 20px;
+}
+
+.outline-level-3 {
+  padding-left: 32px;
+}
+
+.outline-level-4 {
+  padding-left: 44px;
+}
+
+.outline-level-5 {
+  padding-left: 56px;
+}
+
+.outline-level-6 {
+  padding-left: 68px;
+}
+
+.outline-pages {
+  margin-top: auto;
+  padding: 10px 8px 4px;
+  border-top: 1px solid var(--border-color);
+  color: var(--text-muted);
+  font-size: 11px;
+}
+
+.outline-empty {
+  padding: 16px 12px;
+  color: var(--text-muted);
+  font-size: 12px;
+  line-height: 1.5;
 }
 
 .tree-row {

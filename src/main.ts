@@ -14,6 +14,7 @@ import {
 import { copyTextToClipboard } from "./workspace/clipboard";
 import { createDocumentHeader } from "./workspace/documentHeader";
 import { MenuSyncQueue } from "./workspace/menuSync";
+import { extractOutline, OutlineItem } from "./workspace/outline";
 import {
   buildMenuUiState,
   closeTabInState,
@@ -54,7 +55,9 @@ class BradbitApp {
   private tabState: TabListState = { tabs: [], activeTabPath: null };
   private collapsedDirs = new Set<string>();
   private sidebarVisible = true;
+  private sidebarTab: "files" | "outline" = "files";
   private sidebarWidth = 260;
+  private outlineRefreshTimer: number | null = null;
   private modal: ModalState = { kind: "none" };
   private statusNotice = "";
   private menuQueue = new MenuSyncQueue<MenuUiState>(
@@ -524,6 +527,7 @@ class BradbitApp {
           onContentChange: (path, content) => {
             this.tabState = updateTabContent(this.tabState, path, content);
             this.updateLightweightChrome();
+            this.refreshOutlineSoon();
           },
           onCursorChange: (path, line, col) => {
             this.tabState = {
@@ -741,31 +745,72 @@ class BradbitApp {
     aside.className = "sidebar";
     aside.style.width = `${this.sidebarWidth}px`;
 
+    const tabs = this.renderSidebarTabs(lang);
+
     const header = document.createElement("div");
     header.className = "sidebar-header";
     const title = document.createElement("span");
-    title.textContent = t(lang, "explorerTitle");
+    title.textContent = t(lang, this.sidebarTab === "files" ? "explorerTitle" : "outlineTitle");
 
     const actions = document.createElement("div");
     actions.className = "sidebar-actions";
 
-    const newFileBtn = document.createElement("button");
-    newFileBtn.className = "tree-mini-btn";
-    newFileBtn.dataset.testid = "sidebar-new-file-btn";
-    newFileBtn.title = `${t(lang, "newFile")} (⌘N)`;
-    newFileBtn.textContent = "+📄";
-    newFileBtn.onclick = () => this.openEntryModal("new-file");
+    if (this.sidebarTab === "files") {
+      const newFileBtn = document.createElement("button");
+      newFileBtn.className = "tree-mini-btn";
+      newFileBtn.dataset.testid = "sidebar-new-file-btn";
+      newFileBtn.title = `${t(lang, "newFile")} (⌘N)`;
+      newFileBtn.textContent = "+📄";
+      newFileBtn.onclick = () => this.openEntryModal("new-file");
 
-    const newFolderBtn = document.createElement("button");
-    newFolderBtn.className = "tree-mini-btn";
-    newFolderBtn.dataset.testid = "sidebar-new-folder-btn";
-    newFolderBtn.title = t(lang, "newFolder");
-    newFolderBtn.textContent = "+📁";
-    newFolderBtn.onclick = () => this.openEntryModal("new-folder");
+      const newFolderBtn = document.createElement("button");
+      newFolderBtn.className = "tree-mini-btn";
+      newFolderBtn.dataset.testid = "sidebar-new-folder-btn";
+      newFolderBtn.title = t(lang, "newFolder");
+      newFolderBtn.textContent = "+📁";
+      newFolderBtn.onclick = () => this.openEntryModal("new-folder");
 
-    actions.append(newFileBtn, newFolderBtn);
+      actions.append(newFileBtn, newFolderBtn);
+    }
+
     header.append(title, actions);
+    aside.append(tabs, header);
 
+    if (this.sidebarTab === "files") {
+      aside.appendChild(this.renderFileTree(lang));
+    } else {
+      aside.appendChild(this.renderOutline(lang));
+    }
+    return aside;
+  }
+
+  private renderSidebarTabs(lang: AppSettings["language"]): HTMLElement {
+    const tabs = document.createElement("div");
+    tabs.className = "sidebar-tabs";
+
+    const makeTab = (label: string, tab: "files" | "outline"): HTMLButtonElement => {
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className = "sidebar-tab";
+      button.dataset.sidebarTab = tab;
+      button.textContent = label;
+      button.classList.toggle("active", this.sidebarTab === tab);
+      button.onclick = () => {
+        if (this.sidebarTab === tab) return;
+        this.sidebarTab = tab;
+        this.render();
+      };
+      return button;
+    };
+
+    tabs.append(
+      makeTab(t(lang, "filesTab"), "files"),
+      makeTab(t(lang, "outlineTab"), "outline"),
+    );
+    return tabs;
+  }
+
+  private renderFileTree(lang: AppSettings["language"]): HTMLElement {
     const treeContainer = document.createElement("div");
     treeContainer.className = "tree-container";
     const visibleTree = filterTreeNodes(
@@ -869,8 +914,96 @@ class BradbitApp {
     };
 
     renderNodes(visibleTree, 0);
-    aside.append(header, treeContainer);
-    return aside;
+    return treeContainer;
+  }
+
+  private renderOutline(lang: AppSettings["language"]): HTMLElement {
+    const container = document.createElement("div");
+    container.className = "outline-container";
+
+    const activeTab = this.getActiveTab();
+    if (!activeTab) {
+      container.appendChild(this.outlineMessage(t(lang, "outlineEmpty")));
+      return container;
+    }
+
+    const outline = extractOutline(activeTab.path, activeTab.content);
+    if (!outline) {
+      container.appendChild(this.outlineMessage(t(lang, "outlineUnsupported")));
+      return container;
+    }
+    if (outline.items.length === 0) {
+      container.appendChild(this.outlineMessage(t(lang, "outlineNoHeadings")));
+      return container;
+    }
+
+    for (const item of outline.items) {
+      container.appendChild(this.renderOutlineItem(item, lang));
+    }
+
+    if (outline.pageCount !== null) {
+      const pages = document.createElement("div");
+      pages.className = "outline-pages";
+      pages.textContent = t(lang, "estimatedPages", { count: String(outline.pageCount) });
+      container.appendChild(pages);
+    }
+
+    return container;
+  }
+
+  private renderOutlineItem(item: OutlineItem, lang: AppSettings["language"]): HTMLButtonElement {
+    const row = document.createElement("button");
+    row.type = "button";
+    row.className = `outline-item outline-level-${Math.min(Math.max(item.level, 1), 6)}`;
+    row.dataset.outlineLine = String(item.line);
+    row.title = `${t(lang, "lineShort")} ${item.line}`;
+
+    const icon = document.createElement("span");
+    icon.className = "outline-icon";
+    icon.textContent = item.kind === "scene" ? "🎬" : item.kind === "section" ? "§" : "";
+    if (icon.textContent) {
+      row.appendChild(icon);
+    }
+
+    const label = document.createElement("span");
+    label.className = "outline-label";
+    label.textContent = item.title;
+    row.appendChild(label);
+
+    row.onclick = () => this.jumpToLine(item.line);
+    return row;
+  }
+
+  private outlineMessage(text: string): HTMLElement {
+    const message = document.createElement("div");
+    message.className = "outline-empty";
+    message.textContent = text;
+    return message;
+  }
+
+  private refreshOutlineSoon(): void {
+    if (this.sidebarTab !== "outline" || !this.sidebarVisible) return;
+    if (this.outlineRefreshTimer !== null) {
+      window.clearTimeout(this.outlineRefreshTimer);
+    }
+    this.outlineRefreshTimer = window.setTimeout(() => {
+      this.outlineRefreshTimer = null;
+      const current = this.rootEl.querySelector(".outline-container");
+      if (!current) return;
+      const scrollTop = current.scrollTop;
+      const next = this.renderOutline(this.settings.language);
+      current.replaceWith(next);
+      next.scrollTop = scrollTop;
+    }, 250);
+  }
+
+  private jumpToLine(line: number): void {
+    const active = this.getActiveTab();
+    if (!active) return;
+    if (active.viewMode === "preview") {
+      this.togglePreview();
+    }
+    this.editor?.gotoLine(line);
   }
 
   private renderSidebarResizer(): HTMLElement {
