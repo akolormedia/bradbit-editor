@@ -42,6 +42,8 @@ export interface OpenTab {
   cursorLine: number;
   cursorCol: number;
   viewMode: TabViewMode;
+  /** Set when the file changed on disk while this tab had unsaved edits. */
+  externalChange?: boolean;
 }
 
 export interface MenuUiState {
@@ -80,4 +82,8 @@ export interface CreatedProject {
   path: string;
   name: string;
   gitInitialized: boolean;
+}
+
+export interface FsChangeEvent {
+  paths: string[];
 }

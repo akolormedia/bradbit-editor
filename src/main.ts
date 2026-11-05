@@ -5,6 +5,7 @@ import { t } from "./i18n";
 import {
   AppSettings,
   FileTreeNode,
+  FsChangeEvent,
   MenuCommand,
   MenuUiState,
   OpenedFolder,
@@ -24,6 +25,7 @@ import {
   ProjectDraftError,
 } from "./workspace/projectCreation";
 import { flattenFileTree } from "./workspace/quickOpen";
+import { isTabAffected, reconcileTabsWithDisk } from "./workspace/reconcile";
 import { SearchPalette } from "./workspace/searchPalette";
 import {
   buildMenuUiState,
@@ -119,6 +121,13 @@ class BradbitApp {
     } catch (err) {
       console.error("No se pudo conectar el menú nativo", err);
     }
+    try {
+      await backend.listenFsChanges((event) => {
+        void this.handleFsChange(event);
+      });
+    } catch (err) {
+      console.error("No se pudo escuchar los cambios de archivos", err);
+    }
     this.applyThemeAttribute();
     this.render();
   }
@@ -151,6 +160,12 @@ class BradbitApp {
       this.editor?.destroy();
       this.editor = null;
       this.recents = await backend.listRecentProjects();
+      try {
+        await backend.startWatching(opened.rootPath);
+      } catch (err) {
+        console.error("No se pudo iniciar el watcher", err);
+        this.statusNotice = err instanceof Error ? err.message : String(err);
+      }
       this.render();
     } catch (err) {
       this.statusNotice = err instanceof Error ? err.message : String(err);
@@ -377,6 +392,50 @@ class BradbitApp {
   private async openFileAtLine(path: string, line: number): Promise<void> {
     await this.openFileFromTree(path, true);
     this.editor?.gotoLine(line);
+  }
+
+  private async handleFsChange(event: FsChangeEvent): Promise<void> {
+    if (!this.folder || event.paths.length === 0) return;
+    const root = this.folder.rootPath;
+    const affected = this.tabState.tabs.filter((tab) =>
+      isTabAffected(tab.path, event.paths),
+    );
+    const diskContents = new Map<string, string | null>();
+    for (const tab of affected) {
+      try {
+        diskContents.set(tab.path, await backend.readTextFile(root, tab.path));
+      } catch {
+        diskContents.set(tab.path, null);
+      }
+    }
+    if (!this.folder || this.folder.rootPath !== root) return;
+
+    try {
+      await this.refreshTree();
+    } catch (err) {
+      console.error("No se pudo actualizar el árbol de archivos", err);
+    }
+
+    const result = reconcileTabsWithDisk(this.tabState, event.paths, diskContents);
+    for (const path of [...result.closed, ...result.reloaded]) {
+      this.editor?.closeDocumentState(path);
+    }
+    this.tabState = result.state;
+
+    if (result.conflicts.length > 0) {
+      this.statusNotice = t(this.settings.language, "fileChangedExternal", {
+        name: this.fileName(result.conflicts[0]),
+      });
+    } else if (result.deletedConflicts.length > 0) {
+      this.statusNotice = t(this.settings.language, "fileDeletedExternal", {
+        name: this.fileName(result.deletedConflicts[0]),
+      });
+    }
+    this.render();
+  }
+
+  private fileName(path: string): string {
+    return path.split("/").pop() ?? path;
   }
 
   private async openNewProjectModal(): Promise<void> {
@@ -795,7 +854,15 @@ class BradbitApp {
       tabEl.classList.toggle("preview", active.preview);
       const dot = tabEl.querySelector(".tab-dirty-dot") as HTMLElement | null;
       if (dot) {
-        dot.textContent = isTabDirty(active) ? "•" : "";
+        dot.textContent = active.externalChange
+          ? "⚠"
+          : isTabDirty(active)
+            ? "•"
+            : "";
+        dot.classList.toggle("external", Boolean(active.externalChange));
+        dot.title = active.externalChange
+          ? t(this.settings.language, "externalChangeBadge")
+          : "";
       }
     }
 
@@ -876,6 +943,9 @@ class BradbitApp {
       closeFolderBtn.className = "toolbar-btn";
       closeFolderBtn.textContent = t(lang, "closeFolder");
       closeFolderBtn.onclick = () => {
+        void backend.stopWatching().catch((err) => {
+          console.error("No se pudo detener el watcher", err);
+        });
         this.folder = null;
         this.tabState = { tabs: [], activeTabPath: null };
         this.editor?.destroy();
@@ -1309,7 +1379,15 @@ class BradbitApp {
 
         const dirtyDot = document.createElement("span");
         dirtyDot.className = "tab-dirty-dot";
-        dirtyDot.textContent = isTabDirty(tab) ? "•" : "";
+        dirtyDot.textContent = tab.externalChange
+          ? "⚠"
+          : isTabDirty(tab)
+            ? "•"
+            : "";
+        dirtyDot.classList.toggle("external", Boolean(tab.externalChange));
+        dirtyDot.title = tab.externalChange
+          ? t(lang, "externalChangeBadge")
+          : "";
 
         const closeBtn = document.createElement("button");
         closeBtn.className = "tab-close-btn";

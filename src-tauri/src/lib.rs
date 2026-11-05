@@ -4,10 +4,12 @@ pub mod menu;
 pub mod search;
 pub mod settings;
 pub mod templates;
+pub mod watcher;
 
 use fs_ops::{FileTreeNode, OpenedFolder};
 use menu::{MenuContext, MenuUiState};
 use settings::{AppSettings, RecentProject};
+use tauri::Emitter;
 use tauri_plugin_opener::OpenerExt;
 
 #[tauri::command]
@@ -93,6 +95,34 @@ fn open_templates_folder(app: tauri::AppHandle) -> Result<(), String> {
 }
 
 #[tauri::command]
+fn start_watching(
+    app: tauri::AppHandle,
+    state: tauri::State<watcher::WatcherState>,
+    root: String,
+) -> Result<(), String> {
+    let app = app.clone();
+    let service = watcher::WatcherService::start(&root, move |event| {
+        let _ = app.emit(watcher::FS_CHANGE_EVENT, event);
+    })?;
+    let mut slot = state
+        .0
+        .lock()
+        .map_err(|_| "No se pudo bloquear el watcher".to_string())?;
+    *slot = Some(service);
+    Ok(())
+}
+
+#[tauri::command]
+fn stop_watching(state: tauri::State<watcher::WatcherState>) -> Result<(), String> {
+    state
+        .0
+        .lock()
+        .map_err(|_| "No se pudo bloquear el watcher".to_string())?
+        .take();
+    Ok(())
+}
+
+#[tauri::command]
 fn open_folder(path: String, show_config: bool) -> Result<OpenedFolder, String> {
     let opened = fs_ops::open_folder(&path, show_config)?;
     let _ = settings::record_recent_project(&opened.root_path, &opened.name);
@@ -135,6 +165,7 @@ pub fn run() {
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_opener::init())
         .manage(MenuContext::default())
+        .manage(watcher::WatcherState::default())
         .setup(|app| {
             let settings = settings::load_settings().unwrap_or_default();
             let state = MenuUiState {
@@ -162,6 +193,8 @@ pub fn run() {
             create_project_from_template,
             save_current_as_template,
             open_templates_folder,
+            start_watching,
+            stop_watching,
             open_folder,
             list_directory_tree,
             read_text_file,

@@ -103,6 +103,10 @@ export const translations = {
     projectErrorNameInvalid: "El nombre contiene caracteres no permitidos",
     projectErrorDestination: "Selecciona una carpeta de destino",
     projectWillBeCreatedAt: "Se creará en:",
+    fileChangedExternal: "«{name}» cambió en disco. Guarda o descarta tus cambios.",
+    fileDeletedExternal:
+      "«{name}» se eliminó en disco. Tu copia sin guardar se mantiene.",
+    externalChangeBadge: "Cambió en disco",
     filesTab: "Archivos",
     outlineTab: "Esquema",
     outlineTitle: "Esquema",
@@ -213,6 +217,10 @@ export const translations = {
     projectErrorNameInvalid: "The name contains invalid characters",
     projectErrorDestination: "Select a destination folder",
     projectWillBeCreatedAt: "Will be created at:",
+    fileChangedExternal: "“{name}” changed on disk. Save or discard your changes.",
+    fileDeletedExternal:
+      "“{name}” was deleted on disk. Your unsaved copy is kept.",
+    externalChangeBadge: "Changed on disk",
     filesTab: "Files",
     outlineTab: "Outline",
     outlineTitle: "Outline",

@@ -2,6 +2,7 @@ import {
   AppSettings,
   CreatedProject,
   FileTreeNode,
+  FsChangeEvent,
   MenuCommand,
   MenuUiState,
   OpenedFolder,
@@ -470,6 +471,28 @@ export const backend = {
   async openTemplatesFolder(): Promise<void> {
     if (!isTauriEnvironment()) return;
     await tauriInvoke<void>("open_templates_folder");
+  },
+
+  async startWatching(rootPath: string): Promise<void> {
+    if (!isTauriEnvironment()) return;
+    await tauriInvoke<void>("start_watching", { root: rootPath });
+  },
+
+  async stopWatching(): Promise<void> {
+    if (!isTauriEnvironment()) return;
+    await tauriInvoke<void>("stop_watching");
+  },
+
+  async listenFsChanges(
+    handler: (event: FsChangeEvent) => void,
+  ): Promise<() => void> {
+    if (!isTauriEnvironment()) {
+      return () => {};
+    }
+    const { listen } = await import("@tauri-apps/api/event");
+    return listen<FsChangeEvent>("bradbit-fs-change", (event) =>
+      handler(event.payload),
+    );
   },
 };
 
