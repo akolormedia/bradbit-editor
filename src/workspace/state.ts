@@ -1,0 +1,202 @@
+import { AppSettings, FileTreeNode, OpenTab } from "../types";
+
+export const DEFAULT_SETTINGS: AppSettings = {
+  language: "es",
+  theme: "dark",
+  fontSize: 15,
+  wordWrap: true,
+  lineNumbers: false,
+  showConfigFiles: false,
+};
+
+const CONFIG_NAMES = new Set([
+  ".opencode",
+  ".bradbit",
+  ".narra",
+  ".gitignore",
+  "AGENTS.md",
+  "CLAUDE.md",
+]);
+
+const ALWAYS_HIDDEN = new Set([".git", ".DS_Store", "node_modules", "target"]);
+
+export function isAlwaysHiddenEntry(name: string): boolean {
+  return ALWAYS_HIDDEN.has(name);
+}
+
+export function isConfigEntry(name: string): boolean {
+  return CONFIG_NAMES.has(name) || (name.startsWith(".") && !ALWAYS_HIDDEN.has(name));
+}
+
+export function filterTreeNodes(nodes: FileTreeNode[], showConfigFiles: boolean): FileTreeNode[] {
+  const result: FileTreeNode[] = [];
+  for (const node of nodes) {
+    if (isAlwaysHiddenEntry(node.name)) {
+      continue;
+    }
+    if (!showConfigFiles && (node.isConfig || isConfigEntry(node.name))) {
+      continue;
+    }
+    if (node.isDir && node.children) {
+      result.push({
+        ...node,
+        children: filterTreeNodes(node.children, showConfigFiles),
+      });
+    } else {
+      result.push(node);
+    }
+  }
+  return result;
+}
+
+export function isTabDirty(tab: OpenTab): boolean {
+  return tab.content !== tab.savedContent;
+}
+
+export interface TabListState {
+  tabs: OpenTab[];
+  activeTabPath: string | null;
+}
+
+/**
+ * Opens a file in the tab bar:
+ * - If already open, activates it (and pins it if `pin` is true).
+ * - If `pin` is false (single click) and there is an existing clean preview tab, replaces it.
+ * - Otherwise appends a new tab.
+ */
+export function openFileInTabs(
+  state: TabListState,
+  file: { path: string; name: string; content: string },
+  pin: boolean,
+): TabListState {
+  const existingIndex = state.tabs.findIndex((t) => t.path === file.path);
+  if (existingIndex !== -1) {
+    const updated = state.tabs.map((tab, idx) =>
+      idx === existingIndex && pin ? { ...tab, preview: false } : tab,
+    );
+    return {
+      tabs: updated,
+      activeTabPath: file.path,
+    };
+  }
+
+  const newTab: OpenTab = {
+    path: file.path,
+    name: file.name,
+    content: file.content,
+    savedContent: file.content,
+    preview: !pin,
+    cursorLine: 1,
+    cursorCol: 1,
+  };
+
+  if (!pin) {
+    const previewIdx = state.tabs.findIndex((t) => t.preview && !isTabDirty(t));
+    if (previewIdx !== -1) {
+      const nextTabs = [...state.tabs];
+      nextTabs[previewIdx] = newTab;
+      return {
+        tabs: nextTabs,
+        activeTabPath: newTab.path,
+      };
+    }
+  }
+
+  return {
+    tabs: [...state.tabs, newTab],
+    activeTabPath: newTab.path,
+  };
+}
+
+/**
+ * Updates the content of a tab and automatically pins it if it was a preview tab.
+ */
+export function updateTabContent(
+  state: TabListState,
+  path: string,
+  newContent: string,
+): TabListState {
+  return {
+    ...state,
+    tabs: state.tabs.map((tab) => {
+      if (tab.path !== path) return tab;
+      const changed = newContent !== tab.content;
+      return {
+        ...tab,
+        content: newContent,
+        preview: changed ? false : tab.preview,
+      };
+    }),
+  };
+}
+
+export function markTabSaved(state: TabListState, path: string): TabListState {
+  return {
+    ...state,
+    tabs: state.tabs.map((tab) =>
+      tab.path === path
+        ? { ...tab, savedContent: tab.content, preview: false }
+        : tab,
+    ),
+  };
+}
+
+export function closeTabInState(state: TabListState, path: string): TabListState {
+  const idx = state.tabs.findIndex((t) => t.path === path);
+  if (idx === -1) return state;
+  const nextTabs = state.tabs.filter((t) => t.path !== path);
+  let nextActive = state.activeTabPath;
+  if (state.activeTabPath === path) {
+    if (nextTabs.length === 0) {
+      nextActive = null;
+    } else if (idx < nextTabs.length) {
+      nextActive = nextTabs[idx].path;
+    } else {
+      nextActive = nextTabs[nextTabs.length - 1].path;
+    }
+  }
+  return {
+    tabs: nextTabs,
+    activeTabPath: nextActive,
+  };
+}
+
+export function renamePathInTabs(
+  state: TabListState,
+  oldPath: string,
+  newPath: string,
+): TabListState {
+  const getBaseName = (p: string) => p.split("/").pop() || p;
+  const matchesPath = (p: string) => p === oldPath || p.startsWith(`${oldPath}/`);
+  const replacePrefix = (p: string) =>
+    p === oldPath ? newPath : `${newPath}${p.slice(oldPath.length)}`;
+
+  const nextTabs = state.tabs.map((tab) => {
+    if (!matchesPath(tab.path)) return tab;
+    const updatedPath = replacePrefix(tab.path);
+    return {
+      ...tab,
+      path: updatedPath,
+      name: getBaseName(updatedPath),
+    };
+  });
+
+  const nextActive =
+    state.activeTabPath && matchesPath(state.activeTabPath)
+      ? replacePrefix(state.activeTabPath)
+      : state.activeTabPath;
+
+  return {
+    tabs: nextTabs,
+    activeTabPath: nextActive,
+  };
+}
+
+export function countWordsAndChars(text: string): { words: number; chars: number } {
+  const trimmed = text.trim();
+  const words = trimmed.length === 0 ? 0 : trimmed.split(/\s+/).length;
+  return {
+    words,
+    chars: Array.from(text).length,
+  };
+}
