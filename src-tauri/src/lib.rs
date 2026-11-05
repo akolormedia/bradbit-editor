@@ -1,7 +1,9 @@
 pub mod fs_ops;
+pub mod menu;
 pub mod settings;
 
 use fs_ops::{FileTreeNode, OpenedFolder};
+use menu::{MenuContext, MenuUiState};
 use settings::{AppSettings, RecentProject};
 
 #[tauri::command]
@@ -23,6 +25,13 @@ fn list_recent_projects() -> Result<Vec<RecentProject>, String> {
 #[tauri::command]
 fn remove_recent_project(path: String) -> Result<Vec<RecentProject>, String> {
     settings::remove_recent_project(&path)
+}
+
+#[tauri::command]
+fn refresh_menu(app: tauri::AppHandle, state: MenuUiState) -> Result<(), String> {
+    let native_menu = menu::build_menu(&app, &state).map_err(|err| err.to_string())?;
+    app.set_menu(native_menu).map_err(|err| err.to_string())?;
+    Ok(())
 }
 
 #[tauri::command]
@@ -66,11 +75,28 @@ fn delete_entry(root: String, rel_path: String) -> Result<(), String> {
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
+        .manage(MenuContext::default())
+        .setup(|app| {
+            let settings = settings::load_settings().unwrap_or_default();
+            let state = MenuUiState {
+                language: settings.language,
+                word_wrap: settings.word_wrap,
+                line_numbers: settings.line_numbers,
+                ..Default::default()
+            };
+            let native_menu = menu::build_menu(app.handle(), &state)?;
+            app.set_menu(native_menu)?;
+            #[cfg(target_os = "macos")]
+            menu::install_shortcut_monitor(app.handle());
+            Ok(())
+        })
+        .on_menu_event(menu::handle_menu_event)
         .invoke_handler(tauri::generate_handler![
             load_settings,
             save_settings,
             list_recent_projects,
             remove_recent_project,
+            refresh_menu,
             open_folder,
             list_directory_tree,
             read_text_file,

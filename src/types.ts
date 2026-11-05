@@ -40,3 +40,17 @@ export interface OpenTab {
   cursorLine: number;
   cursorCol: number;
 }
+
+export interface MenuUiState {
+  language: Language;
+  hasFolder: boolean;
+  hasActiveTab: boolean;
+  sidebarVisible: boolean;
+  wordWrap: boolean;
+  lineNumbers: boolean;
+}
+
+export interface MenuCommand {
+  id: string;
+  path?: string;
+}

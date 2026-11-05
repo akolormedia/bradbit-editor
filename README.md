@@ -4,6 +4,12 @@ Editor de texto de escritorio agnóstico para escritura creativa (`.md`, `.mdx`,
 
 ## Características (Story 1.1)
 
+- **Menú nativo de macOS (`Story 1.1.1`):** La barra superior del sistema incluye **Bradbit Editor, Archivo, Edición, Visualización y Ventana**:
+  - *Archivo:* Abrir carpeta (`⌘O`), Abrir reciente, Nuevo archivo (`⌘N`), Guardar (`⌘S`) y Cerrar pestaña (`⌘W`).
+  - *Edición:* Deshacer/Rehacer conectados al historial de cada pestaña, Cortar/Copiar/Pegar/Seleccionar todo, Buscar (`⌘F`) y Buscar y reemplazar (`⌥⌘F`).
+  - *Visualización:* Mostrar/ocultar explorador (`⌘B`), Ajuste de línea, Números de línea y Pantalla completa.
+  - *Ventana:* Minimizar, Zoom y Traer todo al frente.
+  - Los ítems se habilitan, deshabilitan y marcan según el estado real, y las etiquetas cambian con el idioma.
 - **Cualquier carpeta es un proyecto:** Abre cualquier carpeta del disco sin requerir archivos de configuración propietarios (`project.yaml`).
 - **Pantalla de bienvenida y proyectos recientes:** Abre carpetas del disco o retoma cualquiera de tus proyectos recientes en un clic.
 - **Explorador de archivos lateral redimensionable y colapsable (`⌘B`):**
