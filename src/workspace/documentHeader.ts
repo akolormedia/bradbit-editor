@@ -1,12 +1,13 @@
 import { t } from "../i18n";
 import { Language, OpenTab } from "../types";
-import { isMarkdownPath } from "./state";
+import { isFountainPath, isMarkdownPath } from "./state";
 
 export interface DocumentHeaderOptions {
   tab: OpenTab;
   language: Language;
   onTogglePreview: () => void;
   onCopy: () => Promise<boolean>;
+  onExportPdf?: () => void;
 }
 
 /**
@@ -51,6 +52,17 @@ export function createDocumentHeader(options: DocumentHeaderOptions): HTMLElemen
     previewBtn.textContent = "</>";
     previewBtn.onclick = () => options.onTogglePreview();
     actions.appendChild(previewBtn);
+  }
+
+  if (isFountainPath(tab.path) && options.onExportPdf) {
+    const exportBtn = document.createElement("button");
+    exportBtn.className = "icon-btn document-action";
+    exportBtn.dataset.action = "export-pdf";
+    exportBtn.title = `${t(language, "exportPdf")} (⌘E)`;
+    exportBtn.setAttribute("aria-label", t(language, "exportPdf"));
+    exportBtn.textContent = "PDF";
+    exportBtn.onclick = () => options.onExportPdf?.();
+    actions.appendChild(exportBtn);
   }
 
   const copyBtn = document.createElement("button");

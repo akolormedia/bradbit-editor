@@ -17,6 +17,7 @@ pub struct MenuUiState {
     pub has_folder: bool,
     pub has_active_tab: bool,
     pub is_markdown: bool,
+    pub is_fountain: bool,
     pub preview_mode: bool,
     pub sidebar_visible: bool,
     pub word_wrap: bool,
@@ -30,6 +31,7 @@ impl Default for MenuUiState {
             has_folder: false,
             has_active_tab: false,
             is_markdown: false,
+            is_fountain: false,
             preview_mode: false,
             sidebar_visible: true,
             word_wrap: true,
@@ -69,6 +71,7 @@ struct MenuLabels {
     open_recent: &'static str,
     new_file: &'static str,
     save: &'static str,
+    export_pdf: &'static str,
     close_tab: &'static str,
     edit: &'static str,
     undo: &'static str,
@@ -109,6 +112,7 @@ impl MenuLabels {
                 open_recent: "Open Recent",
                 new_file: "New File",
                 save: "Save",
+                export_pdf: "Export PDF…",
                 close_tab: "Close Tab",
                 edit: "Edit",
                 undo: "Undo",
@@ -146,6 +150,7 @@ impl MenuLabels {
                 open_recent: "Abrir reciente",
                 new_file: "Nuevo archivo",
                 save: "Guardar",
+                export_pdf: "Exportar PDF…",
                 close_tab: "Cerrar pestaña",
                 edit: "Edición",
                 undo: "Deshacer",
@@ -188,6 +193,7 @@ pub fn is_known_command(id: &str) -> bool {
             | "file.openFolder"
             | "file.newFile"
             | "file.save"
+            | "file.exportPdf"
             | "file.closeTab"
             | "edit.undo"
             | "edit.redo"
@@ -210,6 +216,7 @@ pub fn command_enabled(state: &MenuUiState, id: &str) -> bool {
         "file.newFile" | "view.toggleSidebar" => state.has_folder,
         "file.save" | "file.closeTab" | "edit.undo" | "edit.redo" | "edit.find"
         | "edit.findReplace" => state.has_active_tab,
+        "file.exportPdf" => state.has_active_tab && state.is_fountain,
         "edit.bold" | "edit.italic" | "view.togglePreview" => {
             state.has_active_tab && state.is_markdown
         }
@@ -231,6 +238,7 @@ pub fn shortcut_command(key: &str, shift: bool, option: bool) -> Option<&'static
         ("p", false, true) => Some("view.togglePreview"),
         ("e", true, false) => Some("view.toggleSidebar"),
         ("s", false, false) => Some("file.save"),
+        ("e", false, false) => Some("file.exportPdf"),
         ("o", false, false) => Some("file.openFolder"),
         ("n", false, false) => Some("file.newFile"),
         ("w", false, false) => Some("file.closeTab"),
@@ -301,6 +309,11 @@ pub fn build_menu<R: Runtime>(
         .accelerator("CmdOrCtrl+S")
         .enabled(state.has_active_tab)
         .build(app)?;
+    let export_pdf = MenuItemBuilder::new(labels.export_pdf)
+        .id("file.exportPdf")
+        .accelerator("CmdOrCtrl+E")
+        .enabled(state.has_active_tab && state.is_fountain)
+        .build(app)?;
     let close_tab = MenuItemBuilder::new(labels.close_tab)
         .id("file.closeTab")
         .accelerator("CmdOrCtrl+W")
@@ -323,6 +336,7 @@ pub fn build_menu<R: Runtime>(
         .separator()
         .item(&new_file)
         .item(&save)
+        .item(&export_pdf)
         .separator()
         .item(&close_tab)
         .build()?;
@@ -535,6 +549,7 @@ mod tests {
     #[test]
     fn known_commands_exclude_predefined_items() {
         assert!(is_known_command("file.save"));
+        assert!(is_known_command("file.exportPdf"));
         assert!(is_known_command("edit.findReplace"));
         assert!(is_known_command("edit.bold"));
         assert!(is_known_command("edit.italic"));
@@ -556,12 +571,14 @@ mod tests {
         assert_eq!(es.bold, "Negrita");
         assert_eq!(es.italic, "Cursiva");
         assert_eq!(es.preview, "Vista previa");
+        assert_eq!(es.export_pdf, "Exportar PDF…");
         assert_eq!(en.file, "File");
         assert_eq!(en.edit, "Edit");
         assert_eq!(en.view, "View");
         assert_eq!(en.bold, "Bold");
         assert_eq!(en.italic, "Italic");
         assert_eq!(en.preview, "Preview");
+        assert_eq!(en.export_pdf, "Export PDF…");
     }
 
     #[test]
@@ -571,6 +588,7 @@ mod tests {
         assert!(!state.has_folder);
         assert!(!state.has_active_tab);
         assert!(!state.is_markdown);
+        assert!(!state.is_fountain);
         assert!(!state.preview_mode);
         assert!(state.sidebar_visible);
     }
@@ -595,6 +613,7 @@ mod tests {
         assert!(command_enabled(&state, "file.save"));
         assert!(command_enabled(&state, "file.closeTab"));
         assert!(command_enabled(&state, "edit.find"));
+        assert!(!command_enabled(&state, "file.exportPdf"));
         assert!(!command_enabled(&state, "edit.bold"));
         assert!(!command_enabled(&state, "view.togglePreview"));
 
@@ -602,6 +621,10 @@ mod tests {
         assert!(command_enabled(&state, "edit.bold"));
         assert!(command_enabled(&state, "edit.italic"));
         assert!(command_enabled(&state, "view.togglePreview"));
+        assert!(!command_enabled(&state, "file.exportPdf"));
+
+        state.is_fountain = true;
+        assert!(command_enabled(&state, "file.exportPdf"));
         assert!(!command_enabled(&state, "unknown.command"));
     }
 
@@ -620,9 +643,9 @@ mod tests {
         assert_eq!(shortcut_command("z", false, false), Some("edit.undo"));
         assert_eq!(shortcut_command("z", true, false), Some("edit.redo"));
         assert_eq!(shortcut_command("s", false, false), Some("file.save"));
+        assert_eq!(shortcut_command("e", false, false), Some("file.exportPdf"));
         assert_eq!(shortcut_command("f", false, true), Some("edit.findReplace"));
         assert_eq!(shortcut_command("b", true, false), None);
-        assert_eq!(shortcut_command("e", false, false), None);
         assert_eq!(shortcut_command("p", false, false), None);
     }
 }

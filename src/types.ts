@@ -49,6 +49,7 @@ export interface MenuUiState {
   hasFolder: boolean;
   hasActiveTab: boolean;
   isMarkdown: boolean;
+  isFountain: boolean;
   previewMode: boolean;
   sidebarVisible: boolean;
   wordWrap: boolean;

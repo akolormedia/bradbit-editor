@@ -21,6 +21,7 @@ import {
   countWordsAndChars,
   DEFAULT_SETTINGS,
   filterTreeNodes,
+  isFountainPath,
   isMarkdownPath,
   isTabDirty,
   markTabSaved,
@@ -42,8 +43,8 @@ type ModalState =
 /** Shortcuts owned by the native menu when running inside Tauri. */
 const NATIVE_MENU_KEYS = new Set(["b", "i", "s", "o", "n", "w", ",", "f"]);
 
-function isNativeMenuShortcut(key: string, shift: boolean, alt: boolean): boolean {
-  if (key === "e") return shift;
+function isNativeMenuShortcut(key: string, _shift: boolean, alt: boolean): boolean {
+  if (key === "e") return true;
   if (key === "p") return alt;
   return NATIVE_MENU_KEYS.has(key);
 }
@@ -68,6 +69,7 @@ class BradbitApp {
         hasFolder: this.folder !== null,
         hasActiveTab: activeTab !== null,
         isMarkdown: activeTab ? isMarkdownPath(activeTab.path) : false,
+        isFountain: activeTab ? isFountainPath(activeTab.path) : false,
         previewMode: activeTab?.viewMode === "preview",
         sidebarVisible: this.sidebarVisible,
       });
@@ -333,6 +335,25 @@ class BradbitApp {
     return copied;
   }
 
+  private async exportActiveFountainPdf(): Promise<void> {
+    const active = this.getActiveTab();
+    if (!active || !this.folder || !isTauriEnvironment() || !isFountainPath(active.path)) {
+      return;
+    }
+    try {
+      const output = await backend.exportFountainPdf(
+        this.folder.rootPath,
+        active.path,
+        active.content,
+      );
+      this.showStatusNotice(
+        `${t(this.settings.language, "pdfExported")}: ${output}`,
+      );
+    } catch (err) {
+      this.showStatusNotice(err instanceof Error ? err.message : String(err));
+    }
+  }
+
   private showStatusNotice(message: string): void {
     this.statusNotice = message;
     const active = this.getActiveTab();
@@ -391,6 +412,9 @@ class BradbitApp {
         break;
       case "file.save":
         await this.saveActiveTab();
+        break;
+      case "file.exportPdf":
+        await this.exportActiveFountainPdf();
         break;
       case "file.closeTab":
         if (this.tabState.activeTabPath) {
@@ -1093,6 +1117,9 @@ class BradbitApp {
           language: lang,
           onTogglePreview: () => this.togglePreview(),
           onCopy: () => this.copyActiveDocument(),
+          onExportPdf: isTauriEnvironment()
+            ? () => void this.exportActiveFountainPdf()
+            : undefined,
         }),
       );
     }

@@ -5,6 +5,7 @@ import {
   countWordsAndChars,
   DEFAULT_SETTINGS,
   filterTreeNodes,
+  isFountainPath,
   isMarkdownPath,
   isTabDirty,
   markTabSaved,
@@ -110,6 +111,7 @@ describe("workspace tab state (Story 1.1)", () => {
       hasFolder: true,
       hasActiveTab: false,
       isMarkdown: false,
+      isFountain: false,
       previewMode: false,
       sidebarVisible: false,
     });
@@ -118,6 +120,7 @@ describe("workspace tab state (Story 1.1)", () => {
       hasFolder: true,
       hasActiveTab: false,
       isMarkdown: false,
+      isFountain: false,
       previewMode: false,
       sidebarVisible: false,
       wordWrap: true,
@@ -161,6 +164,13 @@ describe("workspace tab state (Story 1.1)", () => {
     expect(isMarkdownPath("notas/ideas.MDX")).toBe(true);
     expect(isMarkdownPath("guion/acto.fountain")).toBe(false);
     expect(isMarkdownPath("README.txt")).toBe(false);
+  });
+
+  it("detects Fountain paths case-insensitively (T-1.2.3)", () => {
+    expect(isFountainPath("guion/acto-1.fountain")).toBe(true);
+    expect(isFountainPath("guion/acto-1.FOUNTAIN")).toBe(true);
+    expect(isFountainPath("guion/acto-1.spmd")).toBe(true);
+    expect(isFountainPath("biblia/premisa.md")).toBe(false);
   });
 
   it("resolves relative preview links against the document folder (T-1.2.1)", () => {
