@@ -1,7 +1,9 @@
 import { describe, expect, it } from "vitest";
 import {
+  buildMenuUiState,
   closeTabInState,
   countWordsAndChars,
+  DEFAULT_SETTINGS,
   filterTreeNodes,
   isTabDirty,
   markTabSaved,
@@ -97,5 +99,22 @@ describe("workspace tab state (Story 1.1)", () => {
   it("counts words and characters accurately with Unicode", () => {
     expect(countWordsAndChars("")).toEqual({ words: 0, chars: 0 });
     expect(countWordsAndChars("Hola mundo guión")).toEqual({ words: 3, chars: 16 });
+  });
+
+  it("builds native menu UI state from workspace and settings (T-1.1.1)", () => {
+    const menuState = buildMenuUiState({
+      settings: { ...DEFAULT_SETTINGS, language: "en", lineNumbers: true },
+      hasFolder: true,
+      hasActiveTab: false,
+      sidebarVisible: false,
+    });
+    expect(menuState).toEqual({
+      language: "en",
+      hasFolder: true,
+      hasActiveTab: false,
+      sidebarVisible: false,
+      wordWrap: true,
+      lineNumbers: true,
+    });
   });
 });

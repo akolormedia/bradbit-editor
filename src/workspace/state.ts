@@ -1,4 +1,4 @@
-import { AppSettings, FileTreeNode, OpenTab } from "../types";
+import { AppSettings, FileTreeNode, MenuUiState, OpenTab } from "../types";
 
 export const DEFAULT_SETTINGS: AppSettings = {
   language: "es",
@@ -200,3 +200,20 @@ export function countWordsAndChars(text: string): { words: number; chars: number
     chars: Array.from(text).length,
   };
 }
+
+export function buildMenuUiState(params: {
+  settings: AppSettings;
+  hasFolder: boolean;
+  hasActiveTab: boolean;
+  sidebarVisible: boolean;
+}): MenuUiState {
+  return {
+    language: params.settings.language,
+    hasFolder: params.hasFolder,
+    hasActiveTab: params.hasActiveTab,
+    sidebarVisible: params.sidebarVisible,
+    wordWrap: params.settings.wordWrap,
+    lineNumbers: params.settings.lineNumbers,
+  };
+}
+

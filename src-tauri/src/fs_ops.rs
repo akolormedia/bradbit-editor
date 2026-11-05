@@ -176,7 +176,10 @@ pub fn read_text_file(root: &str, rel_path: &str) -> Result<String, String> {
         return Err(format!("'{}' no es un archivo regular", rel_path));
     }
     if meta.len() > MAX_FILE_BYTES {
-        return Err(format!("El archivo '{}' excede el límite de 10 MB", rel_path));
+        return Err(format!(
+            "El archivo '{}' excede el límite de 10 MB",
+            rel_path
+        ));
     }
     fs::read_to_string(&target)
         .map_err(|e| format!("El archivo '{}' no es texto UTF-8 válido: {}", rel_path, e))
@@ -264,8 +267,8 @@ pub fn rename_entry(root: &str, old_rel_path: &str, new_rel_path: &str) -> Resul
 pub fn delete_entry(root: &str, rel_path: &str) -> Result<(), String> {
     let canon_root = canonical_root(root)?;
     let target = resolve_safe_relative(&canon_root, rel_path)?;
-    let meta = fs::symlink_metadata(&target)
-        .map_err(|e| format!("No existe '{}': {}", rel_path, e))?;
+    let meta =
+        fs::symlink_metadata(&target).map_err(|e| format!("No existe '{}': {}", rel_path, e))?;
     if meta.is_dir() {
         fs::remove_dir_all(&target)
             .map_err(|e| format!("No se pudo eliminar la carpeta '{}': {}", rel_path, e))
@@ -295,7 +298,11 @@ mod tests {
         assert_eq!(opened_default.tree[0].name, "biblia");
 
         let opened_with_cfg = open_folder(root.to_str().unwrap(), true).unwrap();
-        let names: Vec<_> = opened_with_cfg.tree.iter().map(|n| n.name.as_str()).collect();
+        let names: Vec<_> = opened_with_cfg
+            .tree
+            .iter()
+            .map(|n| n.name.as_str())
+            .collect();
         assert_eq!(names, vec![".opencode", "biblia", "AGENTS.md"]);
     }
 

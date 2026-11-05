@@ -1,4 +1,4 @@
-import { AppSettings, FileTreeNode, OpenedFolder, RecentProject } from "../types";
+import { AppSettings, FileTreeNode, MenuCommand, MenuUiState, OpenedFolder, RecentProject } from "../types";
 import { DEFAULT_SETTINGS, isAlwaysHiddenEntry, isConfigEntry } from "../workspace/state";
 
 declare global {
@@ -332,5 +332,19 @@ export const backend = {
         activeVirtualFs.dirs.delete(d);
       }
     }
+  },
+
+  async refreshMenu(state: MenuUiState): Promise<void> {
+    if (isTauriEnvironment()) {
+      await tauriInvoke<void>("refresh_menu", { state });
+    }
+  },
+
+  async listenMenuCommands(handler: (command: MenuCommand) => void): Promise<() => void> {
+    if (!isTauriEnvironment()) {
+      return () => {};
+    }
+    const { listen } = await import("@tauri-apps/api/event");
+    return listen<MenuCommand>("bradbit-menu", (event) => handler(event.payload));
   },
 };

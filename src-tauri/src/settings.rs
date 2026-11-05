@@ -43,7 +43,8 @@ fn config_dir() -> Result<PathBuf, String> {
         fs::create_dir_all(&p).map_err(|e| e.to_string())?;
         return Ok(p);
     }
-    let base = dirs::config_dir().ok_or_else(|| "No se encontró el directorio de configuración".to_string())?;
+    let base = dirs::config_dir()
+        .ok_or_else(|| "No se encontró el directorio de configuración".to_string())?;
     let dir = base.join("Bradbit");
     fs::create_dir_all(&dir).map_err(|e| format!("No se pudo crear directorio Bradbit: {}", e))?;
     Ok(dir)
@@ -54,7 +55,8 @@ pub fn load_settings() -> Result<AppSettings, String> {
     if !path.exists() {
         return Ok(AppSettings::default());
     }
-    let raw = fs::read_to_string(&path).map_err(|e| format!("Error leyendo settings.json: {}", e))?;
+    let raw =
+        fs::read_to_string(&path).map_err(|e| format!("Error leyendo settings.json: {}", e))?;
     serde_json::from_str(&raw).map_err(|e| format!("settings.json inválido: {}", e))
 }
 

@@ -8,7 +8,7 @@ import {
   lineNumbers as cmLineNumbers,
   ViewUpdate,
 } from "@codemirror/view";
-import { defaultKeymap, history, historyKeymap, indentWithTab } from "@codemirror/commands";
+import { defaultKeymap, history, historyKeymap, indentWithTab, redo as cmRedo, undo as cmUndo } from "@codemirror/commands";
 import { openSearchPanel, search, searchKeymap } from "@codemirror/search";
 import { markdown } from "@codemirror/lang-markdown";
 import {
@@ -246,6 +246,29 @@ export class BradbitCodeMirror {
     if (!this.view) return;
     this.view.focus();
     openSearchPanel(this.view);
+  }
+
+  public openReplacePanel(): void {
+    if (!this.view) return;
+    this.view.focus();
+    openSearchPanel(this.view);
+    const replaceInput = this.view.dom.querySelector<HTMLInputElement>(
+      '.cm-search input[name="replace"]',
+    );
+    replaceInput?.focus();
+    replaceInput?.select();
+  }
+
+  public undo(): void {
+    if (!this.view) return;
+    this.view.focus();
+    cmUndo(this.view);
+  }
+
+  public redo(): void {
+    if (!this.view) return;
+    this.view.focus();
+    cmRedo(this.view);
   }
 
   public focus(): void {

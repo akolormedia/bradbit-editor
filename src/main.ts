@@ -1,8 +1,16 @@
-import { backend } from "./backend";
+import { backend, isTauriEnvironment } from "./backend";
 import { BradbitCodeMirror } from "./editor/codemirror";
 import { t } from "./i18n";
-import { AppSettings, FileTreeNode, OpenedFolder, OpenTab, RecentProject } from "./types";
 import {
+  AppSettings,
+  FileTreeNode,
+  MenuCommand,
+  OpenedFolder,
+  OpenTab,
+  RecentProject,
+} from "./types";
+import {
+  buildMenuUiState,
   closeTabInState,
   countWordsAndChars,
   DEFAULT_SETTINGS,
@@ -21,6 +29,9 @@ type ModalState =
   | { kind: "entry-input"; mode: "new-file" | "new-folder" | "rename"; targetPath: string; value: string; error?: string }
   | { kind: "confirm-delete"; targetPath: string; error?: string }
   | { kind: "confirm-unsaved"; tabPath: string; tabName: string };
+
+/** Shortcuts handled by the native macOS menu when running inside Tauri. */
+const NATIVE_MENU_KEYS = new Set(["b", "s", "o", "n", "w", ",", "f"]);
 
 class BradbitApp {
   private settings: AppSettings = { ...DEFAULT_SETTINGS };
@@ -45,6 +56,13 @@ class BradbitApp {
   public async init(): Promise<void> {
     this.settings = await backend.loadSettings();
     this.recents = await backend.listRecentProjects();
+    try {
+      await backend.listenMenuCommands((command) => {
+        void this.executeMenuCommand(command);
+      });
+    } catch (err) {
+      console.error("No se pudo conectar el menú nativo", err);
+    }
     this.applyThemeAttribute();
     this.render();
   }
@@ -248,6 +266,105 @@ class BradbitApp {
     this.render();
   }
 
+  private async syncMenu(): Promise<void> {
+    const activeTab = this.getActiveTab();
+    const state = buildMenuUiState({
+      settings: this.settings,
+      hasFolder: this.folder !== null,
+      hasActiveTab: activeTab !== null,
+      sidebarVisible: this.sidebarVisible,
+    });
+    try {
+      await backend.refreshMenu(state);
+    } catch (err) {
+      console.error("No se pudo actualizar el menú nativo", err);
+    }
+  }
+
+  private toggleSidebar(): void {
+    this.sidebarVisible = !this.sidebarVisible;
+    this.render();
+  }
+
+  private performUndo(): void {
+    const activeElement = document.activeElement;
+    if (activeElement instanceof HTMLInputElement || activeElement instanceof HTMLTextAreaElement) {
+      document.execCommand("undo");
+      return;
+    }
+    this.editor?.undo();
+  }
+
+  private performRedo(): void {
+    const activeElement = document.activeElement;
+    if (activeElement instanceof HTMLInputElement || activeElement instanceof HTMLTextAreaElement) {
+      document.execCommand("redo");
+      return;
+    }
+    this.editor?.redo();
+  }
+
+  private async executeMenuCommand(command: MenuCommand): Promise<void> {
+    const activeElement = document.activeElement;
+    const editingTextInput =
+      activeElement instanceof HTMLInputElement || activeElement instanceof HTMLTextAreaElement;
+    const isInputUndo =
+      editingTextInput && (command.id === "edit.undo" || command.id === "edit.redo");
+
+    if (this.modal.kind !== "none" && command.id !== "app.settings" && !isInputUndo) {
+      return;
+    }
+
+    switch (command.id) {
+      case "app.settings":
+        this.modal = { kind: "settings" };
+        this.render();
+        break;
+      case "file.openFolder":
+        await this.handleOpenFolderDialog();
+        break;
+      case "file.openRecent":
+        if (command.path) {
+          await this.openFolderByPath(command.path);
+        }
+        break;
+      case "file.newFile":
+        if (this.folder) {
+          this.openEntryModal("new-file");
+        }
+        break;
+      case "file.save":
+        await this.saveActiveTab();
+        break;
+      case "file.closeTab":
+        if (this.tabState.activeTabPath) {
+          this.requestCloseTab(this.tabState.activeTabPath);
+        }
+        break;
+      case "edit.undo":
+        this.performUndo();
+        break;
+      case "edit.redo":
+        this.performRedo();
+        break;
+      case "edit.find":
+        this.editor?.openFindPanel();
+        break;
+      case "edit.findReplace":
+        this.editor?.openReplacePanel();
+        break;
+      case "view.toggleSidebar":
+        this.toggleSidebar();
+        break;
+      case "view.wordWrap":
+        await this.updateSettings({ wordWrap: !this.settings.wordWrap });
+        break;
+      case "view.lineNumbers":
+        await this.updateSettings({ lineNumbers: !this.settings.lineNumbers });
+        break;
+    }
+  }
+
   private bindGlobalShortcuts(): void {
     window.addEventListener("keydown", (e) => {
       const mod = e.metaKey || e.ctrlKey;
@@ -260,10 +377,15 @@ class BradbitApp {
       if (!mod) return;
 
       const key = e.key.toLowerCase();
+      if (isTauriEnvironment() && NATIVE_MENU_KEYS.has(key)) {
+        // On macOS the native menu owns these accelerators. Preventing the
+        // webview default avoids running the command twice.
+        e.preventDefault();
+        return;
+      }
       if (key === "b") {
         e.preventDefault();
-        this.sidebarVisible = !this.sidebarVisible;
-        this.render();
+        this.toggleSidebar();
       } else if (key === "s") {
         e.preventDefault();
         void this.saveActiveTab();
@@ -351,6 +473,9 @@ class BradbitApp {
       }
       this.editor.openDocument(activeTab.path, activeTab.content, this.settings);
     }
+
+    // Keep native menu labels, check marks and enabled items aligned with the UI.
+    void this.syncMenu();
   }
 
   /**
@@ -389,10 +514,7 @@ class BradbitApp {
       toggleBtn.className = "icon-btn";
       toggleBtn.title = `${t(lang, "toggleSidebar")} (⌘B)`;
       toggleBtn.textContent = "☰";
-      toggleBtn.onclick = () => {
-        this.sidebarVisible = !this.sidebarVisible;
-        this.render();
-      };
+      toggleBtn.onclick = () => this.toggleSidebar();
       left.appendChild(toggleBtn);
 
       const badge = document.createElement("span");
