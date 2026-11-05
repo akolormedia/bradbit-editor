@@ -33,6 +33,11 @@ Editor de texto de escritorio agnóstico para escritura creativa (`.md`, `.mdx`,
 - **Pestañas inteligentes:**
   - Un clic abre en modo *preview* (cursiva); doble clic o editar fija la pestaña.
   - Indicador de cambios sin guardar (`•`), cierre seguro con confirmación (`⌘W`) y guardado atómico en disco (`⌘S`).
+- **Archivos externos en vivo (`T-1.4.1`):**
+  - Los cambios hechos por `opencode`, `claude` o cualquier proceso externo actualizan el árbol de archivos al instante.
+  - Las pestañas limpias se recargan automáticamente.
+  - Si una pestaña tiene cambios sin guardar, se conserva tu texto y aparece un aviso `⚠` con el mensaje *Cambió en disco*; nunca se sobrescribe tu borrador.
+  - Los archivos eliminados cierran su pestaña si estaba limpia; si tenía cambios, se mantiene la copia para que puedas guardarla.
 - **Edición profesional con CodeMirror 6:**
   - Deshacer/rehacer por pestaña, buscar y reemplazar en el archivo (`⌘F`), *word wrap*, números de línea opcionales, corrector ortográfico nativo y resaltado para Markdown y Fountain.
   - Negrita (`⌘B`) y cursiva (`⌘I`) en Markdown/MDX, con selección o cursor entre marcadores.

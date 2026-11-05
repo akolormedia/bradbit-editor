@@ -439,6 +439,10 @@ body,
   font-weight: 700;
 }
 
+.tab-dirty-dot.external {
+  color: var(--danger);
+}
+
 .tab-close-btn {
   background: transparent;
   border: none;

@@ -89,6 +89,7 @@ export function openFileInTabs(
     cursorLine: 1,
     cursorCol: 1,
     viewMode: "edit",
+    externalChange: false,
   };
 
   if (!pin) {
@@ -136,7 +137,7 @@ export function markTabSaved(state: TabListState, path: string): TabListState {
     ...state,
     tabs: state.tabs.map((tab) =>
       tab.path === path
-        ? { ...tab, savedContent: tab.content, preview: false }
+        ? { ...tab, savedContent: tab.content, preview: false, externalChange: false }
         : tab,
     ),
   };
