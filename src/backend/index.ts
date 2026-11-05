@@ -1,11 +1,13 @@
 import {
   AppSettings,
+  CreatedProject,
   FileTreeNode,
   MenuCommand,
   MenuUiState,
   OpenedFolder,
   RecentProject,
   SearchMatch,
+  TemplateInfo,
 } from "../types";
 import { DEFAULT_SETTINGS, isAlwaysHiddenEntry, isConfigEntry } from "../workspace/state";
 
@@ -418,6 +420,56 @@ export const backend = {
     return results.sort((a, b) =>
       a.path < b.path ? -1 : a.path > b.path ? 1 : a.line - b.line,
     );
+  },
+
+  async listTemplates(): Promise<TemplateInfo[]> {
+    if (isTauriEnvironment()) {
+      return tauriInvoke<TemplateInfo[]>("list_templates");
+    }
+    return [
+      {
+        id: "guionista-kit",
+        name: "Guion Audiovisual (guionista-kit)",
+        description: "Biblia, estructura, guion, investigación y agentes de guionista-kit.",
+        source: "bundled",
+      },
+      {
+        id: "blank",
+        name: "Proyecto en blanco",
+        description: "Carpeta limpia para escribir libremente.",
+        source: "blank",
+      },
+    ];
+  },
+
+  async createProjectFromTemplate(
+    templateId: string,
+    name: string,
+    destination: string,
+  ): Promise<CreatedProject> {
+    if (!isTauriEnvironment()) {
+      throw new Error("La creación de proyectos requiere la app de escritorio");
+    }
+    return tauriInvoke<CreatedProject>("create_project_from_template", {
+      templateId,
+      name,
+      destination,
+    });
+  },
+
+  async saveCurrentAsTemplate(folderPath: string, name: string): Promise<TemplateInfo> {
+    if (!isTauriEnvironment()) {
+      throw new Error("Guardar plantillas requiere la app de escritorio");
+    }
+    return tauriInvoke<TemplateInfo>("save_current_as_template", {
+      folderPath,
+      name,
+    });
+  },
+
+  async openTemplatesFolder(): Promise<void> {
+    if (!isTauriEnvironment()) return;
+    await tauriInvoke<void>("open_templates_folder");
   },
 };
 

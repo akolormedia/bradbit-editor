@@ -67,3 +67,17 @@ export interface SearchMatch {
   column: number;
   snippet: string;
 }
+
+export interface TemplateInfo {
+  id: string;
+  name: string;
+  description: string;
+  source: "bundled" | "blank" | "user" | string;
+  path?: string;
+}
+
+export interface CreatedProject {
+  path: string;
+  name: string;
+  gitInitialized: boolean;
+}

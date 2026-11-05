@@ -69,6 +69,9 @@ struct MenuLabels {
     file: &'static str,
     open_folder: &'static str,
     open_recent: &'static str,
+    new_project: &'static str,
+    save_as_template: &'static str,
+    open_templates_folder: &'static str,
     new_file: &'static str,
     save: &'static str,
     export_pdf: &'static str,
@@ -112,6 +115,9 @@ impl MenuLabels {
                 file: "File",
                 open_folder: "Open Folder…",
                 open_recent: "Open Recent",
+                new_project: "New Project…",
+                save_as_template: "Save as Template…",
+                open_templates_folder: "Open Templates Folder",
                 new_file: "New File",
                 save: "Save",
                 export_pdf: "Export PDF…",
@@ -152,6 +158,9 @@ impl MenuLabels {
                 file: "Archivo",
                 open_folder: "Abrir carpeta…",
                 open_recent: "Abrir reciente",
+                new_project: "Nuevo proyecto…",
+                save_as_template: "Guardar como plantilla…",
+                open_templates_folder: "Abrir carpeta de plantillas",
                 new_file: "Nuevo archivo",
                 save: "Guardar",
                 export_pdf: "Exportar PDF…",
@@ -197,6 +206,9 @@ pub fn is_known_command(id: &str) -> bool {
         id,
         "app.settings"
             | "file.openFolder"
+            | "file.newProject"
+            | "file.saveAsTemplate"
+            | "file.openTemplatesFolder"
             | "file.newFile"
             | "file.save"
             | "file.exportPdf"
@@ -221,6 +233,8 @@ pub fn is_known_command(id: &str) -> bool {
 pub fn command_enabled(state: &MenuUiState, id: &str) -> bool {
     match id {
         "app.settings" | "file.openFolder" => true,
+        "file.newProject" | "file.openTemplatesFolder" => true,
+        "file.saveAsTemplate" => state.has_folder,
         "file.newFile" | "file.quickOpen" | "edit.findInProject" | "view.toggleSidebar" => {
             state.has_folder
         }
@@ -253,6 +267,7 @@ pub fn shortcut_command(key: &str, shift: bool, option: bool) -> Option<&'static
         ("e", false, false) => Some("file.exportPdf"),
         ("o", false, false) => Some("file.openFolder"),
         ("n", false, false) => Some("file.newFile"),
+        ("n", true, false) => Some("file.newProject"),
         ("w", false, false) => Some("file.closeTab"),
         (",", false, false) => Some("app.settings"),
         _ => None,
@@ -311,6 +326,17 @@ pub fn build_menu<R: Runtime>(
         .id("file.openFolder")
         .accelerator("CmdOrCtrl+O")
         .build(app)?;
+    let new_project = MenuItemBuilder::new(labels.new_project)
+        .id("file.newProject")
+        .accelerator("Shift+CmdOrCtrl+N")
+        .build(app)?;
+    let save_as_template = MenuItemBuilder::new(labels.save_as_template)
+        .id("file.saveAsTemplate")
+        .enabled(state.has_folder)
+        .build(app)?;
+    let open_templates_folder = MenuItemBuilder::new(labels.open_templates_folder)
+        .id("file.openTemplatesFolder")
+        .build(app)?;
     let new_file = MenuItemBuilder::new(labels.new_file)
         .id("file.newFile")
         .accelerator("CmdOrCtrl+N")
@@ -350,6 +376,10 @@ pub fn build_menu<R: Runtime>(
         file_menu = file_menu.item(&recent_submenu);
     }
     let file_menu = file_menu
+        .separator()
+        .item(&new_project)
+        .item(&save_as_template)
+        .item(&open_templates_folder)
         .separator()
         .item(&quick_open)
         .separator()
@@ -575,6 +605,9 @@ mod tests {
     fn known_commands_exclude_predefined_items() {
         assert!(is_known_command("file.save"));
         assert!(is_known_command("file.exportPdf"));
+        assert!(is_known_command("file.newProject"));
+        assert!(is_known_command("file.saveAsTemplate"));
+        assert!(is_known_command("file.openTemplatesFolder"));
         assert!(is_known_command("file.quickOpen"));
         assert!(is_known_command("edit.findInProject"));
         assert!(is_known_command("edit.findReplace"));
@@ -600,6 +633,9 @@ mod tests {
         assert_eq!(es.preview, "Vista previa");
         assert_eq!(es.export_pdf, "Exportar PDF…");
         assert_eq!(es.quick_open, "Apertura rápida…");
+        assert_eq!(es.new_project, "Nuevo proyecto…");
+        assert_eq!(es.save_as_template, "Guardar como plantilla…");
+        assert_eq!(es.open_templates_folder, "Abrir carpeta de plantillas");
         assert_eq!(es.find_in_project, "Buscar en proyecto…");
         assert_eq!(en.file, "File");
         assert_eq!(en.edit, "Edit");
@@ -609,6 +645,9 @@ mod tests {
         assert_eq!(en.preview, "Preview");
         assert_eq!(en.export_pdf, "Export PDF…");
         assert_eq!(en.quick_open, "Quick Open…");
+        assert_eq!(en.new_project, "New Project…");
+        assert_eq!(en.save_as_template, "Save as Template…");
+        assert_eq!(en.open_templates_folder, "Open Templates Folder");
         assert_eq!(en.find_in_project, "Find in Project…");
     }
 
@@ -629,6 +668,9 @@ mod tests {
         let mut state = MenuUiState::default();
         assert!(command_enabled(&state, "file.openFolder"));
         assert!(command_enabled(&state, "app.settings"));
+        assert!(command_enabled(&state, "file.newProject"));
+        assert!(command_enabled(&state, "file.openTemplatesFolder"));
+        assert!(!command_enabled(&state, "file.saveAsTemplate"));
         assert!(!command_enabled(&state, "file.newFile"));
         assert!(!command_enabled(&state, "file.save"));
         assert!(!command_enabled(&state, "file.quickOpen"));
@@ -639,6 +681,7 @@ mod tests {
 
         state.has_folder = true;
         assert!(command_enabled(&state, "file.newFile"));
+        assert!(command_enabled(&state, "file.saveAsTemplate"));
         assert!(command_enabled(&state, "file.quickOpen"));
         assert!(command_enabled(&state, "edit.findInProject"));
         assert!(command_enabled(&state, "view.toggleSidebar"));
@@ -678,6 +721,8 @@ mod tests {
         assert_eq!(shortcut_command("z", false, false), Some("edit.undo"));
         assert_eq!(shortcut_command("z", true, false), Some("edit.redo"));
         assert_eq!(shortcut_command("s", false, false), Some("file.save"));
+        assert_eq!(shortcut_command("n", false, false), Some("file.newFile"));
+        assert_eq!(shortcut_command("n", true, false), Some("file.newProject"));
         assert_eq!(shortcut_command("e", false, false), Some("file.exportPdf"));
         assert_eq!(shortcut_command("f", false, true), Some("edit.findReplace"));
         assert_eq!(
