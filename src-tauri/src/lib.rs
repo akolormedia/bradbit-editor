@@ -1,5 +1,7 @@
+pub mod cancel;
 pub mod fountain;
 pub mod fs_ops;
+pub mod git;
 pub mod menu;
 pub mod search;
 pub mod settings;
@@ -123,6 +125,26 @@ fn stop_watching(state: tauri::State<watcher::WatcherState>) -> Result<(), Strin
 }
 
 #[tauri::command]
+fn git_status(root: String) -> Result<git::api::GitStatus, String> {
+    git::api::status(&root)
+}
+
+#[tauri::command]
+fn git_init(root: String) -> Result<git::api::GitStatus, String> {
+    git::api::init(&root)
+}
+
+#[tauri::command]
+fn git_diff_file(root: String, rel_path: String) -> Result<String, String> {
+    git::api::diff_file(&root, &rel_path)
+}
+
+#[tauri::command]
+fn git_restore_file(root: String, rel_path: String) -> Result<git::api::GitStatus, String> {
+    git::api::restore_file(&root, &rel_path)
+}
+
+#[tauri::command]
 fn open_folder(path: String, show_config: bool) -> Result<OpenedFolder, String> {
     let opened = fs_ops::open_folder(&path, show_config)?;
     let _ = settings::record_recent_project(&opened.root_path, &opened.name);
@@ -195,6 +217,10 @@ pub fn run() {
             open_templates_folder,
             start_watching,
             stop_watching,
+            git_status,
+            git_init,
+            git_diff_file,
+            git_restore_file,
             open_folder,
             list_directory_tree,
             read_text_file,

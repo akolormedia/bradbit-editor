@@ -6,6 +6,7 @@ import {
   AppSettings,
   FileTreeNode,
   FsChangeEvent,
+  GitStatus,
   MenuCommand,
   MenuUiState,
   OpenedFolder,
@@ -16,6 +17,7 @@ import {
 } from "./types";
 import { copyTextToClipboard } from "./workspace/clipboard";
 import { createDocumentHeader } from "./workspace/documentHeader";
+import { badgeClass, buildGitBadgeMap } from "./git/status";
 import { MenuSyncQueue } from "./workspace/menuSync";
 import { extractOutline, OutlineItem } from "./workspace/outline";
 import {
@@ -85,6 +87,7 @@ class BradbitApp {
   private outlineRefreshTimer: number | null = null;
   private modal: ModalState = { kind: "none" };
   private statusNotice = "";
+  private gitStatus: GitStatus | null = null;
   private menuQueue = new MenuSyncQueue<MenuUiState>(
     () => {
       const activeTab = this.getActiveTab();
@@ -166,6 +169,7 @@ class BradbitApp {
         console.error("No se pudo iniciar el watcher", err);
         this.statusNotice = err instanceof Error ? err.message : String(err);
       }
+      await this.refreshGitStatus();
       this.render();
     } catch (err) {
       this.statusNotice = err instanceof Error ? err.message : String(err);
@@ -183,6 +187,20 @@ class BradbitApp {
       ...this.folder,
       tree,
     };
+    await this.refreshGitStatus();
+  }
+
+  private async refreshGitStatus(): Promise<void> {
+    if (!this.folder || !isTauriEnvironment()) {
+      this.gitStatus = null;
+      return;
+    }
+    try {
+      this.gitStatus = await backend.gitStatus(this.folder.rootPath);
+    } catch (err) {
+      console.error("No se pudo leer el estado de Git", err);
+      this.gitStatus = null;
+    }
   }
 
   private async openFileFromTree(relPath: string, pin: boolean): Promise<void> {
@@ -208,6 +226,7 @@ class BradbitApp {
       await backend.writeTextFile(this.folder.rootPath, active.path, active.content);
       this.tabState = markTabSaved(this.tabState, active.path);
       this.statusNotice = t(this.settings.language, "saved");
+      await this.refreshGitStatus();
       this.render();
       return true;
     } catch (err) {
@@ -948,6 +967,7 @@ class BradbitApp {
         });
         this.folder = null;
         this.tabState = { tabs: [], activeTabPath: null };
+        this.gitStatus = null;
         this.editor?.destroy();
         this.editor = null;
         this.render();
@@ -1137,6 +1157,7 @@ class BradbitApp {
       this.folder?.tree ?? [],
       this.settings.showConfigFiles,
     );
+    const gitBadges = buildGitBadgeMap(this.gitStatus?.entries ?? []);
 
     const renderNodes = (nodes: FileTreeNode[], depth: number) => {
       for (const node of nodes) {
@@ -1168,6 +1189,14 @@ class BradbitApp {
         const nameSpan = document.createElement("span");
         nameSpan.textContent = node.name;
         label.append(icon, nameSpan);
+
+        const badge = gitBadges.get(node.path);
+        if (badge) {
+          const badgeEl = document.createElement("span");
+          badgeEl.className = `tree-git-badge git-badge-${badgeClass(badge)}`;
+          badgeEl.textContent = badge;
+          label.appendChild(badgeEl);
+        }
 
         const rowActions = document.createElement("div");
         rowActions.className = "tree-row-actions";
@@ -1358,6 +1387,7 @@ class BradbitApp {
     if (this.tabState.tabs.length > 0) {
       const tabsBar = document.createElement("div");
       tabsBar.className = "tabs-bar";
+      const gitBadges = buildGitBadgeMap(this.gitStatus?.entries ?? []);
 
       for (const tab of this.tabState.tabs) {
         const tabEl = document.createElement("div");
@@ -1376,6 +1406,14 @@ class BradbitApp {
         title.className = "tab-title";
         title.textContent = tab.name;
         title.title = tab.path;
+
+        const gitBadge = gitBadges.get(tab.path);
+        let badgeEl: HTMLSpanElement | null = null;
+        if (gitBadge) {
+          badgeEl = document.createElement("span");
+          badgeEl.className = `tab-git-badge git-badge-${badgeClass(gitBadge)}`;
+          badgeEl.textContent = gitBadge;
+        }
 
         const dirtyDot = document.createElement("span");
         dirtyDot.className = "tab-dirty-dot";
@@ -1407,7 +1445,11 @@ class BradbitApp {
           this.render();
         };
 
-        tabEl.append(title, dirtyDot, closeBtn);
+        tabEl.appendChild(title);
+        if (badgeEl) {
+          tabEl.appendChild(badgeEl);
+        }
+        tabEl.append(dirtyDot, closeBtn);
         tabsBar.appendChild(tabEl);
       }
 
@@ -1485,6 +1527,15 @@ class BradbitApp {
 
     const left = document.createElement("div");
     left.className = "statusbar-left";
+
+    if (this.gitStatus?.isRepository) {
+      const branchSpan = document.createElement("span");
+      branchSpan.className = "git-branch";
+      const ahead = this.gitStatus.ahead > 0 ? ` ↑${this.gitStatus.ahead}` : "";
+      const behind = this.gitStatus.behind > 0 ? ` ↓${this.gitStatus.behind}` : "";
+      branchSpan.textContent = `⑂ ${this.gitStatus.branch ?? t(lang, "gitNoBranch")}${ahead}${behind}`;
+      left.appendChild(branchSpan);
+    }
 
     if (activeTab) {
       const pathSpan = document.createElement("span");

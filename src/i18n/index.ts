@@ -107,6 +107,7 @@ export const translations = {
     fileDeletedExternal:
       "«{name}» se eliminó en disco. Tu copia sin guardar se mantiene.",
     externalChangeBadge: "Cambió en disco",
+    gitNoBranch: "sin rama",
     filesTab: "Archivos",
     outlineTab: "Esquema",
     outlineTitle: "Esquema",
@@ -221,6 +222,7 @@ export const translations = {
     fileDeletedExternal:
       "“{name}” was deleted on disk. Your unsaved copy is kept.",
     externalChangeBadge: "Changed on disk",
+    gitNoBranch: "no branch",
     filesTab: "Files",
     outlineTab: "Outline",
     outlineTitle: "Outline",

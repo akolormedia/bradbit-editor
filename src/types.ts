@@ -87,3 +87,17 @@ export interface CreatedProject {
 export interface FsChangeEvent {
   paths: string[];
 }
+
+export interface GitStatusEntry {
+  path: string;
+  index: string;
+  worktree: string;
+}
+
+export interface GitStatus {
+  isRepository: boolean;
+  branch: string | null;
+  ahead: number;
+  behind: number;
+  entries: GitStatusEntry[];
+}
