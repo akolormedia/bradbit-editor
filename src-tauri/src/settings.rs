@@ -37,7 +37,7 @@ pub struct RecentProject {
     pub last_opened: String,
 }
 
-fn config_dir() -> Result<PathBuf, String> {
+pub(crate) fn config_dir() -> Result<PathBuf, String> {
     if let Ok(custom) = std::env::var("BRADBIT_CONFIG_DIR") {
         let p = PathBuf::from(custom);
         fs::create_dir_all(&p).map_err(|e| e.to_string())?;
