@@ -90,3 +90,44 @@ fn api_status_and_init_handle_plain_folders() {
     assert!(after.is_repository);
     assert!(dir.path().join(".git").is_dir());
 }
+
+#[test]
+fn head_file_and_discard_handle_tracked_and_new_files() {
+    let (dir, repo) = initialized_repo();
+    let root = dir.path().to_str().unwrap();
+    fs::write(dir.path().join("a.md"), "original").unwrap();
+    repo.stage_all(options()).unwrap();
+    repo.commit("inicial", "Test", "test@example.com", options())
+        .unwrap();
+
+    assert_eq!(
+        super::api::head_file(root, "a.md").unwrap().as_deref(),
+        Some("original")
+    );
+    assert_eq!(super::api::head_file(root, "nuevo.md").unwrap(), None);
+
+    fs::write(dir.path().join("a.md"), "cambiado").unwrap();
+    fs::write(dir.path().join("nuevo.md"), "nuevo").unwrap();
+
+    let tracked = super::api::discard_file(root, "a.md").unwrap();
+    assert!(!tracked.deleted);
+    assert_eq!(
+        fs::read_to_string(dir.path().join("a.md")).unwrap(),
+        "original"
+    );
+
+    let untracked = super::api::discard_file(root, "nuevo.md").unwrap();
+    assert!(untracked.deleted);
+    assert!(!dir.path().join("nuevo.md").exists());
+
+    fs::write(dir.path().join("staged.md"), "staged").unwrap();
+    repo.stage(&["staged.md"], options()).unwrap();
+    let staged = super::api::discard_file(root, "staged.md").unwrap();
+    assert!(staged.deleted);
+    assert!(!dir.path().join("staged.md").exists());
+    assert!(!staged
+        .status
+        .entries
+        .iter()
+        .any(|entry| entry.path == "staged.md"));
+}

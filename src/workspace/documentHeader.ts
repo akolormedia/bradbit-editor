@@ -8,6 +8,11 @@ export interface DocumentHeaderOptions {
   onTogglePreview: () => void;
   onCopy: () => Promise<boolean>;
   onExportPdf?: () => void;
+  canDiff?: boolean;
+  diffActive?: boolean;
+  onToggleDiff?: () => void;
+  canDiscard?: boolean;
+  onDiscard?: () => void;
 }
 
 /**
@@ -52,6 +57,30 @@ export function createDocumentHeader(options: DocumentHeaderOptions): HTMLElemen
     previewBtn.textContent = "</>";
     previewBtn.onclick = () => options.onTogglePreview();
     actions.appendChild(previewBtn);
+  }
+
+  if (options.canDiff && options.onToggleDiff) {
+    const diffBtn = document.createElement("button");
+    diffBtn.className = "icon-btn document-action";
+    diffBtn.classList.toggle("active", Boolean(options.diffActive));
+    diffBtn.dataset.action = "diff";
+    diffBtn.setAttribute("aria-pressed", String(Boolean(options.diffActive)));
+    diffBtn.title = t(language, "diffButton");
+    diffBtn.setAttribute("aria-label", t(language, "diffButton"));
+    diffBtn.textContent = "Diff";
+    diffBtn.onclick = () => options.onToggleDiff?.();
+    actions.appendChild(diffBtn);
+  }
+
+  if (options.canDiscard && options.onDiscard) {
+    const discardBtn = document.createElement("button");
+    discardBtn.className = "icon-btn document-action";
+    discardBtn.dataset.action = "discard";
+    discardBtn.title = t(language, "discardChangesTitle");
+    discardBtn.setAttribute("aria-label", t(language, "discardChangesTitle"));
+    discardBtn.textContent = "↺";
+    discardBtn.onclick = () => options.onDiscard?.();
+    actions.appendChild(discardBtn);
   }
 
   if (isFountainPath(tab.path) && options.onExportPdf) {

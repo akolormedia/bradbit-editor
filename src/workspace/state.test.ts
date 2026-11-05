@@ -12,6 +12,7 @@ import {
   openFileInTabs,
   renamePathInTabs,
   resolveProjectLink,
+  setTabViewMode,
   TabListState,
   toggleTabViewMode,
   updateTabContent,
@@ -171,6 +172,19 @@ describe("workspace tab state (Story 1.1)", () => {
     expect(isFountainPath("guion/acto-1.FOUNTAIN")).toBe(true);
     expect(isFountainPath("guion/acto-1.spmd")).toBe(true);
     expect(isFountainPath("biblia/premisa.md")).toBe(false);
+  });
+
+  it("sets per-tab diff/edit view modes (T-1.4.3)", () => {
+    let state: TabListState = { tabs: [], activeTabPath: null };
+    state = openFileInTabs(
+      state,
+      { path: "biblia/premisa.md", name: "premisa.md", content: "# Premisa" },
+      true,
+    );
+    state = setTabViewMode(state, "biblia/premisa.md", "diff");
+    expect(state.tabs[0].viewMode).toBe("diff");
+    state = setTabViewMode(state, "biblia/premisa.md", "edit");
+    expect(state.tabs[0].viewMode).toBe("edit");
   });
 
   it("resolves relative preview links against the document folder (T-1.2.1)", () => {

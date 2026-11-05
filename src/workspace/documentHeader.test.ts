@@ -113,4 +113,45 @@ describe("active document header (T-1.2.1)", () => {
     expect(button?.textContent).toBe("⧉");
     header.remove();
   });
+
+  it("shows Diff and Discard actions when the file has Git changes (T-1.4.3)", () => {
+    const onToggleDiff = vi.fn();
+    const onDiscard = vi.fn();
+    const header = createDocumentHeader({
+      tab: tab({ viewMode: "diff" }),
+      language: "es",
+      onTogglePreview: () => {},
+      onCopy: async () => true,
+      canDiff: true,
+      diffActive: true,
+      onToggleDiff,
+      canDiscard: true,
+      onDiscard,
+    });
+
+    const diffBtn = header.querySelector<HTMLButtonElement>('[data-action="diff"]');
+    expect(diffBtn).not.toBeNull();
+    expect(diffBtn?.getAttribute("aria-pressed")).toBe("true");
+    expect(diffBtn?.title).toBe("Diff");
+    diffBtn?.click();
+    expect(onToggleDiff).toHaveBeenCalledOnce();
+
+    const discardBtn = header.querySelector<HTMLButtonElement>('[data-action="discard"]');
+    expect(discardBtn).not.toBeNull();
+    expect(discardBtn?.title).toBe("Descartar cambios");
+    discardBtn?.click();
+    expect(onDiscard).toHaveBeenCalledOnce();
+  });
+
+  it("hides Diff and Discard actions for files without Git changes", () => {
+    const header = createDocumentHeader({
+      tab: tab(),
+      language: "es",
+      onTogglePreview: () => {},
+      onCopy: async () => true,
+    });
+
+    expect(header.querySelector('[data-action="diff"]')).toBeNull();
+    expect(header.querySelector('[data-action="discard"]')).toBeNull();
+  });
 });

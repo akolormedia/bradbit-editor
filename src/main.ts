@@ -1,5 +1,6 @@
 import { backend, isTauriEnvironment } from "./backend";
 import { BradbitCodeMirror } from "./editor/codemirror";
+import { BradbitDiffView } from "./editor/diff";
 import { renderMarkdownPreview } from "./editor/preview";
 import { t } from "./i18n";
 import {
@@ -42,6 +43,7 @@ import {
   openFileInTabs,
   renamePathInTabs,
   resolveProjectLink,
+  setTabViewMode,
   TabListState,
   toggleTabViewMode,
   updateTabContent,
@@ -64,6 +66,7 @@ type ModalState =
   | { kind: "save-template"; name: string; error?: string; saving?: boolean }
   | { kind: "entry-input"; mode: "new-file" | "new-folder" | "rename"; targetPath: string; value: string; error?: string }
   | { kind: "confirm-delete"; targetPath: string; error?: string }
+  | { kind: "confirm-discard"; path: string; name: string; error?: string }
   | { kind: "confirm-unsaved"; tabPath: string; tabName: string };
 
 /** Shortcuts owned by the native menu when running inside Tauri. */
@@ -107,6 +110,11 @@ class BradbitApp {
 
   private rootEl: HTMLElement;
   private cmHostEl: HTMLElement | null = null;
+  private diffHostEl: HTMLElement | null = null;
+  private diffView: BradbitDiffView | null = null;
+  private diffViewKey: string | null = null;
+  private diffData: { path: string; original: string; isNew: boolean } | null = null;
+  private diffLoadingPath: string | null = null;
   private editor: BradbitCodeMirror | null = null;
 
   constructor(rootEl: HTMLElement) {
@@ -378,6 +386,111 @@ class BradbitApp {
   private ensureEditMode(): void {
     if (this.getActiveTab()?.viewMode === "preview") {
       this.togglePreview();
+    }
+  }
+
+  private toggleDiff(): void {
+    const active = this.getActiveTab();
+    if (!active || !this.folder) return;
+
+    const entering = active.viewMode !== "diff";
+    this.tabState = setTabViewMode(
+      this.tabState,
+      active.path,
+      entering ? "diff" : "edit",
+    );
+    if (!entering) {
+      this.diffData = null;
+      this.destroyDiffView();
+    }
+    this.render();
+  }
+
+  private destroyDiffView(): void {
+    this.diffView?.destroy();
+    this.diffView = null;
+    this.diffViewKey = null;
+  }
+
+  private syncDiffView(activeTab: OpenTab | null): void {
+    if (!activeTab || activeTab.viewMode !== "diff") {
+      this.destroyDiffView();
+      this.diffData = null;
+      return;
+    }
+    if (!this.diffHostEl) return;
+
+    const data = this.diffData;
+    if (!data || data.path !== activeTab.path) {
+      void this.loadDiffData(activeTab);
+      return;
+    }
+
+    const key = `${activeTab.path}\u0000${data.original}\u0000${activeTab.content}`;
+    if (this.diffView && this.diffViewKey === key) return;
+
+    this.destroyDiffView();
+    this.diffView = new BradbitDiffView(this.diffHostEl);
+    this.diffViewKey = key;
+    this.diffView.open(data.original, activeTab.content, this.settings);
+  }
+
+  private async loadDiffData(tab: OpenTab): Promise<void> {
+    if (!this.folder || this.diffLoadingPath === tab.path) return;
+    this.diffLoadingPath = tab.path;
+    try {
+      const original = await backend.gitHeadFile(this.folder.rootPath, tab.path);
+      if (this.getActiveTab()?.path !== tab.path) return;
+      this.diffData = {
+        path: tab.path,
+        original: original ?? "",
+        isNew: original === null,
+      };
+      this.render();
+    } catch (err) {
+      console.error("No se pudo cargar la versión guardada", err);
+      this.tabState = setTabViewMode(this.tabState, tab.path, "edit");
+      this.render();
+    } finally {
+      this.diffLoadingPath = null;
+    }
+  }
+
+  private requestDiscard(): void {
+    const active = this.getActiveTab();
+    if (!active || !this.folder) return;
+    this.modal = { kind: "confirm-discard", path: active.path, name: active.name };
+    this.render();
+  }
+
+  private async discardChanges(): Promise<void> {
+    const modal = this.modal;
+    if (modal.kind !== "confirm-discard" || !this.folder) return;
+    try {
+      const result = await backend.gitDiscardFile(this.folder.rootPath, modal.path);
+      this.gitStatus = result.status;
+      this.editor?.closeDocumentState(modal.path);
+      this.destroyDiffView();
+      this.diffData = null;
+
+      if (result.deleted) {
+        this.tabState = closeTabInState(this.tabState, modal.path);
+        await this.refreshTree();
+      } else {
+        const content = await backend.readTextFile(this.folder.rootPath, modal.path);
+        this.tabState = updateTabContent(this.tabState, modal.path, content);
+        this.tabState = markTabSaved(this.tabState, modal.path);
+        this.tabState = setTabViewMode(this.tabState, modal.path, "edit");
+      }
+
+      this.modal = { kind: "none" };
+      this.render();
+      this.showStatusNotice(t(this.settings.language, "changesDiscarded"));
+    } catch (err) {
+      if (this.modal.kind === "confirm-discard") {
+        this.modal.error = err instanceof Error ? err.message : String(err);
+        this.render();
+      }
     }
   }
 
@@ -793,10 +906,14 @@ class BradbitApp {
     const lang = this.settings.language;
     const activeTab = this.getActiveTab();
 
-    // Preserve CodeMirror host element across renders so typing/focus never drops
+    // Preserve CodeMirror and diff hosts across renders so typing/focus never drops
     if (!this.cmHostEl) {
       this.cmHostEl = document.createElement("div");
       this.cmHostEl.className = "cm-host";
+    }
+    if (!this.diffHostEl) {
+      this.diffHostEl = document.createElement("div");
+      this.diffHostEl.className = "diff-host";
     }
 
     this.rootEl.innerHTML = "";
@@ -852,8 +969,12 @@ class BradbitApp {
           },
         });
       }
-      this.editor.openDocument(activeTab.path, activeTab.content, this.settings);
+      if (activeTab.viewMode !== "diff") {
+        this.editor.openDocument(activeTab.path, activeTab.content, this.settings);
+      }
     }
+
+    this.syncDiffView(activeTab);
 
     // Keep native menu labels, check marks and enabled items aligned with the UI.
     this.syncMenu();
@@ -1456,6 +1577,17 @@ class BradbitApp {
       col.appendChild(tabsBar);
     }
 
+    const gitEntry = activeTab
+      ? this.gitStatus?.entries.find((entry) => entry.path === activeTab.path)
+      : undefined;
+    const tabDirty = activeTab ? isTabDirty(activeTab) : false;
+    const canDiff = Boolean(
+      activeTab &&
+        this.gitStatus?.isRepository &&
+        (gitEntry || tabDirty || activeTab.viewMode === "diff"),
+    );
+    const canDiscard = Boolean(activeTab && (gitEntry || tabDirty));
+
     if (activeTab) {
       col.appendChild(
         createDocumentHeader({
@@ -1466,6 +1598,11 @@ class BradbitApp {
           onExportPdf: isTauriEnvironment()
             ? () => void this.exportActiveFountainPdf()
             : undefined,
+          canDiff,
+          diffActive: activeTab.viewMode === "diff",
+          onToggleDiff: () => void this.toggleDiff(),
+          canDiscard,
+          onDiscard: () => this.requestDiscard(),
         }),
       );
     }
@@ -1482,6 +1619,33 @@ class BradbitApp {
       preview.appendChild(inner);
       preview.addEventListener("click", (e) => this.handlePreviewClick(e, activeTab));
       surface.appendChild(preview);
+    } else if (activeTab && activeTab.viewMode === "diff") {
+      const wrapper = document.createElement("div");
+      wrapper.className = "diff-wrapper";
+
+      const banner = document.createElement("div");
+      banner.className = "diff-banner";
+      const ready = this.diffData?.path === activeTab.path;
+      if (!ready) {
+        banner.textContent = t(lang, "diffLoading");
+      } else if (this.diffData?.isNew) {
+        banner.textContent = t(lang, "diffNewFile");
+        banner.classList.add("new-file");
+      } else {
+        banner.textContent = t(lang, "diffWithHead");
+      }
+      wrapper.appendChild(banner);
+
+      if (ready && this.diffHostEl) {
+        wrapper.appendChild(this.diffHostEl);
+      } else {
+        const loading = document.createElement("div");
+        loading.className = "diff-loading";
+        loading.textContent = t(lang, "diffLoading");
+        wrapper.appendChild(loading);
+      }
+
+      surface.appendChild(wrapper);
     } else if (activeTab && this.cmHostEl) {
       surface.appendChild(this.cmHostEl);
     } else {
@@ -2075,6 +2239,43 @@ class BradbitApp {
 
       footer.append(cancelBtn, discardBtn, saveBtn);
       dialog.append(h3, p, footer);
+    } else if (this.modal.kind === "confirm-discard") {
+      const { path, name } = this.modal;
+      const h3 = document.createElement("h3");
+      h3.textContent = t(lang, "discardChangesTitle");
+      const p = document.createElement("p");
+      p.textContent = t(lang, "discardChangesPrompt", { name });
+      const pathEl = document.createElement("p");
+      pathEl.className = "modal-hint";
+      pathEl.textContent = path;
+      dialog.append(h3, p, pathEl);
+
+      if (this.modal.error) {
+        const errEl = document.createElement("div");
+        errEl.className = "error-banner";
+        errEl.textContent = this.modal.error;
+        dialog.appendChild(errEl);
+      }
+
+      const footer = document.createElement("div");
+      footer.className = "modal-footer";
+      const cancelBtn = document.createElement("button");
+      cancelBtn.className = "toolbar-btn";
+      cancelBtn.textContent = t(lang, "cancel");
+      cancelBtn.onclick = () => {
+        this.modal = { kind: "none" };
+        this.render();
+      };
+
+      const discardBtn = document.createElement("button");
+      discardBtn.className = "toolbar-btn danger";
+      discardBtn.dataset.testid = "confirm-discard-btn";
+      discardBtn.textContent = t(lang, "discardChanges");
+      discardBtn.onclick = () => void this.discardChanges();
+
+      footer.append(cancelBtn, discardBtn);
+      dialog.appendChild(footer);
+      setTimeout(() => cancelBtn.focus(), 10);
     }
 
     backdrop.appendChild(dialog);

@@ -224,6 +224,19 @@ export function toggleTabViewMode(state: TabListState, path: string): TabListSta
   };
 }
 
+export function setTabViewMode(
+  state: TabListState,
+  path: string,
+  viewMode: OpenTab["viewMode"],
+): TabListState {
+  return {
+    ...state,
+    tabs: state.tabs.map((tab) =>
+      tab.path === path ? { ...tab, viewMode } : tab,
+    ),
+  };
+}
+
 /**
  * Resolves a relative link from a Markdown preview against the folder of the
  * document that contains it. Returns null for absolute URLs, anchors or paths

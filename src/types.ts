@@ -31,7 +31,7 @@ export interface RecentProject {
   lastOpened: string;
 }
 
-export type TabViewMode = "edit" | "preview";
+export type TabViewMode = "edit" | "preview" | "diff";
 
 export interface OpenTab {
   path: string;
@@ -100,4 +100,9 @@ export interface GitStatus {
   ahead: number;
   behind: number;
   entries: GitStatusEntry[];
+}
+
+export interface GitDiscardResult {
+  deleted: boolean;
+  status: GitStatus;
 }

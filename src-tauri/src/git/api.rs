@@ -1,5 +1,7 @@
 use super::{DiffScope, OpOptions, Repository, WorktreeStatus};
+use crate::fs_ops;
 use serde::Serialize;
+use std::fs;
 use std::path::Path;
 
 #[derive(Debug, Clone, Serialize, PartialEq, Eq)]
@@ -81,6 +83,62 @@ pub fn restore_file(root: &str, rel_path: &str) -> Result<GitStatus, String> {
     repo.restore_file(rel_path, OpOptions::default())
         .map_err(|e| e.to_string())?;
     status(root)
+}
+
+#[derive(Debug, Clone, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct DiscardResult {
+    pub deleted: bool,
+    pub status: GitStatus,
+}
+
+/// Read a file's content from HEAD. `None` means the file has no committed
+/// version yet (new or untracked file).
+pub fn head_file(root: &str, rel_path: &str) -> Result<Option<String>, String> {
+    if !Path::new(root).join(".git").exists() {
+        return Ok(None);
+    }
+    let repo =
+        Repository::open(Path::new(root), OpOptions::default()).map_err(|e| e.to_string())?;
+    match repo.show_file("HEAD", rel_path, OpOptions::default()) {
+        Ok(content) => Ok(Some(content)),
+        Err(_) => Ok(None),
+    }
+}
+
+/// Restore a tracked file to HEAD, or delete an untracked/new file. Staged
+/// new files are removed from the index before the file is deleted.
+pub fn discard_file(root: &str, rel_path: &str) -> Result<DiscardResult, String> {
+    let root_path = fs::canonicalize(root)
+        .map_err(|e| format!("No se pudo abrir la carpeta '{}': {}", root, e))?;
+    let repo = Repository::open(&root_path, OpOptions::default()).map_err(|e| e.to_string())?;
+    let has_head_version = repo
+        .show_file("HEAD", rel_path, OpOptions::default())
+        .is_ok();
+
+    if has_head_version {
+        repo.restore_file(rel_path, OpOptions::default())
+            .map_err(|e| e.to_string())?;
+        return Ok(DiscardResult {
+            deleted: false,
+            status: status(root)?,
+        });
+    }
+
+    // New file: unstage it if needed and remove it from disk.
+    let _ = repo.unstage_path(rel_path, OpOptions::default());
+    let target = fs_ops::resolve_safe_relative(&root_path, rel_path)?;
+    if target.exists() {
+        if !target.is_file() {
+            return Err("Solo se pueden descartar archivos, no carpetas".to_string());
+        }
+        fs::remove_file(&target)
+            .map_err(|e| format!("No se pudo eliminar '{}': {}", rel_path, e))?;
+    }
+    Ok(DiscardResult {
+        deleted: true,
+        status: status(root)?,
+    })
 }
 
 fn label(status: WorktreeStatus) -> &'static str {
