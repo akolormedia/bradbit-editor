@@ -11,11 +11,18 @@ import {
   OpenTab,
   RecentProject,
   SearchMatch,
+  TemplateInfo,
 } from "./types";
 import { copyTextToClipboard } from "./workspace/clipboard";
 import { createDocumentHeader } from "./workspace/documentHeader";
 import { MenuSyncQueue } from "./workspace/menuSync";
 import { extractOutline, OutlineItem } from "./workspace/outline";
+import {
+  defaultProjectDestination,
+  projectPathPreview,
+  validateProjectDraft,
+  ProjectDraftError,
+} from "./workspace/projectCreation";
 import { flattenFileTree } from "./workspace/quickOpen";
 import { SearchPalette } from "./workspace/searchPalette";
 import {
@@ -41,6 +48,16 @@ type ModalState =
   | { kind: "settings" }
   | { kind: "quick-open" }
   | { kind: "global-search" }
+  | {
+      kind: "new-project";
+      templates: TemplateInfo[];
+      selectedTemplateId: string;
+      name: string;
+      destination: string;
+      error?: string;
+      submitting?: boolean;
+    }
+  | { kind: "save-template"; name: string; error?: string; saving?: boolean }
   | { kind: "entry-input"; mode: "new-file" | "new-folder" | "rename"; targetPath: string; value: string; error?: string }
   | { kind: "confirm-delete"; targetPath: string; error?: string }
   | { kind: "confirm-unsaved"; tabPath: string; tabName: string };
@@ -362,6 +379,135 @@ class BradbitApp {
     this.editor?.gotoLine(line);
   }
 
+  private async openNewProjectModal(): Promise<void> {
+    if (!isTauriEnvironment()) return;
+    try {
+      const templates = await backend.listTemplates();
+      this.modal = {
+        kind: "new-project",
+        templates,
+        selectedTemplateId: templates[0]?.id ?? "",
+        name: "",
+        destination: defaultProjectDestination(this.folder?.rootPath ?? null),
+      };
+      this.render();
+    } catch (err) {
+      this.showStatusNotice(err instanceof Error ? err.message : String(err));
+    }
+  }
+
+  private openSaveTemplateModal(): void {
+    if (!this.folder || !isTauriEnvironment()) return;
+    this.modal = { kind: "save-template", name: this.folder.name };
+    this.render();
+  }
+
+  private async chooseProjectDestination(): Promise<void> {
+    if (this.modal.kind !== "new-project") return;
+    try {
+      const picked = await backend.pickFolderDialog();
+      if (picked && this.modal.kind === "new-project") {
+        this.modal.destination = picked;
+        this.render();
+      }
+    } catch (err) {
+      this.showStatusNotice(err instanceof Error ? err.message : String(err));
+    }
+  }
+
+  private async submitNewProject(): Promise<void> {
+    const modal = this.modal;
+    if (modal.kind !== "new-project") return;
+    const validation = validateProjectDraft({
+      templateId: modal.selectedTemplateId,
+      name: modal.name,
+      destination: modal.destination,
+    });
+    if (validation) {
+      modal.error = t(this.settings.language, this.projectErrorKey(validation));
+      this.render();
+      return;
+    }
+
+    modal.submitting = true;
+    this.render();
+    try {
+      const created = await backend.createProjectFromTemplate(
+        modal.selectedTemplateId,
+        modal.name.trim(),
+        modal.destination.trim(),
+      );
+      this.modal = { kind: "none" };
+      await this.openFolderByPath(created.path);
+      this.showStatusNotice(
+        t(
+          this.settings.language,
+          created.gitInitialized ? "projectCreated" : "projectCreatedNoGit",
+        ),
+      );
+    } catch (err) {
+      if (this.modal.kind === "new-project") {
+        this.modal.submitting = false;
+        this.modal.error = err instanceof Error ? err.message : String(err);
+        this.render();
+      }
+    }
+  }
+
+  private async submitSaveTemplate(): Promise<void> {
+    const modal = this.modal;
+    if (modal.kind !== "save-template" || !this.folder) return;
+    const name = modal.name.trim();
+    if (!name) {
+      modal.error = t(this.settings.language, "projectErrorName");
+      this.render();
+      return;
+    }
+
+    modal.saving = true;
+    this.render();
+    try {
+      await backend.saveCurrentAsTemplate(this.folder.rootPath, name);
+      this.modal = { kind: "none" };
+      this.render();
+      this.showStatusNotice(t(this.settings.language, "templateSaved"));
+    } catch (err) {
+      if (this.modal.kind === "save-template") {
+        this.modal.saving = false;
+        this.modal.error = err instanceof Error ? err.message : String(err);
+        this.render();
+      }
+    }
+  }
+
+  private async openTemplatesFolder(): Promise<void> {
+    if (!isTauriEnvironment()) return;
+    try {
+      await backend.openTemplatesFolder();
+    } catch (err) {
+      this.showStatusNotice(err instanceof Error ? err.message : String(err));
+    }
+  }
+
+  private projectErrorKey(
+    error: ProjectDraftError,
+  ):
+    | "projectErrorTemplate"
+    | "projectErrorName"
+    | "projectErrorNameInvalid"
+    | "projectErrorDestination" {
+    switch (error) {
+      case "template":
+        return "projectErrorTemplate";
+      case "name":
+        return "projectErrorName";
+      case "nameInvalid":
+        return "projectErrorNameInvalid";
+      case "destination":
+        return "projectErrorDestination";
+    }
+  }
+
   private async copyActiveDocument(): Promise<boolean> {
     const active = this.getActiveTab();
     if (!active) return false;
@@ -447,6 +593,15 @@ class BradbitApp {
           this.openEntryModal("new-file");
         }
         break;
+      case "file.newProject":
+        await this.openNewProjectModal();
+        break;
+      case "file.saveAsTemplate":
+        this.openSaveTemplateModal();
+        break;
+      case "file.openTemplatesFolder":
+        await this.openTemplatesFolder();
+        break;
       case "file.save":
         await this.saveActiveTab();
         break;
@@ -527,6 +682,9 @@ class BradbitApp {
       } else if (letter === "o") {
         e.preventDefault();
         void this.handleOpenFolderDialog();
+      } else if (letter === "n" && e.shiftKey) {
+        e.preventDefault();
+        void this.openNewProjectModal();
       } else if (letter === "n" && this.folder) {
         e.preventDefault();
         this.openEntryModal("new-file");
@@ -683,6 +841,16 @@ class BradbitApp {
     openBtn.onclick = () => void this.handleOpenFolderDialog();
     right.appendChild(openBtn);
 
+    if (isTauriEnvironment()) {
+      const newProjectBtn = document.createElement("button");
+      newProjectBtn.className = "toolbar-btn";
+      newProjectBtn.dataset.testid = "topbar-new-project-btn";
+      newProjectBtn.textContent = `＋ ${t(lang, "projectShort")}`;
+      newProjectBtn.title = `${t(lang, "newProjectButton")} (⇧⌘N)`;
+      newProjectBtn.onclick = () => void this.openNewProjectModal();
+      right.appendChild(newProjectBtn);
+    }
+
     if (this.folder) {
       const newFileBtn = document.createElement("button");
       newFileBtn.className = "toolbar-btn";
@@ -762,7 +930,16 @@ class BradbitApp {
     demoBtn.onclick = () =>
       void this.openFolderByPath("/Users/rafaelolivares/Documents/GitHub/guionista-kit");
 
-    actions.append(openBtn, demoBtn);
+    actions.append(openBtn);
+    if (isTauriEnvironment()) {
+      const newProjectBtn = document.createElement("button");
+      newProjectBtn.className = "toolbar-btn";
+      newProjectBtn.dataset.testid = "welcome-new-project-btn";
+      newProjectBtn.textContent = t(lang, "newProjectButton");
+      newProjectBtn.onclick = () => void this.openNewProjectModal();
+      actions.appendChild(newProjectBtn);
+    }
+    actions.appendChild(demoBtn);
 
     const recentsSec = document.createElement("div");
     recentsSec.className = "recents-section";
@@ -1272,6 +1449,227 @@ class BradbitApp {
     return bar;
   }
 
+  private renderNewProjectModal(
+    dialog: HTMLElement,
+    lang: AppSettings["language"],
+  ): void {
+    const modal = this.modal;
+    if (modal.kind !== "new-project") return;
+    dialog.classList.add("new-project-dialog");
+
+    const h3 = document.createElement("h3");
+    h3.textContent = t(lang, "newProjectTitle");
+
+    const templateField = document.createElement("div");
+    templateField.className = "form-row";
+    const templateLabel = document.createElement("label");
+    templateLabel.className = "form-label";
+    templateLabel.textContent = t(lang, "templateLabel");
+    const templateSelect = document.createElement("select");
+    templateSelect.className = "select-input";
+    templateSelect.dataset.testid = "new-project-template";
+    for (const template of modal.templates) {
+      const option = document.createElement("option");
+      option.value = template.id;
+      option.textContent = template.name;
+      templateSelect.appendChild(option);
+    }
+    if (modal.selectedTemplateId) {
+      templateSelect.value = modal.selectedTemplateId;
+    }
+    templateSelect.disabled = modal.templates.length === 0;
+
+    const templateDescription = document.createElement("p");
+    templateDescription.className = "template-description";
+    const updateDescription = () => {
+      if (this.modal.kind !== "new-project") return;
+      const selected = this.modal.templates.find(
+        (template) => template.id === templateSelect.value,
+      );
+      templateDescription.textContent =
+        selected?.description ?? t(lang, "noTemplates");
+    };
+    updateDescription();
+    templateSelect.onchange = () => {
+      if (this.modal.kind !== "new-project") return;
+      this.modal.selectedTemplateId = templateSelect.value;
+      updateDescription();
+    };
+    templateField.append(templateLabel, templateSelect, templateDescription);
+
+    const nameField = document.createElement("div");
+    nameField.className = "form-row";
+    const nameLabel = document.createElement("label");
+    nameLabel.className = "form-label";
+    nameLabel.textContent = t(lang, "projectNameLabel");
+    const nameInput = document.createElement("input");
+    nameInput.className = "text-input";
+    nameInput.dataset.testid = "new-project-name";
+    nameInput.value = modal.name;
+    nameInput.placeholder = t(lang, "projectNamePlaceholder");
+
+    const destinationField = document.createElement("div");
+    destinationField.className = "form-row";
+    const destinationLabel = document.createElement("label");
+    destinationLabel.className = "form-label";
+    destinationLabel.textContent = t(lang, "projectDestinationLabel");
+    const destinationRow = document.createElement("div");
+    destinationRow.className = "destination-row";
+    const destinationInput = document.createElement("input");
+    destinationInput.className = "text-input";
+    destinationInput.dataset.testid = "new-project-destination";
+    destinationInput.value = modal.destination;
+    destinationInput.placeholder = t(lang, "projectDestinationPlaceholder");
+    const chooseButton = document.createElement("button");
+    chooseButton.className = "toolbar-btn";
+    chooseButton.textContent = t(lang, "chooseFolder");
+    chooseButton.onclick = () => void this.chooseProjectDestination();
+    destinationRow.append(destinationInput, chooseButton);
+    destinationField.append(destinationLabel, destinationRow);
+
+    const preview = document.createElement("div");
+    preview.className = "project-path-preview";
+    const updatePreview = () => {
+      if (this.modal.kind !== "new-project") return;
+      const path = projectPathPreview(this.modal.destination, this.modal.name);
+      preview.textContent = path
+        ? `${t(lang, "projectWillBeCreatedAt")} ${path}`
+        : "";
+    };
+    updatePreview();
+
+    nameInput.oninput = () => {
+      if (this.modal.kind !== "new-project") return;
+      this.modal.name = nameInput.value;
+      updatePreview();
+    };
+    destinationInput.oninput = () => {
+      if (this.modal.kind !== "new-project") return;
+      this.modal.destination = destinationInput.value;
+      updatePreview();
+    };
+    nameField.append(nameLabel, nameInput);
+
+    const footer = document.createElement("div");
+    footer.className = "modal-footer new-project-footer";
+    const left = document.createElement("div");
+    left.className = "modal-footer-left";
+    const templatesButton = document.createElement("button");
+    templatesButton.className = "toolbar-btn";
+    templatesButton.textContent = t(lang, "openTemplatesFolder");
+    templatesButton.onclick = () => void this.openTemplatesFolder();
+    left.appendChild(templatesButton);
+    if (this.folder) {
+      const saveButton = document.createElement("button");
+      saveButton.className = "toolbar-btn";
+      saveButton.textContent = t(lang, "saveAsTemplate");
+      saveButton.onclick = () => this.openSaveTemplateModal();
+      left.appendChild(saveButton);
+    }
+
+    const right = document.createElement("div");
+    right.className = "modal-footer-right";
+    const cancelButton = document.createElement("button");
+    cancelButton.className = "toolbar-btn";
+    cancelButton.textContent = t(lang, "cancel");
+    cancelButton.onclick = () => this.closeModal();
+    const createButton = document.createElement("button");
+    createButton.className = "toolbar-btn primary";
+    createButton.dataset.testid = "new-project-create";
+    createButton.disabled = Boolean(modal.submitting) || modal.templates.length === 0;
+    createButton.textContent = modal.submitting
+      ? t(lang, "creatingProject")
+      : t(lang, "createProject");
+    createButton.onclick = () => void this.submitNewProject();
+    right.append(cancelButton, createButton);
+    footer.append(left, right);
+
+    dialog.append(h3, templateField, nameField, destinationField, preview);
+    if (modal.error) {
+      const error = document.createElement("div");
+      error.className = "error-banner";
+      error.textContent = modal.error;
+      dialog.appendChild(error);
+    }
+    dialog.appendChild(footer);
+    window.setTimeout(() => nameInput.focus(), 10);
+  }
+
+  private renderSaveTemplateModal(
+    dialog: HTMLElement,
+    lang: AppSettings["language"],
+  ): void {
+    const modal = this.modal;
+    if (modal.kind !== "save-template") return;
+    dialog.classList.add("save-template-dialog");
+
+    const h3 = document.createElement("h3");
+    h3.textContent = t(lang, "saveAsTemplateTitle");
+    const hint = document.createElement("p");
+    hint.textContent = t(lang, "saveTemplateHint", {
+      name: this.folder?.name ?? "",
+    });
+
+    const field = document.createElement("div");
+    field.className = "form-row";
+    const label = document.createElement("label");
+    label.className = "form-label";
+    label.textContent = t(lang, "templateNameLabel");
+    const input = document.createElement("input");
+    input.className = "text-input";
+    input.dataset.testid = "save-template-name";
+    input.value = modal.name;
+    input.oninput = () => {
+      if (this.modal.kind === "save-template") {
+        this.modal.name = input.value;
+      }
+    };
+    input.onkeydown = (event) => {
+      if (event.key === "Enter") {
+        event.preventDefault();
+        void this.submitSaveTemplate();
+      }
+    };
+    field.append(label, input);
+
+    const footer = document.createElement("div");
+    footer.className = "modal-footer save-template-footer";
+    const left = document.createElement("div");
+    left.className = "modal-footer-left";
+    const templatesButton = document.createElement("button");
+    templatesButton.className = "toolbar-btn";
+    templatesButton.textContent = t(lang, "openTemplatesFolder");
+    templatesButton.onclick = () => void this.openTemplatesFolder();
+    left.appendChild(templatesButton);
+
+    const right = document.createElement("div");
+    right.className = "modal-footer-right";
+    const cancelButton = document.createElement("button");
+    cancelButton.className = "toolbar-btn";
+    cancelButton.textContent = t(lang, "cancel");
+    cancelButton.onclick = () => this.closeModal();
+    const saveButton = document.createElement("button");
+    saveButton.className = "toolbar-btn primary";
+    saveButton.dataset.testid = "save-template-submit";
+    saveButton.disabled = Boolean(modal.saving);
+    saveButton.textContent = modal.saving
+      ? t(lang, "savingTemplate")
+      : t(lang, "saveTemplateAction");
+    saveButton.onclick = () => void this.submitSaveTemplate();
+    right.append(cancelButton, saveButton);
+    footer.append(left, right);
+
+    dialog.append(h3, hint, field);
+    if (modal.error) {
+      const error = document.createElement("div");
+      error.className = "error-banner";
+      error.textContent = modal.error;
+      dialog.appendChild(error);
+    }
+    dialog.appendChild(footer);
+    window.setTimeout(() => input.focus(), 10);
+  }
+
   private renderModal(lang: AppSettings["language"]): HTMLElement {
     const backdrop = document.createElement("div");
     backdrop.className = "modal-backdrop";
@@ -1421,6 +1819,10 @@ class BradbitApp {
               onClose: () => this.closeModal(),
             });
       dialog.appendChild(palette.element());
+    } else if (this.modal.kind === "new-project") {
+      this.renderNewProjectModal(dialog, lang);
+    } else if (this.modal.kind === "save-template") {
+      this.renderSaveTemplateModal(dialog, lang);
     } else if (this.modal.kind === "entry-input") {
       const modalState = this.modal;
       const h3 = document.createElement("h3");
