@@ -43,6 +43,11 @@ Editor de texto de escritorio agnóstico para escritura creativa (`.md`, `.mdx`,
   - La barra inferior muestra la rama actual y los contadores `↑`/`↓` de commits adelante/atrás.
   - Las insignias se actualizan al guardar y cuando el File Watcher detecta cambios externos.
   - Los archivos eliminados del disco se reflejarán en el panel de Versiones (`T-1.4.4`), ya que dejan de existir en el árbol.
+- **Visor de Diffs integrado (`T-1.4.3`):**
+  - El botón **Diff** de la cabecera compara lado a lado la última versión guardada (Git `HEAD`) con el contenido actual de la pestaña, con cambios resaltados y tramos sin cambios colapsados.
+  - Los archivos nuevos muestran el aviso *Archivo nuevo (sin versión guardada)* y se comparan contra un documento vacío.
+  - El botón **↺ Descartar cambios** pide confirmación y restaura el archivo a `HEAD`; si es un archivo nuevo, lo elimina del disco y del índice. La pestaña, el árbol y las insignias se refrescan al instante.
+  - Funciona también con cambios sin guardar: el Diff muestra el texto vivo de la pestaña y el descarte elimina tanto el borrador como los cambios en disco.
 - **Edición profesional con CodeMirror 6:**
   - Deshacer/rehacer por pestaña, buscar y reemplazar en el archivo (`⌘F`), *word wrap*, números de línea opcionales, corrector ortográfico nativo y resaltado para Markdown y Fountain.
   - Negrita (`⌘B`) y cursiva (`⌘I`) en Markdown/MDX, con selección o cursor entre marcadores.

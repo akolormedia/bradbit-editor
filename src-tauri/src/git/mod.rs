@@ -383,6 +383,16 @@ impl Repository {
         Ok(())
     }
 
+    /// Remove a path from the index without touching the working tree.
+    pub fn unstage_path(&self, path: &str, options: OpOptions) -> Result<(), GitError> {
+        validate_relative_path(path)?;
+        let output = run_git(Some(&self.root), "reset", &["reset", "--", path], options)?;
+        if !output.status.success() {
+            return Err(command_failed("reset", &output.stderr));
+        }
+        Ok(())
+    }
+
     pub fn diff_stats(
         &self,
         scope: DiffScope,

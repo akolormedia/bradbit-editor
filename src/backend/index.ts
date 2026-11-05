@@ -3,6 +3,7 @@ import {
   CreatedProject,
   FileTreeNode,
   FsChangeEvent,
+  GitDiscardResult,
   GitStatus,
   MenuCommand,
   MenuUiState,
@@ -520,6 +521,27 @@ export const backend = {
       throw new Error("Git requiere la app de escritorio");
     }
     return tauriInvoke<GitStatus>("git_restore_file", { root: rootPath, relPath });
+  },
+
+  async gitHeadFile(rootPath: string, relPath: string): Promise<string | null> {
+    if (!isTauriEnvironment()) return null;
+    return tauriInvoke<string | null>("git_head_file", {
+      root: rootPath,
+      relPath,
+    });
+  },
+
+  async gitDiscardFile(
+    rootPath: string,
+    relPath: string,
+  ): Promise<GitDiscardResult> {
+    if (!isTauriEnvironment()) {
+      throw new Error("Git requiere la app de escritorio");
+    }
+    return tauriInvoke<GitDiscardResult>("git_discard_file", {
+      root: rootPath,
+      relPath,
+    });
   },
 };
 

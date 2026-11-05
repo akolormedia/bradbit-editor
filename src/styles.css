@@ -518,6 +518,77 @@ body,
   height: 100%;
 }
 
+/* Diff viewer (T-1.4.3) */
+.diff-wrapper {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.diff-banner {
+  flex-shrink: 0;
+  padding: 6px 12px;
+  font-size: 11.5px;
+  color: var(--text-muted);
+  background: var(--bg-surface);
+  border-bottom: 1px solid var(--border-color);
+}
+
+.diff-banner.new-file {
+  color: var(--success);
+}
+
+.diff-host {
+  flex: 1;
+  min-height: 0;
+}
+
+.diff-loading {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-muted);
+  font-size: 13px;
+}
+
+.cm-mergeView {
+  height: 100%;
+}
+
+.cm-mergeView .cm-editor {
+  height: 100%;
+}
+
+.cm-mergeView .cm-scroller {
+  overflow: auto;
+}
+
+.cm-mergeView .cm-changedLine {
+  background-color: rgba(88, 196, 136, 0.12);
+}
+
+.cm-mergeView .cm-changedText {
+  background-color: rgba(88, 196, 136, 0.28);
+}
+
+.cm-mergeView .cm-deletedChunk {
+  background-color: rgba(243, 108, 108, 0.12);
+}
+
+.cm-mergeView .cm-deletedText {
+  background-color: rgba(243, 108, 108, 0.28);
+}
+
+.cm-mergeView .cm-insertedLine {
+  background-color: rgba(88, 196, 136, 0.12);
+}
+
+.cm-mergeView .cm-insertedText {
+  background-color: rgba(88, 196, 136, 0.28);
+}
+
 .empty-editor-state {
   height: 100%;
   display: flex;
