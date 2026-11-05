@@ -3,6 +3,7 @@ import {
   CreatedProject,
   FileTreeNode,
   FsChangeEvent,
+  GitStatus,
   MenuCommand,
   MenuUiState,
   OpenedFolder,
@@ -493,6 +494,32 @@ export const backend = {
     return listen<FsChangeEvent>("bradbit-fs-change", (event) =>
       handler(event.payload),
     );
+  },
+
+  async gitStatus(rootPath: string): Promise<GitStatus> {
+    if (!isTauriEnvironment()) {
+      return { isRepository: false, branch: null, ahead: 0, behind: 0, entries: [] };
+    }
+    return tauriInvoke<GitStatus>("git_status", { root: rootPath });
+  },
+
+  async gitInit(rootPath: string): Promise<GitStatus> {
+    if (!isTauriEnvironment()) {
+      throw new Error("Git requiere la app de escritorio");
+    }
+    return tauriInvoke<GitStatus>("git_init", { root: rootPath });
+  },
+
+  async gitDiffFile(rootPath: string, relPath: string): Promise<string> {
+    if (!isTauriEnvironment()) return "";
+    return tauriInvoke<string>("git_diff_file", { root: rootPath, relPath });
+  },
+
+  async gitRestoreFile(rootPath: string, relPath: string): Promise<GitStatus> {
+    if (!isTauriEnvironment()) {
+      throw new Error("Git requiere la app de escritorio");
+    }
+    return tauriInvoke<GitStatus>("git_restore_file", { root: rootPath, relPath });
   },
 };
 

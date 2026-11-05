@@ -38,6 +38,11 @@ Editor de texto de escritorio agnóstico para escritura creativa (`.md`, `.mdx`,
   - Las pestañas limpias se recargan automáticamente.
   - Si una pestaña tiene cambios sin guardar, se conserva tu texto y aparece un aviso `⚠` con el mensaje *Cambió en disco*; nunca se sobrescribe tu borrador.
   - Los archivos eliminados cierran su pestaña si estaba limpia; si tenía cambios, se mantiene la copia para que puedas guardarla.
+- **Insignias de estado Git (`T-1.4.2`):**
+  - Insignias en el explorador y las pestañas: **`M`** modificado, **`+`** nuevo/untracked, **`D`** eliminado, **`R`** renombrado y **`!`** conflicto.
+  - La barra inferior muestra la rama actual y los contadores `↑`/`↓` de commits adelante/atrás.
+  - Las insignias se actualizan al guardar y cuando el File Watcher detecta cambios externos.
+  - Los archivos eliminados del disco se reflejarán en el panel de Versiones (`T-1.4.4`), ya que dejan de existir en el árbol.
 - **Edición profesional con CodeMirror 6:**
   - Deshacer/rehacer por pestaña, buscar y reemplazar en el archivo (`⌘F`), *word wrap*, números de línea opcionales, corrector ortográfico nativo y resaltado para Markdown y Fountain.
   - Negrita (`⌘B`) y cursiva (`⌘I`) en Markdown/MDX, con selección o cursor entre marcadores.
