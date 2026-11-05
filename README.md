@@ -13,13 +13,19 @@ Editor de texto de escritorio agnóstico para escritura creativa (`.md`, `.mdx`,
 - **Cualquier carpeta es un proyecto:** Abre cualquier carpeta del disco sin requerir archivos de configuración propietarios (`project.yaml`).
 - **Pantalla de bienvenida y proyectos recientes:** Abre carpetas del disco o retoma cualquiera de tus proyectos recientes en un clic.
 - **Explorador de archivos lateral redimensionable y colapsable (`⌘⇧E`):**
+  - Pestañas **Archivos | Esquema** en el panel lateral.
   - Oculta por defecto `.git`, `.DS_Store` y `.opencode` con opción *Mostrar archivos de configuración*.
   - Acciones integradas: Nuevo archivo (`⌘N`), Nueva carpeta, Renombrar y Eliminar (con confirmación).
+- **Esquema del documento (`T-1.2.2`):**
+  - En Markdown/MDX: encabezados (`#`, `##`, `###`…) clicables que saltan a la línea exacta.
+  - En Fountain: secciones (`# Acto`) y escenas (`INT.`, `EXT.`, `I/E.`, `.forzada`) con jerarquía y conteo estimado de páginas (`~N páginas`).
+  - Se actualiza automáticamente al escribir y funciona también desde la vista previa (al hacer clic vuelve a edición y salta a la línea).
 - **Pestañas inteligentes:**
   - Un clic abre en modo *preview* (cursiva); doble clic o editar fija la pestaña.
   - Indicador de cambios sin guardar (`•`), cierre seguro con confirmación (`⌘W`) y guardado atómico en disco (`⌘S`).
 - **Edición profesional con CodeMirror 6:**
   - Deshacer/rehacer por pestaña, buscar y reemplazar en el archivo (`⌘F`), *word wrap*, números de línea opcionales, corrector ortográfico nativo y resaltado para Markdown y Fountain.
+  - **Fountain 1.1:** resaltado diferenciado de escenas, secciones, transiciones, personajes, diálogos, paréntesis y notas `[[...]]`.
   - Negrita (`⌘B`) y cursiva (`⌘I`) en Markdown/MDX, con selección o cursor entre marcadores.
 - **Cabecera del documento y vista previa de lectura (`T-1.2.1`):**
   - La cabecera sobre el editor muestra el nombre y la ruta del archivo activo, con acciones **Copiar** y **`</>` Vista previa / Editar**.

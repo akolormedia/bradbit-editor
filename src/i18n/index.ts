@@ -63,6 +63,13 @@ export const translations = {
     italic: "Cursiva",
     linkOpenError: "No se pudo abrir el enlace",
     copyError: "No se pudo copiar el texto",
+    filesTab: "Archivos",
+    outlineTab: "Esquema",
+    outlineTitle: "Esquema",
+    outlineEmpty: "Abre un archivo Markdown, MDX o Fountain para ver su esquema.",
+    outlineUnsupported: "El esquema está disponible para Markdown, MDX y Fountain.",
+    outlineNoHeadings: "Este archivo no tiene encabezados ni escenas.",
+    estimatedPages: "~{count} páginas",
   },
   en: {
     appName: "Bradbit Editor",
@@ -126,6 +133,13 @@ export const translations = {
     italic: "Italic",
     linkOpenError: "Could not open link",
     copyError: "Could not copy text",
+    filesTab: "Files",
+    outlineTab: "Outline",
+    outlineTitle: "Outline",
+    outlineEmpty: "Open a Markdown, MDX or Fountain file to see its outline.",
+    outlineUnsupported: "The outline is available for Markdown, MDX and Fountain.",
+    outlineNoHeadings: "This file has no headings or scenes.",
+    estimatedPages: "~{count} pages",
   },
 } as const;
 

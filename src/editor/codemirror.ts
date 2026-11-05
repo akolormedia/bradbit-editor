@@ -21,51 +21,53 @@ import {
 import { tags } from "@lezer/highlight";
 import { AppSettings } from "../types";
 import { isMarkdownPath } from "../workspace/state";
+import { classifyFountainLine, createFountainState, FountainLineType, FountainState } from "./fountain";
 import { computeWrapEdit } from "./markdownFormat";
 
+interface FountainStreamState {
+  fountain: FountainState;
+  lineType: FountainLineType;
+}
+
+const fountainLineStyle: Record<FountainLineType, string | null> = {
+  blank: null,
+  scene: "heading",
+  section: "heading",
+  transition: "keyword",
+  character: "variableName.special",
+  parenthetical: "meta",
+  dialogue: "string",
+  action: null,
+};
+
 /**
- * Lightweight Fountain stream highlighter for Story 1.1 (expanded in Story 1.2)
+ * Fountain 1.1 highlighter: scene headings, sections, transitions, character
+ * cues, parentheticals, dialogue and inline notes.
  */
-const fountainStreamLanguage = StreamLanguage.define({
-  startState: () => ({ afterCue: false }),
+const fountainStreamLanguage = StreamLanguage.define<FountainStreamState>({
+  startState: () => ({ fountain: createFountainState(), lineType: "blank" }),
   token(stream, state) {
     if (stream.sol()) {
-      const line = stream.string.trim();
-      if (/^(INT\.|EXT\.|INT\.\/EXT\.|I\/E\.)/i.test(line) || line.startsWith(".")) {
-        stream.skipToEnd();
-        state.afterCue = false;
-        return "heading";
-      }
-      if (/^#+/.test(line)) {
-        stream.skipToEnd();
-        state.afterCue = false;
-        return "heading";
-      }
-      if (line.endsWith("TO:") || line.startsWith(">")) {
-        stream.skipToEnd();
-        state.afterCue = false;
-        return "keyword";
-      }
-      if (
-        line.length > 0 &&
-        line.length < 50 &&
-        line === line.toUpperCase() &&
-        /[A-ZÁÉÍÓÚÑ]/.test(line)
-      ) {
-        stream.skipToEnd();
-        state.afterCue = true;
-        return "variableName.special";
-      }
-      if (line.startsWith("(") && line.endsWith(")")) {
-        stream.skipToEnd();
-        return "meta";
-      }
-      if (line.length === 0) {
-        state.afterCue = false;
-      }
+      const classified = classifyFountainLine(stream.string, state.fountain);
+      state.fountain = classified.state;
+      state.lineType = classified.type;
     }
-    stream.skipToEnd();
-    return state.afterCue ? "string" : null;
+
+    // Inline notes [[...]] get their own comment token.
+    if (stream.match(/\[\[.*?\]\]/)) {
+      return "comment";
+    }
+
+    const style = fountainLineStyle[state.lineType];
+    const start = stream.pos;
+    while (!stream.eol() && !stream.match(/\[\[/, false)) {
+      stream.next();
+    }
+    if (stream.pos === start && !stream.eol()) {
+      // Unclosed note marker: consume one char to guarantee progress.
+      stream.next();
+    }
+    return style;
   },
 });
 
@@ -77,7 +79,8 @@ const writerHighlightStyle = HighlightStyle.define([
   { tag: tags.special(tags.variableName), color: "var(--cm-character)", fontWeight: "700" },
   { tag: tags.string, color: "var(--cm-dialogue)" },
   { tag: tags.meta, color: "var(--cm-parenthetical)", fontStyle: "italic" },
-  { tag: tags.link, color: "var(--cm-accent)", textDecoration: "underline" },
+  { tag: tags.comment, color: "var(--text-muted)", fontStyle: "italic" },
+  { tag: tags.link, color: "var(--accent)", textDecoration: "underline" },
   { tag: tags.monospace, fontFamily: "var(--font-mono)" },
 ]);
 
@@ -294,6 +297,17 @@ export class BradbitCodeMirror {
 
   public focus(): void {
     this.view?.focus();
+  }
+
+  public gotoLine(line: number): void {
+    if (!this.view) return;
+    const clamped = Math.min(Math.max(1, Math.floor(line)), this.view.state.doc.lines);
+    const target = this.view.state.doc.line(clamped);
+    this.view.dispatch({
+      selection: { anchor: target.from },
+      effects: EditorView.scrollIntoView(target.from, { y: "center" }),
+    });
+    this.view.focus();
   }
 
   public destroy(): void {
