@@ -3,6 +3,7 @@ pub mod fs_ops;
 pub mod menu;
 pub mod search;
 pub mod settings;
+pub mod templates;
 
 use fs_ops::{FileTreeNode, OpenedFolder};
 use menu::{MenuContext, MenuUiState};
@@ -59,6 +60,36 @@ fn search_in_folder(
     include_config: bool,
 ) -> Result<Vec<search::SearchMatch>, String> {
     search::search_in_folder(&root, &query, max_results, include_config)
+}
+
+#[tauri::command]
+fn list_templates() -> Result<Vec<templates::TemplateInfo>, String> {
+    templates::list_templates()
+}
+
+#[tauri::command]
+fn create_project_from_template(
+    template_id: String,
+    name: String,
+    destination: String,
+) -> Result<templates::CreatedProject, String> {
+    templates::create_project_from_template(&template_id, &name, &destination)
+}
+
+#[tauri::command]
+fn save_current_as_template(
+    folder_path: String,
+    name: String,
+) -> Result<templates::TemplateInfo, String> {
+    templates::save_folder_as_template(&folder_path, &name)
+}
+
+#[tauri::command]
+fn open_templates_folder(app: tauri::AppHandle) -> Result<(), String> {
+    let dir = templates::user_templates_dir()?;
+    app.opener()
+        .open_path(dir.to_string_lossy().to_string(), None::<&str>)
+        .map_err(|e| format!("No se pudo abrir la carpeta de plantillas: {}", e))
 }
 
 #[tauri::command]
@@ -127,6 +158,10 @@ pub fn run() {
             refresh_menu,
             export_fountain_pdf,
             search_in_folder,
+            list_templates,
+            create_project_from_template,
+            save_current_as_template,
+            open_templates_folder,
             open_folder,
             list_directory_tree,
             read_text_file,
