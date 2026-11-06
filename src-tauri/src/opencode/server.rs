@@ -19,7 +19,6 @@ use serde_json::json;
 use tauri::{AppHandle, Emitter};
 
 use super::client::OpenCodeClient;
-use super::OpenCodeSession;
 use crate::git::redact_secrets;
 
 pub const EVENT_NAME: &str = "bradbit-opencode-event";
@@ -28,7 +27,6 @@ const LOG_LIMIT: usize = 40;
 
 pub struct RunningServer {
     pub root: String,
-    pub session: OpenCodeSession,
     pub base_url: String,
     password: String,
     child: Child,
@@ -100,14 +98,8 @@ impl RunningServer {
             );
         }
 
-        let session = client.create_session("Bradbit").inspect_err(|_| {
-            let _ = child.kill();
-            let _ = child.wait();
-        })?;
-
         Ok(Self {
             root: root.to_string(),
-            session,
             base_url,
             password,
             child,
@@ -277,7 +269,11 @@ mod tests {
         std::fs::write(dir.path().join("notas.md"), "# Notas\n").unwrap();
         let root = dir.path().to_str().unwrap();
         let server = RunningServer::spawn(root).expect("start opencode serve");
-        assert!(server.session.id.starts_with("ses_"));
+        let session = server
+            .client()
+            .create_session("Test")
+            .expect("create session");
+        assert!(session.id.starts_with("ses_"));
         assert_eq!(server.root, root);
         drop(server);
     }

@@ -15,9 +15,11 @@ import {
   GitHubPullRequest,
   MenuCommand,
   MenuUiState,
+  OpenCodeChatMessage,
   OpenCodeEvent,
   OpenedFolder,
   OpenTab,
+  ProjectWorkspaceState,
   RecentProject,
   SearchMatch,
   TemplateInfo,
@@ -44,14 +46,15 @@ import {
   appendUserMessage,
   applyOpenCodeEvent,
   chatFailed,
+  chatFromHistory,
   chatSendFailed,
-  chatStarted,
   chatStarting,
   chatStopped,
   clearChatError,
   ChatState,
   initialChatState,
 } from "./session/chatState";
+import { addSessionTab, removeSessionTab, SessionTabInfo } from "./session/sessionTabs";
 import { MenuSyncQueue } from "./workspace/menuSync";
 import { extractOutline, OutlineItem } from "./workspace/outline";
 import {
@@ -171,6 +174,18 @@ class BradbitApp {
   private githubPullRequests: GitHubPullRequest[] = [];
   private githubPrLoading = false;
   private chatState: ChatState = { ...initialChatState };
+  private chatSessions = new Map<string, ChatState>();
+  private chatSessionOrder: string[] = [];
+  private activeChatSessionId: string | null = null;
+  private workspaceState: ProjectWorkspaceState = {
+    openSessionIds: [],
+    activeSessionId: null,
+    layout: {
+      sessionWidth: 430,
+      chatVisible: true,
+      editorVisible: true,
+    },
+  };
   private chatPanel: ChatPanel | null = null;
   private chatVisible = true;
   private editorVisible = true;
@@ -253,6 +268,22 @@ class BradbitApp {
       await this.stopChatSession();
       this.chatPanel = null;
       this.folder = opened;
+      try {
+        this.workspaceState = await backend.loadWorkspaceState(opened.rootPath);
+        this.applyWorkspaceLayout(this.workspaceState.layout);
+      } catch (err) {
+        console.error("No se pudo cargar el estado del workspace", err);
+        this.workspaceState = {
+          openSessionIds: [],
+          activeSessionId: null,
+          layout: {
+            sessionWidth: 430,
+            chatVisible: true,
+            editorVisible: true,
+          },
+        };
+        this.applyWorkspaceLayout(this.workspaceState.layout);
+      }
       this.tabState = { tabs: [], activeTabPath: null };
       this.collapsedDirs.clear();
       this.gitHistory = [];
@@ -974,21 +1005,39 @@ class BradbitApp {
       );
   }
 
+  private chatSessionTabs(): SessionTabInfo[] {
+    const lang = this.settings.language;
+    return this.chatSessionOrder.map((id) => {
+      const state = this.chatSessions.get(id);
+      return {
+        id,
+        title:
+          state?.title ||
+          t(lang, "chatSessionDefaultTitle", { count: "?" }),
+        streaming: Boolean(state?.streaming),
+        error: Boolean(state && (state.error || state.status === "error")),
+      };
+    });
+  }
+
   private ensureChatPanel(): ChatPanel {
     if (!this.chatPanel) {
       this.chatPanel = new ChatPanel({
         language: this.settings.language,
         projectName: this.folder?.name ?? "",
+        sessions: this.chatSessionTabs(),
+        activeSessionId: this.activeChatSessionId,
+        canCreateSession: this.chatState.status === "ready",
         onSend: (text) => void this.sendChatMessage(text),
         onStop: () => void this.stopChatGeneration(),
         onRetry: () => void this.retryChat(),
         onToggleEditor: () => this.toggleEditorPanel(),
+        onSelectSession: (id) => this.selectChatSession(id),
+        onCreateSession: () => void this.createChatSession(),
+        onCloseSession: (id) => void this.closeChatSession(id),
       });
     }
-    this.chatPanel.update(this.chatState, {
-      language: this.settings.language,
-      projectName: this.folder?.name ?? "",
-    });
+    this.updateChatPanel();
     return this.chatPanel;
   }
 
@@ -996,7 +1045,37 @@ class BradbitApp {
     this.chatPanel?.update(this.chatState, {
       language: this.settings.language,
       projectName: this.folder?.name ?? "",
+      sessions: this.chatSessionTabs(),
+      activeSessionId: this.activeChatSessionId,
+      canCreateSession: this.chatState.status === "ready",
     });
+  }
+
+  private persistWorkspaceState(): void {
+    if (!this.folder) return;
+    const state: ProjectWorkspaceState = {
+      openSessionIds: [...this.chatSessionOrder],
+      activeSessionId: this.activeChatSessionId,
+      layout: {
+        sessionWidth: this.sessionWidth,
+        chatVisible: this.chatVisible,
+        editorVisible: this.editorVisible,
+      },
+    };
+    this.workspaceState = state;
+    void backend
+      .saveWorkspaceState(this.folder.rootPath, state)
+      .catch((err) => console.error("No se pudo guardar el estado del workspace", err));
+  }
+
+  private applyWorkspaceLayout(layout: ProjectWorkspaceState["layout"]): void {
+    this.sessionWidth = Math.min(640, Math.max(320, layout.sessionWidth || 430));
+    this.chatVisible = layout.chatVisible;
+    this.editorVisible = layout.editorVisible;
+    if (!this.chatVisible && !this.editorVisible) {
+      this.chatVisible = true;
+      this.editorVisible = true;
+    }
   }
 
   private async startChatSession(force = false): Promise<void> {
@@ -1008,6 +1087,10 @@ class BradbitApp {
       return;
     }
     const root = this.folder.rootPath;
+    const lang = this.settings.language;
+    this.chatSessions.clear();
+    this.chatSessionOrder = [];
+    this.activeChatSessionId = null;
     this.chatState = chatStarting(this.chatState);
     this.ensureChatPanel();
     this.updateChatPanel();
@@ -1015,7 +1098,7 @@ class BradbitApp {
     if (!isTauriEnvironment()) {
       this.chatState = chatFailed(
         this.chatState,
-        t(this.settings.language, "chatNoDesktop"),
+        t(lang, "chatNoDesktop"),
       );
       this.updateChatPanel();
       return;
@@ -1026,15 +1109,56 @@ class BradbitApp {
       this.opencodeUnlisten = null;
       await backend.opencodeStop();
       if (!this.folder || this.folder.rootPath !== root) return;
-      const session = await backend.opencodeStart(root);
+      await backend.opencodeStart(root);
       if (!this.folder || this.folder.rootPath !== root) {
         await backend.opencodeStop();
         return;
       }
+
+      const available = await backend.opencodeListSessions();
+      const availableIds = new Set(available.map((session) => session.id));
+      let openIds = this.workspaceState.openSessionIds.filter((id) =>
+        availableIds.has(id),
+      );
+      if (openIds.length === 0) {
+        const title = t(lang, "chatSessionDefaultTitle", { count: "1" });
+        const session = await backend.opencodeCreateSession(title);
+        openIds = [session.id];
+        available.push(session);
+      }
+
+      const loaded = await Promise.all(
+        openIds.map(async (id) => {
+          const session =
+            available.find((item) => item.id === id) ?? {
+              id,
+              title: t(lang, "chatSessionDefaultTitle", { count: "?" }),
+            };
+          let messages: OpenCodeChatMessage[] = [];
+          let error = "";
+          try {
+            messages = await backend.opencodeSessionMessages(id);
+          } catch (err) {
+            error = err instanceof Error ? err.message : String(err);
+          }
+          const state = chatFromHistory(session, messages);
+          return [id, error ? { ...state, error } : state] as const;
+        }),
+      );
+
+      this.chatSessions = new Map(loaded);
+      const persistedActive =
+        this.workspaceState.activeSessionId &&
+        openIds.includes(this.workspaceState.activeSessionId)
+          ? this.workspaceState.activeSessionId
+          : openIds[0];
+      this.activeChatSessionId = persistedActive;
+      this.chatState =
+        this.chatSessions.get(persistedActive) ?? chatStopped();
       this.opencodeUnlisten = await backend.listenOpenCodeEvents((event) =>
         this.handleOpenCodeEvent(event),
       );
-      this.chatState = chatStarted(this.chatState, session);
+      this.persistWorkspaceState();
     } catch (err) {
       this.chatState = chatFailed(
         this.chatState,
@@ -1054,12 +1178,81 @@ class BradbitApp {
         console.error("No se pudo detener OpenCode", err);
       }
     }
+    this.chatSessions.clear();
+    this.chatSessionOrder = [];
+    this.activeChatSessionId = null;
     this.chatState = chatStopped();
     this.updateChatPanel();
   }
 
+  private selectChatSession(id: string): void {
+    const state = this.chatSessions.get(id);
+    if (!state) return;
+    this.activeChatSessionId = id;
+    this.chatState = state;
+    this.updateChatPanel();
+    this.persistWorkspaceState();
+  }
+
+  private async createChatSession(): Promise<void> {
+    if (!this.folder || this.chatState.status !== "ready") return;
+    try {
+      const count = this.chatSessionOrder.length + 1;
+      const title = t(this.settings.language, "chatSessionDefaultTitle", {
+        count: String(count),
+      });
+      const session = await backend.opencodeCreateSession(title);
+      this.chatSessionOrder = addSessionTab(this.chatSessionOrder, session.id);
+      this.chatSessions.set(
+        session.id,
+        chatFromHistory(session, []),
+      );
+      this.activeChatSessionId = session.id;
+      this.chatState = this.chatSessions.get(session.id)!;
+      this.updateChatPanel();
+      this.persistWorkspaceState();
+    } catch (err) {
+      this.chatState = chatSendFailed(
+        this.chatState,
+        err instanceof Error ? err.message : String(err),
+      );
+      this.updateChatPanel();
+    }
+  }
+
+  private async closeChatSession(id: string): Promise<void> {
+    if (this.chatSessionOrder.length <= 1) return;
+    const closing = this.chatSessions.get(id);
+    if (closing?.streaming && isTauriEnvironment()) {
+      void backend.opencodeAbort(id).catch(() => {});
+    }
+    const result = removeSessionTab(
+      this.chatSessionOrder,
+      this.activeChatSessionId,
+      id,
+    );
+    this.chatSessionOrder = result.openIds;
+    this.chatSessions.delete(id);
+    this.activeChatSessionId = result.activeId;
+    this.chatState = result.activeId
+      ? this.chatSessions.get(result.activeId) ?? chatStopped()
+      : chatStopped();
+    this.updateChatPanel();
+    this.persistWorkspaceState();
+  }
+
   private handleOpenCodeEvent(event: OpenCodeEvent): void {
-    this.chatState = applyOpenCodeEvent(this.chatState, event);
+    const data = event.data ?? {};
+    const sessionID =
+      typeof data.sessionID === "string" ? data.sessionID : null;
+    const targetId = sessionID ?? this.activeChatSessionId;
+    if (!targetId || !this.chatSessions.has(targetId)) return;
+    const previous = this.chatSessions.get(targetId)!;
+    const next = applyOpenCodeEvent(previous, event);
+    this.chatSessions.set(targetId, next);
+    if (targetId === this.activeChatSessionId) {
+      this.chatState = next;
+    }
     this.updateChatPanel();
   }
 
@@ -1076,6 +1269,7 @@ class BradbitApp {
     if (!text) return;
 
     this.chatState = appendUserMessage(this.chatState, text);
+    this.chatSessions.set(sessionId, this.chatState);
     this.chatPanel?.clearDraft();
     this.updateChatPanel();
     try {
@@ -1085,6 +1279,7 @@ class BradbitApp {
         this.chatState,
         err instanceof Error ? err.message : String(err),
       );
+      this.chatSessions.set(sessionId, this.chatState);
       this.updateChatPanel();
     }
   }
@@ -1093,6 +1288,7 @@ class BradbitApp {
     const sessionId = this.chatState.sessionId;
     if (!sessionId) return;
     this.chatState = { ...this.chatState, streaming: false };
+    this.chatSessions.set(sessionId, this.chatState);
     this.updateChatPanel();
     try {
       await backend.opencodeAbort(sessionId);
@@ -1101,6 +1297,7 @@ class BradbitApp {
         this.chatState,
         err instanceof Error ? err.message : String(err),
       );
+      this.chatSessions.set(sessionId, this.chatState);
       this.updateChatPanel();
     }
   }
@@ -1111,6 +1308,9 @@ class BradbitApp {
       return;
     }
     this.chatState = clearChatError(this.chatState);
+    if (this.activeChatSessionId) {
+      this.chatSessions.set(this.activeChatSessionId, this.chatState);
+    }
     this.updateChatPanel();
     this.chatPanel?.focus();
   }
@@ -1121,6 +1321,7 @@ class BradbitApp {
       this.editorVisible = true;
     }
     this.render();
+    this.persistWorkspaceState();
   }
 
   private toggleEditorPanel(): void {
@@ -1129,6 +1330,7 @@ class BradbitApp {
       this.chatVisible = true;
     }
     this.render();
+    this.persistWorkspaceState();
   }
 
   private async openFileFromTree(relPath: string, pin: boolean): Promise<void> {
@@ -2573,6 +2775,7 @@ class BradbitApp {
         resizer.classList.remove("dragging");
         window.removeEventListener("mousemove", onMove);
         window.removeEventListener("mouseup", onUp);
+        this.persistWorkspaceState();
       };
       window.addEventListener("mousemove", onMove);
       window.addEventListener("mouseup", onUp);

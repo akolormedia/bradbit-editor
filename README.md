@@ -7,7 +7,9 @@ Editor de texto de escritorio agnóstico para escritura creativa (`.md`, `.mdx`,
 - **Chat integrado con OpenCode (`T-2.1.1`):**
   - Layout dividido estilo `opencode-desktop`: **sesión de escritura a la izquierda** y `EditorWorkspace` a la derecha, con divisor redimensionable.
   - El botón **💬** muestra/oculta el chat y el botón **◫** de la sesión muestra/oculta el editor sin perder el estado de CodeMirror. Al ocultar uno, el otro ocupa todo el ancho de la ventana, con los mensajes y el composer centrados.
-  - Inicia o reutiliza **`opencode serve`** automáticamente para la carpeta abierta, crea una sesión y transmite la respuesta en vivo.
+  - **Pestañas de sesión múltiples** con `+`, cambio y cierre; cada pestaña conserva su historial, su estado de generación y su borrador del composer.
+  - **Persistencia por proyecto:** al reabrir la app se restauran las pestañas abiertas, la sesión activa, el ancho del chat y el estado de los paneles.
+  - Inicia o reutiliza **`opencode serve`** automáticamente para la carpeta abierta, crea una sesión si no hay ninguna y transmite la respuesta en vivo.
   - Composer con **Enter para enviar**, **Shift+Enter** para nueva línea y botón **Detener** durante la generación.
   - Muestra estado de conexión, errores accionables, uso de contexto/tokens y conserva el historial de la sesión mientras cambias de archivo.
   - Usa la configuración, agentes y modelos de OpenCode; Bradbit no almacena claves de modelo.

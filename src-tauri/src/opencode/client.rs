@@ -11,7 +11,7 @@ use std::time::Duration;
 use serde_json::{json, Value};
 
 use super::event::read_events;
-use super::OpenCodeSession;
+use super::{OpenCodeChatMessage, OpenCodeSession};
 use crate::git::redact_secrets;
 
 const REQUEST_TIMEOUT: Duration = Duration::from_secs(20);
@@ -71,19 +71,33 @@ impl OpenCodeClient {
             .ok_or_else(|| "OpenCode no devolvió una lista de modelos".to_string())
     }
 
+    pub fn list_sessions(&self) -> Result<Vec<OpenCodeSession>, String> {
+        let payload = self.get("/api/session")?;
+        let data = payload
+            .get("data")
+            .and_then(Value::as_array)
+            .ok_or_else(|| "OpenCode no devolvió una lista de sesiones".to_string())?;
+        Ok(data.iter().filter_map(parse_session).collect())
+    }
+
     pub fn create_session(&self, title: &str) -> Result<OpenCodeSession, String> {
         let payload = self.post("/api/session", &json!({ "title": title }))?;
         let data = payload
             .get("data")
             .ok_or_else(|| "OpenCode no devolvió la sesión creada".to_string())?;
-        Ok(OpenCodeSession {
-            id: req_str(data, "/id")?,
-            title: data
-                .get("title")
-                .and_then(Value::as_str)
-                .unwrap_or(title)
-                .to_string(),
-        })
+        parse_session(data).ok_or_else(|| "OpenCode devolvió una sesión inválida".to_string())
+    }
+
+    pub fn session_messages(&self, session_id: &str) -> Result<Vec<OpenCodeChatMessage>, String> {
+        validate_session_id(session_id)?;
+        let payload = self.get(&format!(
+            "/api/session/{session_id}/message?limit=200&order=asc"
+        ))?;
+        let data = payload
+            .get("data")
+            .and_then(Value::as_array)
+            .ok_or_else(|| "OpenCode no devolvió los mensajes de la sesión".to_string())?;
+        Ok(data.iter().filter_map(parse_chat_message).collect())
     }
 
     pub fn prompt(&self, session_id: &str, text: &str) -> Result<(), String> {
@@ -213,12 +227,62 @@ fn api_error(status: u16, body: &str) -> String {
     )
 }
 
-fn req_str(payload: &Value, pointer: &str) -> Result<String, String> {
-    payload
-        .pointer(pointer)
-        .and_then(Value::as_str)
-        .map(str::to_string)
-        .ok_or_else(|| format!("OpenCode no devolvió el campo requerido {pointer}"))
+fn parse_session(value: &Value) -> Option<OpenCodeSession> {
+    let id = value.get("id").and_then(Value::as_str)?;
+    if !id.starts_with("ses_") {
+        return None;
+    }
+    Some(OpenCodeSession {
+        id: id.to_string(),
+        title: value
+            .get("title")
+            .and_then(Value::as_str)
+            .unwrap_or("Sesión")
+            .to_string(),
+        updated: value.pointer("/time/updated").and_then(Value::as_i64),
+        directory: value
+            .pointer("/location/directory")
+            .and_then(Value::as_str)
+            .map(str::to_string),
+    })
+}
+
+fn parse_chat_message(value: &Value) -> Option<OpenCodeChatMessage> {
+    let id = value.get("id").and_then(Value::as_str)?.to_string();
+    let kind = value.get("type").and_then(Value::as_str)?;
+    if kind == "user" {
+        let text = value
+            .get("text")
+            .and_then(Value::as_str)?
+            .trim()
+            .to_string();
+        if text.is_empty() {
+            return None;
+        }
+        return Some(OpenCodeChatMessage {
+            id,
+            role: "user".to_string(),
+            text,
+        });
+    }
+    if kind == "assistant" {
+        let content = value.get("content").and_then(Value::as_array)?;
+        let text = content
+            .iter()
+            .filter(|part| part.get("type").and_then(Value::as_str) == Some("text"))
+            .filter_map(|part| part.get("text").and_then(Value::as_str))
+            .collect::<Vec<_>>()
+            .join("\n");
+        if text.trim().is_empty() {
+            return None;
+        }
+        return Some(OpenCodeChatMessage {
+            id,
+            role: "assistant".to_string(),
+            text,
+        });
+    }
+    None
 }
 
 fn validate_session_id(session_id: &str) -> Result<(), String> {
@@ -293,5 +357,49 @@ mod tests {
         let error = api_error(401, r#"{"message":"Bad credentials ghp_secretvalue"}"#);
         assert!(error.contains("Bad credentials"), "{error}");
         assert!(!error.contains("ghp_secretvalue"), "{error}");
+    }
+
+    #[test]
+    fn parses_sessions_and_chat_history() {
+        let session = parse_session(&json!({
+            "id": "ses_abc",
+            "title": "Sesión 1",
+            "time": { "created": 1, "updated": 42 },
+            "location": { "directory": "/proyecto" }
+        }))
+        .expect("session");
+        assert_eq!(session.id, "ses_abc");
+        assert_eq!(session.updated, Some(42));
+        assert_eq!(session.directory.as_deref(), Some("/proyecto"));
+
+        let user = parse_chat_message(&json!({
+            "id": "msg_user",
+            "type": "user",
+            "text": "Hola"
+        }))
+        .expect("user message");
+        assert_eq!(user.role, "user");
+        assert_eq!(user.text, "Hola");
+
+        let assistant = parse_chat_message(&json!({
+            "id": "msg_assistant",
+            "type": "assistant",
+            "content": [
+                { "type": "reasoning", "text": "pensando" },
+                { "type": "text", "text": "Hola" },
+                { "type": "tool", "name": "read" },
+                { "type": "text", "text": "mundo" }
+            ]
+        }))
+        .expect("assistant message");
+        assert_eq!(assistant.role, "assistant");
+        assert_eq!(assistant.text, "Hola\nmundo");
+
+        assert!(parse_chat_message(&json!({
+            "id": "msg_tool",
+            "type": "assistant",
+            "content": [{ "type": "tool", "name": "read" }]
+        }))
+        .is_none());
     }
 }
