@@ -440,6 +440,24 @@ fn opencode_session_messages(
 }
 
 #[tauri::command]
+fn opencode_pending_permissions(
+    state: tauri::State<opencode::OpenCodeState>,
+    session_id: String,
+) -> Result<Vec<opencode::OpenCodePermission>, String> {
+    state.pending_permissions(&session_id)
+}
+
+#[tauri::command]
+fn opencode_reply_permission(
+    state: tauri::State<opencode::OpenCodeState>,
+    session_id: String,
+    request_id: String,
+    decision: String,
+) -> Result<(), String> {
+    state.reply_permission(&session_id, &request_id, &decision)
+}
+
+#[tauri::command]
 fn load_workspace_state(root: String) -> Result<workspace_state::ProjectWorkspaceState, String> {
     workspace_state::load(&root)
 }
@@ -569,6 +587,8 @@ pub fn run() {
             opencode_list_sessions,
             opencode_create_session,
             opencode_session_messages,
+            opencode_pending_permissions,
+            opencode_reply_permission,
             load_workspace_state,
             save_workspace_state,
             open_folder,

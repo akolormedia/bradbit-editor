@@ -10,8 +10,9 @@ use std::time::Duration;
 
 use serde_json::{json, Value};
 
+use super::chat::{parse_chat_message, parse_permission};
 use super::event::read_events;
-use super::{OpenCodeChatMessage, OpenCodeSession};
+use super::{OpenCodeChatMessage, OpenCodePermission, OpenCodeSession};
 use crate::git::redact_secrets;
 
 const REQUEST_TIMEOUT: Duration = Duration::from_secs(20);
@@ -98,6 +99,40 @@ impl OpenCodeClient {
             .and_then(Value::as_array)
             .ok_or_else(|| "OpenCode no devolvió los mensajes de la sesión".to_string())?;
         Ok(data.iter().filter_map(parse_chat_message).collect())
+    }
+
+    pub fn pending_permissions(&self, session_id: &str) -> Result<Vec<OpenCodePermission>, String> {
+        validate_session_id(session_id)?;
+        let payload = self.get(&format!("/api/session/{session_id}/permission"))?;
+        let data = payload
+            .get("data")
+            .and_then(Value::as_array)
+            .ok_or_else(|| "OpenCode no devolvió los permisos pendientes".to_string())?;
+        Ok(data.iter().filter_map(parse_permission).collect())
+    }
+
+    pub fn reply_permission(
+        &self,
+        session_id: &str,
+        request_id: &str,
+        decision: &str,
+    ) -> Result<(), String> {
+        validate_session_id(session_id)?;
+        if !matches!(decision, "once" | "always" | "reject") {
+            return Err("Decisión de permiso inválida".to_string());
+        }
+        if !request_id.starts_with("per_")
+            || !request_id
+                .chars()
+                .all(|character| character.is_ascii_alphanumeric() || character == '_')
+        {
+            return Err("ID de permiso inválido".to_string());
+        }
+        self.post(
+            &format!("/api/session/{session_id}/permission/{request_id}/reply"),
+            &json!({ "decision": decision }),
+        )?;
+        Ok(())
     }
 
     pub fn prompt(&self, session_id: &str, text: &str) -> Result<(), String> {
@@ -245,44 +280,6 @@ fn parse_session(value: &Value) -> Option<OpenCodeSession> {
             .and_then(Value::as_str)
             .map(str::to_string),
     })
-}
-
-fn parse_chat_message(value: &Value) -> Option<OpenCodeChatMessage> {
-    let id = value.get("id").and_then(Value::as_str)?.to_string();
-    let kind = value.get("type").and_then(Value::as_str)?;
-    if kind == "user" {
-        let text = value
-            .get("text")
-            .and_then(Value::as_str)?
-            .trim()
-            .to_string();
-        if text.is_empty() {
-            return None;
-        }
-        return Some(OpenCodeChatMessage {
-            id,
-            role: "user".to_string(),
-            text,
-        });
-    }
-    if kind == "assistant" {
-        let content = value.get("content").and_then(Value::as_array)?;
-        let text = content
-            .iter()
-            .filter(|part| part.get("type").and_then(Value::as_str) == Some("text"))
-            .filter_map(|part| part.get("text").and_then(Value::as_str))
-            .collect::<Vec<_>>()
-            .join("\n");
-        if text.trim().is_empty() {
-            return None;
-        }
-        return Some(OpenCodeChatMessage {
-            id,
-            role: "assistant".to_string(),
-            text,
-        });
-    }
-    None
 }
 
 fn validate_session_id(session_id: &str) -> Result<(), String> {

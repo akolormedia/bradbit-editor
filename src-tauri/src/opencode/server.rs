@@ -117,6 +117,7 @@ impl RunningServer {
                 if shutdown.load(Ordering::Relaxed) {
                     return;
                 }
+                let event = super::chat::normalize_event(event);
                 let _ = app.emit(EVENT_NAME, event);
             });
             if let Err(error) = result {

@@ -4,11 +4,15 @@ import {
   applyOpenCodeEvent,
   chatFailed,
   chatFromHistory,
+  chatPermissionFailed,
+  chatPermissionReplied,
   chatSendFailed,
   chatStarted,
   chatStarting,
   clearChatError,
   initialChatState,
+  messageText,
+  permissionsLoaded,
 } from "./chatState";
 
 const session = { id: "ses_test", title: "Bradbit" };
@@ -30,13 +34,58 @@ describe("chat state (T-2.1.1)", () => {
 
   it("hydrates a session from persisted OpenCode history", () => {
     const state = chatFromHistory(session, [
-      { id: "msg_user", role: "user", text: "Hola" },
-      { id: "msg_assistant", role: "assistant", text: "ok" },
+      {
+        id: "msg_user",
+        role: "user",
+        text: "Hola",
+        parts: [{ type: "text", text: "Hola" }],
+      },
+      {
+        id: "msg_assistant",
+        role: "assistant",
+        text: "ok",
+        model: "opencode-go/hy4",
+        tokens: {
+          input: 10,
+          output: 4,
+          reasoning: 2,
+          cacheRead: 7,
+          cacheWrite: 1,
+        },
+        parts: [
+          { type: "text", text: "ok" },
+          {
+            type: "tool",
+            tool: {
+              id: "tool_1",
+              name: "read",
+              status: "completed",
+              input: { path: "notas.md" },
+              output: "Hola",
+              error: "",
+              executed: false,
+              files: ["notas.md"],
+            },
+          },
+        ],
+      },
     ]);
     expect(state.status).toBe("ready");
     expect(state.sessionId).toBe("ses_test");
     expect(state.streaming).toBe(false);
-    expect(state.messages.map((message) => message.text)).toEqual(["Hola", "ok"]);
+    expect(state.model).toBe("opencode-go/hy4");
+    expect(state.messages.map(messageText)).toEqual(["Hola", "ok"]);
+    expect(state.messages[1].parts[1]).toMatchObject({
+      type: "tool",
+      tool: { name: "read", files: ["notas.md"] },
+    });
+    expect(state.tokens).toEqual({
+      input: 10,
+      output: 4,
+      reasoning: 2,
+      cacheRead: 7,
+      cacheWrite: 1,
+    });
   });
 
   it("streams text deltas into one assistant message", () => {
@@ -73,25 +122,39 @@ describe("chat state (T-2.1.1)", () => {
 
     expect(state.messages).toHaveLength(2);
     expect(state.messages[1].role).toBe("assistant");
-    expect(state.messages[1].text).toBe("ok");
+    expect(messageText(state.messages[1])).toBe("ok");
     expect(state.messages[1].streaming).toBe(false);
     expect(state.streaming).toBe(false);
   });
 
-  it("keeps separate assistant blocks by message and ordinal", () => {
+  it("keeps multiple text blocks as ordered parts of one assistant message", () => {
     let state = appendUserMessage(ready(), "Dos bloques");
     state = applyOpenCodeEvent(state, {
       type: "session.text.delta",
-      data: { sessionID: "ses_test", assistantMessageID: "msg_a", ordinal: 0, delta: "uno" },
+      data: {
+        sessionID: "ses_test",
+        assistantMessageID: "msg_a",
+        ordinal: 0,
+        delta: "uno",
+      },
     });
     state = applyOpenCodeEvent(state, {
       type: "session.text.delta",
-      data: { sessionID: "ses_test", assistantMessageID: "msg_a", ordinal: 1, delta: "dos" },
+      data: {
+        sessionID: "ses_test",
+        assistantMessageID: "msg_a",
+        ordinal: 1,
+        delta: "dos",
+      },
     });
-    const assistants = state.messages.filter((message) => message.role === "assistant");
-    expect(assistants).toHaveLength(2);
-    expect(assistants[0].text).toBe("uno");
-    expect(assistants[1].text).toBe("dos");
+    const assistants = state.messages.filter(
+      (message) => message.role === "assistant",
+    );
+    expect(assistants).toHaveLength(1);
+    expect(assistants[0].parts).toEqual([
+      { type: "text", ordinal: 0, text: "uno" },
+      { type: "text", ordinal: 1, text: "dos" },
+    ]);
   });
 
   it("ignores events from other sessions", () => {
@@ -175,6 +238,149 @@ describe("chat state (T-2.1.1)", () => {
     state = chatSendFailed(state, "HTTP 500");
     expect(state.streaming).toBe(false);
     expect(state.error).toBe("HTTP 500");
-    expect(state.messages[0].text).toBe("Hola");
+    expect(messageText(state.messages[0])).toBe("Hola");
+  });
+});
+
+describe("chat tools and permissions (T-2.1.3)", () => {
+  it("attaches normalized tool events to the assistant message", () => {
+    let state = appendUserMessage(ready(), "Lee el archivo");
+    state = applyOpenCodeEvent(state, {
+      type: "session.tool.input.started",
+      data: {
+        sessionID: "ses_test",
+        assistantMessageID: "msg_a",
+        tool: {
+          id: "tool_1",
+          name: "read",
+          status: "streaming",
+          input: null,
+          output: "",
+          error: "",
+          executed: false,
+          files: [],
+        },
+      },
+    });
+    state = applyOpenCodeEvent(state, {
+      type: "session.tool.success",
+      data: {
+        sessionID: "ses_test",
+        assistantMessageID: "msg_a",
+        tool: {
+          id: "tool_1",
+          name: "read",
+          status: "completed",
+          input: { path: "notas.md" },
+          output: "Hola",
+          error: "",
+          executed: false,
+          files: ["notas.md"],
+        },
+      },
+    });
+
+    const assistant = state.messages.find(
+      (message) => message.role === "assistant",
+    )!;
+    expect(assistant.parts).toHaveLength(1);
+    expect(assistant.parts[0]).toMatchObject({
+      type: "tool",
+      tool: {
+        id: "tool_1",
+        name: "read",
+        status: "completed",
+        output: "Hola",
+        files: ["notas.md"],
+      },
+    });
+  });
+
+  it("adds pending permissions, answers them and can roll back", () => {
+    let state = ready();
+    state = applyOpenCodeEvent(state, {
+      type: "permission.asked",
+      data: {
+        sessionID: "ses_test",
+        permission: {
+          id: "per_1",
+          sessionId: "ses_test",
+          action: "edit",
+          resources: ["notas.md"],
+          save: ["*"],
+          message: "",
+          toolId: "tool_1",
+          status: "pending",
+        },
+      },
+    });
+    expect(state.permissions).toEqual([
+      {
+        id: "per_1",
+        action: "edit",
+        resources: ["notas.md"],
+        save: ["*"],
+        message: "",
+        toolId: "tool_1",
+        status: "pending",
+      },
+    ]);
+
+    state = chatPermissionReplied(state, "per_1", "once");
+    expect(state.permissions[0].status).toBe("allowed");
+
+    state = chatPermissionFailed(state, "per_1", "no se pudo responder");
+    expect(state.permissions[0].status).toBe("pending");
+    expect(state.error).toBe("no se pudo responder");
+  });
+
+  it("loads pending permissions when restoring a session", () => {
+    const state = permissionsLoaded(ready(), [
+      {
+        id: "per_1",
+        sessionId: "ses_test",
+        action: "read",
+        resources: ["notas.md"],
+        save: ["*"],
+        message: "",
+        toolId: "tool_1",
+        status: "pending",
+      },
+    ]);
+    expect(state.permissions).toHaveLength(1);
+    expect(state.permissions[0].action).toBe("read");
+  });
+
+  it("marks tools as answered when the server confirms a permission reply", () => {
+    let state = ready();
+    state = applyOpenCodeEvent(state, {
+      type: "permission.asked",
+      data: {
+        sessionID: "ses_test",
+        permission: {
+          id: "per_1",
+          sessionId: "ses_test",
+          action: "read",
+          resources: ["notas.md"],
+          save: ["*"],
+          message: "",
+          toolId: "tool_1",
+          status: "pending",
+        },
+      },
+    });
+    state = applyOpenCodeEvent(state, {
+      type: "permission.replied",
+      data: {
+        sessionID: "ses_test",
+        permissionReply: {
+          requestId: "per_1",
+          sessionId: "ses_test",
+          reply: "reject",
+          status: "rejected",
+        },
+      },
+    });
+    expect(state.permissions[0].status).toBe("rejected");
   });
 });

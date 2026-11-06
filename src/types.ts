@@ -177,10 +177,47 @@ export interface OpenCodeSession {
   directory?: string | null;
 }
 
+export interface OpenCodeTokens {
+  input: number;
+  output: number;
+  reasoning: number;
+  cacheRead: number;
+  cacheWrite: number;
+}
+
+export interface OpenCodeToolCall {
+  id: string;
+  name: string;
+  status: "streaming" | "running" | "completed" | "error";
+  input: unknown;
+  output: string;
+  error: string;
+  executed: boolean;
+  files: string[];
+}
+
+export type OpenCodeMessagePart =
+  | { type: "text"; text: string }
+  | { type: "tool"; tool: OpenCodeToolCall };
+
 export interface OpenCodeChatMessage {
   id: string;
   role: "user" | "assistant";
   text: string;
+  parts: OpenCodeMessagePart[];
+  tokens?: OpenCodeTokens | null;
+  model?: string | null;
+}
+
+export interface OpenCodePermission {
+  id: string;
+  sessionId: string;
+  action: string;
+  resources: string[];
+  save: string[];
+  message: string;
+  toolId: string | null;
+  status: "pending" | "allowed" | "rejected";
 }
 
 export interface WorkspaceLayout {

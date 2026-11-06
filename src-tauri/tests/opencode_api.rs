@@ -22,7 +22,7 @@ fn spawn_mock() -> (String, Arc<Mutex<Vec<Recorded>>>) {
     let recorded = Arc::new(Mutex::new(Vec::new()));
     let sink = Arc::clone(&recorded);
     thread::spawn(move || {
-        for _ in 0..8 {
+        for _ in 0..10 {
             let Ok((mut stream, _)) = listener.accept() else {
                 return;
             };
@@ -60,13 +60,27 @@ fn spawn_mock() -> (String, Arc<Mutex<Vec<Recorded>>>) {
                 )
             } else if request.target == "/api/session/ses_test/interrupt" {
                 ("application/json", r#"{"interrupted":true}"#.to_string())
+            } else if request.target == "/api/session/ses_test/permission"
+                && request.method == "GET"
+            {
+                (
+                    "application/json",
+                    concat!(
+                        r#"{"data":["#,
+                        r#"{"id":"per_1","sessionID":"ses_test","action":"edit","resources":["notas.md"],"save":["*"],"source":{"type":"tool","messageID":"msg_assistant","id":"tool_1"}}"#,
+                        r#"]}"#,
+                    )
+                    .to_string(),
+                )
+            } else if request.target == "/api/session/ses_test/permission/per_1/reply" {
+                ("application/json", String::new())
             } else if request.target.starts_with("/api/session/ses_test/message") {
                 (
                     "application/json",
                     concat!(
                         r#"{"data":["#,
                         r#"{"id":"msg_user","type":"user","text":"Hola"},"#,
-                        r#"{"id":"msg_assistant","type":"assistant","content":[{"type":"reasoning","text":"pensando"},{"type":"text","text":"ok"}]},"#,
+                        r#"{"id":"msg_assistant","type":"assistant","tokens":{"input":10,"output":4,"reasoning":2,"cache":{"read":7,"write":1}},"content":[{"type":"reasoning","text":"pensando"},{"type":"text","text":"ok"},{"type":"tool","id":"tool_1","name":"read","state":{"status":"completed","input":{"path":"notas.md"},"content":[{"type":"text","text":"Hola"}]}}]},"#,
                         r#"{"id":"msg_tool","type":"assistant","content":[{"type":"tool","name":"read"}]}"#,
                         r#"]}"#,
                     )
@@ -169,6 +183,23 @@ fn client_covers_info_models_sessions_prompts_interrupts_and_events() {
     assert_eq!(messages[0].text, "Hola");
     assert_eq!(messages[1].role, "assistant");
     assert_eq!(messages[1].text, "ok");
+    assert_eq!(messages[1].tokens.as_ref().unwrap().cache_read, 7);
+    assert_eq!(messages[1].parts.len(), 2);
+    match &messages[1].parts[1] {
+        bradbit_editor_lib::opencode::chat::OpenCodeMessagePart::Tool { tool } => {
+            assert_eq!(tool.files, vec!["notas.md"]);
+            assert_eq!(tool.output, "Hola");
+        }
+        _ => panic!("expected tool part"),
+    }
+
+    let permissions = client.pending_permissions("ses_test").unwrap();
+    assert_eq!(permissions.len(), 1);
+    assert_eq!(permissions[0].action, "edit");
+    assert_eq!(permissions[0].tool_id.as_deref(), Some("tool_1"));
+    client
+        .reply_permission("ses_test", "per_1", "once")
+        .unwrap();
 
     let mut events = Vec::new();
     client.subscribe_events(|event| events.push(event)).unwrap();
@@ -194,6 +225,13 @@ fn client_covers_info_models_sessions_prompts_interrupts_and_events() {
     assert_eq!(prompt.method, "POST");
     let body: serde_json::Value = serde_json::from_str(&prompt.body).unwrap();
     assert_eq!(body["text"], "hola");
+
+    let reply = log
+        .iter()
+        .find(|request| request.target == "/api/session/ses_test/permission/per_1/reply")
+        .expect("permission reply request");
+    let body: serde_json::Value = serde_json::from_str(&reply.body).unwrap();
+    assert_eq!(body["decision"], "once");
 }
 
 #[test]
