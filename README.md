@@ -48,6 +48,14 @@ Editor de texto de escritorio agnóstico para escritura creativa (`.md`, `.mdx`,
   - Los archivos nuevos muestran el aviso *Archivo nuevo (sin versión guardada)* y se comparan contra un documento vacío.
   - El botón **↺ Descartar cambios** pide confirmación y restaura el archivo a `HEAD`; si es un archivo nuevo, lo elimina del disco y del índice. La pestaña, el árbol y las insignias se refrescan al instante.
   - Funciona también con cambios sin guardar: el Diff muestra el texto vivo de la pestaña y el descarte elimina tanto el borrador como los cambios en disco.
+- **Panel de Versiones (`T-1.4.4`):**
+  - Nueva pestaña **Versiones** en el panel lateral, también accesible con **`⌘⌥G`**.
+  - **Guardar versión:** resume los cambios pendientes, permite escribir el resumen y firma el commit con el nombre y correo configurados en *Ajustes → Autor de las versiones*.
+  - **Cambios actuales:** lista humana de archivos *Editado*, *Nuevo*, *Eliminado*, *Renombrado* o *Conflicto*; cada fila abre su Diff y ofrece descartar/restaurar.
+  - **Historial de versiones:** línea de tiempo de commits con fecha y autor; al expandir una versión se inspeccionan sus archivos y se puede restaurar cualquiera de ellos sin salir del editor.
+  - **Borradores paralelos:** lista de ramas Git, creación de un borrador nuevo desde la versión actual y cambio de borrador con recarga segura de las pestañas abiertas.
+  - En carpetas sin Git, el panel ofrece **Activar historial** para crear el repositorio y empezar a guardar versiones.
+  - Los archivos eliminados del disco ahora sí aparecen en *Cambios actuales* con su acción de restauración.
 - **Edición profesional con CodeMirror 6:**
   - Deshacer/rehacer por pestaña, buscar y reemplazar en el archivo (`⌘F`), *word wrap*, números de línea opcionales, corrector ortográfico nativo y resaltado para Markdown y Fountain.
   - Negrita (`⌘B`) y cursiva (`⌘I`) en Markdown/MDX, con selección o cursor entre marcadores.

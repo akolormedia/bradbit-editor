@@ -8,6 +8,8 @@ export interface AppSettings {
   wordWrap: boolean;
   lineNumbers: boolean;
   showConfigFiles: boolean;
+  gitAuthorName: string;
+  gitAuthorEmail: string;
 }
 
 export interface FileTreeNode {
@@ -105,4 +107,24 @@ export interface GitStatus {
 export interface GitDiscardResult {
   deleted: boolean;
   status: GitStatus;
+}
+
+export interface GitCommit {
+  id: string;
+  author: string;
+  email: string;
+  date: string;
+  subject: string;
+}
+
+export interface GitCommitFile {
+  path: string;
+  oldPath: string | null;
+  status: string;
+}
+
+export interface GitBranch {
+  name: string;
+  id: string;
+  current: boolean;
 }

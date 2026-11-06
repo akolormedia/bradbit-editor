@@ -4,7 +4,7 @@
 //! `--porcelain=v2`, custom `log` formats) so parsing never depends on
 //! localized human-facing messages.
 
-use super::{BranchInfo, Commit, FileChange, StatusEntry, WorktreeStatus};
+use super::{BranchInfo, Commit, CommitFile, FileChange, StatusEntry, WorktreeStatus};
 
 /// `git version 2.50.1 (Apple Git-155)` → `(2, 50, 1)`.
 pub(crate) fn parse_version(raw: &str) -> Option<(u32, u32, u32)> {
@@ -161,6 +161,41 @@ pub(crate) fn parse_log(raw: &str) -> Vec<Commit> {
         .collect()
 }
 
+/// Parse NUL-separated `git show --name-status -z` output.
+pub(crate) fn parse_commit_files(raw: &str) -> Vec<CommitFile> {
+    let mut tokens = raw.split('\0').filter(|token| !token.is_empty());
+    let mut files = Vec::new();
+    while let Some(status) = tokens.next() {
+        if status.is_empty() {
+            continue;
+        }
+        let is_rename = status.starts_with('R') || status.starts_with('C');
+        if is_rename {
+            let Some(old_path) = tokens.next() else {
+                break;
+            };
+            let Some(path) = tokens.next() else {
+                break;
+            };
+            files.push(CommitFile {
+                path: path.to_string(),
+                old_path: Some(old_path.to_string()),
+                status: status.to_string(),
+            });
+        } else {
+            let Some(path) = tokens.next() else {
+                break;
+            };
+            files.push(CommitFile {
+                path: path.to_string(),
+                old_path: None,
+                status: status.to_string(),
+            });
+        }
+    }
+    files
+}
+
 /// Parse `git diff --numstat` output into per-file change counts.
 pub(crate) fn parse_numstat(raw: &str) -> Vec<FileChange> {
     raw.lines()
@@ -226,6 +261,21 @@ mod tests {
         let raw = "1 .M N... 100644 100644 100644 abc def notes/nota de investigación.md\n";
         let (_, entries) = parse_status(raw);
         assert_eq!(entries[0].path, "notes/nota de investigación.md");
+    }
+
+    #[test]
+    fn parses_commit_files_with_renames() {
+        let raw = "M\0b.md\0R100\0a.md\0c.md\0D\0viejo.md\0";
+        let files = parse_commit_files(raw);
+        assert_eq!(files.len(), 3);
+        assert_eq!(files[0].status, "M");
+        assert_eq!(files[0].path, "b.md");
+        assert_eq!(files[0].old_path, None);
+        assert_eq!(files[1].status, "R100");
+        assert_eq!(files[1].path, "c.md");
+        assert_eq!(files[1].old_path.as_deref(), Some("a.md"));
+        assert_eq!(files[2].status, "D");
+        assert_eq!(files[2].path, "viejo.md");
     }
 
     #[test]

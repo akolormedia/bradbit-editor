@@ -91,6 +91,7 @@ struct MenuLabels {
     find_in_project: &'static str,
     view: &'static str,
     toggle_sidebar: &'static str,
+    versions: &'static str,
     preview: &'static str,
     word_wrap: &'static str,
     line_numbers: &'static str,
@@ -137,6 +138,7 @@ impl MenuLabels {
                 find_in_project: "Find in Project…",
                 view: "View",
                 toggle_sidebar: "Toggle Explorer",
+                versions: "Versions",
                 preview: "Preview",
                 word_wrap: "Word Wrap",
                 line_numbers: "Line Numbers",
@@ -180,6 +182,7 @@ impl MenuLabels {
                 find_in_project: "Buscar en proyecto…",
                 view: "Visualización",
                 toggle_sidebar: "Mostrar u ocultar archivos",
+                versions: "Versiones",
                 preview: "Vista previa",
                 word_wrap: "Ajuste de línea",
                 line_numbers: "Números de línea",
@@ -222,6 +225,7 @@ pub fn is_known_command(id: &str) -> bool {
             | "edit.findReplace"
             | "edit.findInProject"
             | "view.toggleSidebar"
+            | "view.versions"
             | "view.togglePreview"
             | "view.wordWrap"
             | "view.lineNumbers"
@@ -238,6 +242,7 @@ pub fn command_enabled(state: &MenuUiState, id: &str) -> bool {
         "file.newFile" | "file.quickOpen" | "edit.findInProject" | "view.toggleSidebar" => {
             state.has_folder
         }
+        "view.versions" => state.has_folder,
         "file.save" | "file.closeTab" | "edit.undo" | "edit.redo" | "edit.find"
         | "edit.findReplace" => state.has_active_tab,
         "file.exportPdf" => state.has_active_tab && state.is_fountain,
@@ -263,6 +268,7 @@ pub fn shortcut_command(key: &str, shift: bool, option: bool) -> Option<&'static
         ("p", false, false) => Some("file.quickOpen"),
         ("p", false, true) => Some("view.togglePreview"),
         ("e", true, false) => Some("view.toggleSidebar"),
+        ("g", false, true) => Some("view.versions"),
         ("s", false, false) => Some("file.save"),
         ("e", false, false) => Some("file.exportPdf"),
         ("o", false, false) => Some("file.openFolder"),
@@ -455,6 +461,11 @@ pub fn build_menu<R: Runtime>(
         .checked(state.sidebar_visible)
         .enabled(state.has_folder)
         .build(app)?;
+    let versions = MenuItemBuilder::new(labels.versions)
+        .id("view.versions")
+        .accelerator("Alt+CmdOrCtrl+G")
+        .enabled(state.has_folder)
+        .build(app)?;
     let toggle_preview = CheckMenuItemBuilder::new(labels.preview)
         .id("view.togglePreview")
         .accelerator("Alt+CmdOrCtrl+P")
@@ -473,6 +484,7 @@ pub fn build_menu<R: Runtime>(
 
     let view_menu = SubmenuBuilder::new(app, labels.view)
         .item(&toggle_sidebar)
+        .item(&versions)
         .separator()
         .item(&toggle_preview)
         .item(&word_wrap)
@@ -649,6 +661,7 @@ mod tests {
         assert_eq!(en.save_as_template, "Save as Template…");
         assert_eq!(en.open_templates_folder, "Open Templates Folder");
         assert_eq!(en.find_in_project, "Find in Project…");
+        assert_eq!(en.versions, "Versions");
     }
 
     #[test]
@@ -676,6 +689,7 @@ mod tests {
         assert!(!command_enabled(&state, "file.quickOpen"));
         assert!(!command_enabled(&state, "edit.findInProject"));
         assert!(!command_enabled(&state, "view.toggleSidebar"));
+        assert!(!command_enabled(&state, "view.versions"));
         assert!(!command_enabled(&state, "edit.bold"));
         assert!(!command_enabled(&state, "view.togglePreview"));
 
@@ -685,6 +699,7 @@ mod tests {
         assert!(command_enabled(&state, "file.quickOpen"));
         assert!(command_enabled(&state, "edit.findInProject"));
         assert!(command_enabled(&state, "view.toggleSidebar"));
+        assert!(command_enabled(&state, "view.versions"));
         assert!(!command_enabled(&state, "file.save"));
 
         state.has_active_tab = true;
@@ -718,6 +733,7 @@ mod tests {
             shortcut_command("p", false, true),
             Some("view.togglePreview")
         );
+        assert_eq!(shortcut_command("g", false, true), Some("view.versions"));
         assert_eq!(shortcut_command("z", false, false), Some("edit.undo"));
         assert_eq!(shortcut_command("z", true, false), Some("edit.redo"));
         assert_eq!(shortcut_command("s", false, false), Some("file.save"));
