@@ -684,21 +684,36 @@ impl Repository {
 
     /// Configured remotes as `(name, fetch_url)` pairs. URLs are redacted:
     /// credential-bearing remotes are safe to display and log.
+    ///
+    /// We read `remote.<name>.url` from the config instead of `git remote -v`
+    /// because the latter expands `url.<base>.insteadOf` rewrites and can hide
+    /// the actual GitHub URL the user configured.
     pub fn remotes(&self, options: OpOptions) -> Result<Vec<(String, String)>, GitError> {
-        let output = run_git(Some(&self.root), "remote", &["remote", "-v"], options)?;
+        let output = run_git(Some(&self.root), "remote", &["remote"], options.clone())?;
         if !output.status.success() {
             return Err(command_failed("remote", &output.stderr));
         }
-        // `origin  https://host/x.git (fetch)` — dedupe fetch/push lines.
         let mut remotes = Vec::new();
-        for line in String::from_utf8_lossy(&output.stdout).lines() {
-            let mut fields = line.split_whitespace();
-            let (Some(name), Some(url)) = (fields.next(), fields.next()) else {
+        for name in String::from_utf8_lossy(&output.stdout).lines() {
+            let name = name.trim();
+            if name.is_empty() {
                 continue;
-            };
-            let url = redact_secrets(url);
-            if !remotes.iter().any(|(existing, _)| existing == name) {
-                remotes.push((name.to_string(), url));
+            }
+            let key = format!("remote.{name}.url");
+            let url_output = run_git(
+                Some(&self.root),
+                "config",
+                &["config", "--get", &key],
+                options.clone(),
+            )?;
+            if !url_output.status.success() {
+                continue;
+            }
+            let url = String::from_utf8_lossy(&url_output.stdout)
+                .trim()
+                .to_string();
+            if !url.is_empty() {
+                remotes.push((name.to_string(), redact_secrets(&url)));
             }
         }
         Ok(remotes)

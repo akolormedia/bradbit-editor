@@ -32,6 +32,16 @@ function state(overrides: Partial<VersionsPanelState> = {}): VersionsPanelState 
     expandedCommitId: null,
     commitFiles: {},
     error: "",
+    githubTokenPresent: false,
+    githubAccount: null,
+    hasRemote: false,
+    githubRemote: null,
+    githubRepo: null,
+    githubBusy: false,
+    githubError: "",
+    githubPullRequests: [],
+    githubPrLoading: false,
+    currentBranch: "main",
     ...overrides,
   };
 }
@@ -48,6 +58,13 @@ function handlers(): VersionsPanelHandlers {
     onCreateBranch: vi.fn(),
     onCheckoutBranch: vi.fn(),
     onOpenSettings: vi.fn(),
+    onConnectGitHub: vi.fn(),
+    onPublishGitHub: vi.fn(),
+    onPushGitHub: vi.fn(),
+    onPullGitHub: vi.fn(),
+    onCreatePullRequest: vi.fn(),
+    onRefreshPullRequests: vi.fn(),
+    onOpenGitHubUrl: vi.fn(),
   };
 }
 
@@ -150,5 +167,108 @@ describe("versions panel (T-1.4.4)", () => {
 
     panel.querySelector<HTMLButtonElement>('[data-branch-name="final-alternativo"]')?.click();
     expect(onCheckoutBranch).toHaveBeenCalledWith("final-alternativo");
+  });
+
+  it("offers to connect GitHub when no token is stored", () => {
+    const onConnectGitHub = vi.fn();
+    const panel = createVersionsPanel(state(), { ...handlers(), onConnectGitHub });
+    expect(panel.textContent).toContain("Conecta tu cuenta de GitHub");
+    panel.querySelector<HTMLButtonElement>('[data-testid="connect-github-btn"]')?.click();
+    expect(onConnectGitHub).toHaveBeenCalledOnce();
+  });
+
+  it("publishes the project when connected and no remote exists", () => {
+    const onPublishGitHub = vi.fn();
+    const panel = createVersionsPanel(
+      state({ githubTokenPresent: true, githubAccount: "rafael" }),
+      { ...handlers(), onPublishGitHub },
+    );
+
+    expect(panel.textContent).toContain("Conectado como @rafael");
+    expect(panel.textContent).toContain("Publica este proyecto en GitHub");
+    const publish = panel.querySelector<HTMLButtonElement>(
+      '[data-testid="publish-github-btn"]',
+    );
+    expect(publish).not.toBeNull();
+    publish?.click();
+    expect(onPublishGitHub).toHaveBeenCalledOnce();
+  });
+
+  it("shows sync actions and Pull Requests for a GitHub remote", () => {
+    const h = handlers();
+    const panel = createVersionsPanel(
+      state({
+        githubTokenPresent: true,
+        githubAccount: "rafael",
+        hasRemote: true,
+        githubRemote: { name: "origin", url: "git@github.com:rafael/demo.git" },
+        githubRepo: { owner: "rafael", repo: "demo" },
+        currentBranch: "final-alternativo",
+        githubPullRequests: [
+          {
+            number: 7,
+            state: "open",
+            merged: false,
+            title: "Versión del acto 1",
+            htmlUrl: "https://github.com/rafael/demo/pull/7",
+            headRef: "final-alternativo",
+            baseRef: "main",
+          },
+        ],
+      }),
+      h,
+    );
+
+    expect(panel.textContent).toContain("rafael/demo");
+    const push = panel.querySelector<HTMLButtonElement>('[data-testid="github-push-btn"]');
+    const pull = panel.querySelector<HTMLButtonElement>('[data-testid="github-pull-btn"]');
+    const propose = panel.querySelector<HTMLButtonElement>('[data-testid="github-pr-btn"]');
+    expect(propose?.disabled).toBe(false);
+
+    push?.click();
+    pull?.click();
+    propose?.click();
+    expect(h.onPushGitHub).toHaveBeenCalledOnce();
+    expect(h.onPullGitHub).toHaveBeenCalledOnce();
+    expect(h.onCreatePullRequest).toHaveBeenCalledOnce();
+
+    const pr = panel.querySelector<HTMLButtonElement>('[data-testid="github-pr-7"]');
+    expect(pr?.textContent).toContain("#7 Versión del acto 1");
+    expect(pr?.textContent).toContain("final-alternativo → main");
+    pr?.click();
+    expect(h.onOpenGitHubUrl).toHaveBeenCalledWith(
+      "https://github.com/rafael/demo/pull/7",
+    );
+
+    panel.querySelector<HTMLButtonElement>('[data-testid="github-pr-refresh"]')?.click();
+    expect(h.onRefreshPullRequests).toHaveBeenCalledOnce();
+  });
+
+  it("disables Propose changes on the default branch", () => {
+    const panel = createVersionsPanel(
+      state({
+        githubTokenPresent: true,
+        hasRemote: true,
+        githubRemote: { name: "origin", url: "https://github.com/rafael/demo.git" },
+        githubRepo: { owner: "rafael", repo: "demo" },
+        currentBranch: "main",
+      }),
+      handlers(),
+    );
+
+    const propose = panel.querySelector<HTMLButtonElement>('[data-testid="github-pr-btn"]');
+    expect(propose?.disabled).toBe(true);
+    expect(panel.textContent).toContain(
+      "Cambia a un borrador paralelo para proponer cambios",
+    );
+  });
+
+  it("explains when the existing remote is not GitHub and still allows publishing", () => {
+    const panel = createVersionsPanel(
+      state({ githubTokenPresent: true, hasRemote: true }),
+      handlers(),
+    );
+    expect(panel.textContent).toContain("El remoto actual no apunta a github.com");
+    expect(panel.querySelector('[data-testid="publish-github-btn"]')).not.toBeNull();
   });
 });
