@@ -1972,6 +1972,7 @@ class BradbitApp {
       chatBtn.className = "icon-btn";
       chatBtn.dataset.testid = "toggle-chat-btn";
       chatBtn.title = t(lang, "chatToggleChat");
+      chatBtn.setAttribute("aria-label", t(lang, "chatToggleChat"));
       chatBtn.setAttribute("aria-pressed", String(this.chatVisible));
       chatBtn.classList.toggle("active", this.chatVisible);
       chatBtn.textContent = "💬";
@@ -2582,6 +2583,7 @@ class BradbitApp {
   private renderSessionColumn(lang: AppSettings["language"]): HTMLElement {
     const column = document.createElement("section");
     column.className = "session-column";
+    column.classList.toggle("full", !this.editorVisible);
     column.style.width = this.editorVisible ? `${this.sessionWidth}px` : "100%";
     const panel = this.ensureChatPanel();
     panel.update(this.chatState, {

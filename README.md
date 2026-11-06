@@ -6,7 +6,7 @@ Editor de texto de escritorio agnóstico para escritura creativa (`.md`, `.mdx`,
 
 - **Chat integrado con OpenCode (`T-2.1.1`):**
   - Layout dividido estilo `opencode-desktop`: **sesión de escritura a la izquierda** y `EditorWorkspace` a la derecha, con divisor redimensionable.
-  - El botón **💬** muestra/oculta el chat y el botón **◫** de la sesión muestra/oculta el editor sin perder el estado de CodeMirror.
+  - El botón **💬** muestra/oculta el chat y el botón **◫** de la sesión muestra/oculta el editor sin perder el estado de CodeMirror. Al ocultar uno, el otro ocupa todo el ancho de la ventana, con los mensajes y el composer centrados.
   - Inicia o reutiliza **`opencode serve`** automáticamente para la carpeta abierta, crea una sesión y transmite la respuesta en vivo.
   - Composer con **Enter para enviar**, **Shift+Enter** para nueva línea y botón **Detener** durante la generación.
   - Muestra estado de conexión, errores accionables, uso de contexto/tokens y conserva el historial de la sesión mientras cambias de archivo.

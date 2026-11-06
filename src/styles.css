@@ -831,6 +831,13 @@ textarea.text-input {
   overflow: hidden;
 }
 
+.session-column.full {
+  flex: 1;
+  width: 100% !important;
+  max-width: none;
+  border-right: none;
+}
+
 .session-resizer {
   width: 5px;
   cursor: col-resize;
@@ -994,7 +1001,9 @@ textarea.text-input {
   align-items: flex-start;
   justify-content: space-between;
   gap: 8px;
-  margin: 8px 10px 0;
+  width: calc(100% - 20px);
+  max-width: 860px;
+  margin: 8px auto 0;
   padding: 7px 9px;
   border: 1px solid var(--danger);
   border-radius: 6px;
@@ -1027,6 +1036,9 @@ textarea.text-input {
 .chat-messages {
   flex: 1;
   min-height: 0;
+  width: 100%;
+  max-width: 860px;
+  margin: 0 auto;
   overflow-y: auto;
   padding: 14px 12px 18px;
   display: flex;
@@ -1138,12 +1150,16 @@ textarea.text-input {
 
 .chat-composer {
   flex-shrink: 0;
+  width: calc(100% - 20px);
+  max-width: 860px;
+  margin: 0 auto 12px;
   display: flex;
   flex-direction: column;
   gap: 6px;
-  padding: 9px 10px 10px;
-  background: var(--bg-sidebar);
-  border-top: 1px solid var(--border-color);
+  padding: 10px;
+  background: var(--bg-editor);
+  border: 1px solid var(--border-color);
+  border-radius: 10px;
 }
 
 .chat-input {
