@@ -22,7 +22,7 @@ fn spawn_mock() -> (String, Arc<Mutex<Vec<Recorded>>>) {
     let recorded = Arc::new(Mutex::new(Vec::new()));
     let sink = Arc::clone(&recorded);
     thread::spawn(move || {
-        for _ in 0..10 {
+        for _ in 0..12 {
             let Ok((mut stream, _)) = listener.accept() else {
                 return;
             };
@@ -73,6 +73,18 @@ fn spawn_mock() -> (String, Arc<Mutex<Vec<Recorded>>>) {
                     .to_string(),
                 )
             } else if request.target == "/api/session/ses_test/permission/per_1/reply" {
+                ("application/json", String::new())
+            } else if request.target == "/api/session/ses_test/form" {
+                (
+                    "application/json",
+                    concat!(
+                        r#"{"data":["#,
+                        r#"{"id":"frm_1","sessionID":"ses_test","title":"Questions","metadata":{"kind":"question","tool":{"messageID":"msg_assistant","id":"tool_q"}},"fields":[{"key":"q0","title":"Color favorito","type":"string","options":[{"value":"Rojo","label":"Rojo"}],"custom":true}]}"#,
+                        r#"]}"#,
+                    )
+                    .to_string(),
+                )
+            } else if request.target == "/api/session/ses_test/form/frm_1/reply" {
                 ("application/json", String::new())
             } else if request.target.starts_with("/api/session/ses_test/message") {
                 (
@@ -201,6 +213,14 @@ fn client_covers_info_models_sessions_prompts_interrupts_and_events() {
         .reply_permission("ses_test", "per_1", "once")
         .unwrap();
 
+    let forms = client.pending_forms("ses_test").unwrap();
+    assert_eq!(forms.len(), 1);
+    assert_eq!(forms[0].kind, "question");
+    assert_eq!(forms[0].fields.as_array().unwrap().len(), 1);
+    client
+        .reply_form("ses_test", "frm_1", &serde_json::json!({ "q0": "Rojo" }))
+        .unwrap();
+
     let mut events = Vec::new();
     client.subscribe_events(|event| events.push(event)).unwrap();
     assert_eq!(events.len(), 2);
@@ -232,6 +252,13 @@ fn client_covers_info_models_sessions_prompts_interrupts_and_events() {
         .expect("permission reply request");
     let body: serde_json::Value = serde_json::from_str(&reply.body).unwrap();
     assert_eq!(body["decision"], "once");
+
+    let form_reply = log
+        .iter()
+        .find(|request| request.target == "/api/session/ses_test/form/frm_1/reply")
+        .expect("form reply request");
+    let body: serde_json::Value = serde_json::from_str(&form_reply.body).unwrap();
+    assert_eq!(body["answer"]["q0"], "Rojo");
 }
 
 #[test]

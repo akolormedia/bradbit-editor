@@ -1,6 +1,8 @@
 import {
   OpenCodeChatMessage,
   OpenCodeEvent,
+  OpenCodeForm,
+  OpenCodeFormField,
   OpenCodePermission,
   OpenCodeSession,
   OpenCodeToolCall,
@@ -49,6 +51,18 @@ export interface ChatPermission {
   status: "pending" | "allowed" | "rejected";
 }
 
+export interface ChatForm {
+  id: string;
+  title: string;
+  kind: string;
+  toolId: string | null;
+  messageId: string | null;
+  fields: OpenCodeFormField[];
+  status: "pending" | "answered" | "cancelled";
+  answer: Record<string, unknown> | null;
+  message: string | null;
+}
+
 export interface ChatState {
   status: ChatStatus;
   sessionId: string | null;
@@ -59,6 +73,7 @@ export interface ChatState {
   error: string;
   tokens: ChatTokens | null;
   permissions: ChatPermission[];
+  forms: ChatForm[];
 }
 
 export const initialChatState: ChatState = {
@@ -71,6 +86,7 @@ export const initialChatState: ChatState = {
   error: "",
   tokens: null,
   permissions: [],
+  forms: [],
 };
 
 export function messageText(message: ChatMessage): string {
@@ -222,6 +238,63 @@ export function chatPermissionFailed(
       permission.id === requestId
         ? { ...permission, status: "pending" }
         : permission,
+    ),
+  };
+}
+
+function formFromOpenCode(form: OpenCodeForm): ChatForm {
+  return {
+    id: form.id,
+    title: form.title,
+    kind: form.kind,
+    toolId: form.toolId,
+    messageId: form.messageId,
+    fields: Array.isArray(form.fields) ? form.fields : [],
+    status: form.status,
+    answer: form.answer ?? null,
+    message: form.message ?? null,
+  };
+}
+
+function mergeForms(current: ChatForm[], incoming: ChatForm[]): ChatForm[] {
+  const byId = new Map(current.map((form) => [form.id, form]));
+  for (const form of incoming) {
+    byId.set(form.id, { ...byId.get(form.id), ...form });
+  }
+  return [...byId.values()];
+}
+
+export function formsLoaded(state: ChatState, forms: OpenCodeForm[]): ChatState {
+  if (forms.length === 0) return state;
+  return {
+    ...state,
+    forms: mergeForms(state.forms, forms.map(formFromOpenCode)),
+  };
+}
+
+export function chatFormAnswered(
+  state: ChatState,
+  formId: string,
+  answer: Record<string, unknown>,
+): ChatState {
+  return {
+    ...state,
+    forms: state.forms.map((form) =>
+      form.id === formId ? { ...form, status: "answered", answer } : form,
+    ),
+  };
+}
+
+export function chatFormFailed(
+  state: ChatState,
+  formId: string,
+  message: string,
+): ChatState {
+  return {
+    ...state,
+    error: message,
+    forms: state.forms.map((form) =>
+      form.id === formId ? { ...form, status: "pending", answer: null } : form,
     ),
   };
 }
@@ -458,6 +531,50 @@ function applyPermissionReply(
   };
 }
 
+function upsertForm(state: ChatState, data: Record<string, unknown>): ChatState {
+  const raw = data.form;
+  if (!raw || typeof raw !== "object") return state;
+  const form = formFromOpenCode(raw as OpenCodeForm);
+  return {
+    ...state,
+    forms: mergeForms(state.forms, [form]),
+  };
+}
+
+function applyFormReply(
+  state: ChatState,
+  data: Record<string, unknown>,
+): ChatState {
+  const raw = data.formReply;
+  if (!raw || typeof raw !== "object") return state;
+  const reply = raw as Record<string, unknown>;
+  const formId = textOf(reply.id);
+  if (!formId) return state;
+  const status = textOf(reply.status);
+  const answer =
+    reply.answer && typeof reply.answer === "object"
+      ? (reply.answer as Record<string, unknown>)
+      : null;
+  return {
+    ...state,
+    forms: state.forms.map((form) =>
+      form.id === formId
+        ? formFromOpenCode({
+            ...form,
+            sessionId: "",
+            status:
+              status === "cancelled"
+                ? "cancelled"
+                : status === "answered"
+                  ? "answered"
+                  : form.status,
+            answer: answer ?? form.answer,
+          })
+        : form,
+    ),
+  };
+}
+
 function markAllMessagesIdle(state: ChatState): ChatMessage[] {
   return state.messages.map((message) =>
     message.streaming ? { ...message, streaming: false } : message,
@@ -551,6 +668,13 @@ export function applyOpenCodeEvent(
 
     case "permission.replied":
       return applyPermissionReply(state, data);
+
+    case "form.created":
+      return upsertForm(state, data);
+
+    case "form.replied":
+    case "form.cancelled":
+      return applyFormReply(state, data);
 
     case "session.usage.updated": {
       const tokens = tokensFrom(data);

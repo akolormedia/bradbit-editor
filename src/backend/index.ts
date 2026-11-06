@@ -17,6 +17,7 @@ import {
   MenuUiState,
   OpenCodeChatMessage,
   OpenCodeEvent,
+  OpenCodeForm,
   OpenCodePermission,
   OpenCodeSession,
   OpenCodeStatus,
@@ -849,6 +850,28 @@ export const backend = {
       sessionId,
       requestId,
       decision,
+    });
+  },
+
+  async opencodePendingForms(sessionId: string): Promise<OpenCodeForm[]> {
+    if (!isTauriEnvironment()) return [];
+    return tauriInvoke<OpenCodeForm[]>("opencode_pending_forms", {
+      sessionId,
+    });
+  },
+
+  async opencodeReplyForm(
+    sessionId: string,
+    formId: string,
+    answer: Record<string, unknown>,
+  ): Promise<void> {
+    if (!isTauriEnvironment()) {
+      throw new Error("OpenCode requiere la app de escritorio");
+    }
+    return tauriInvoke<void>("opencode_reply_form", {
+      sessionId,
+      formId,
+      answer,
     });
   },
 

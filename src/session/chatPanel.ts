@@ -1,6 +1,7 @@
 import { t } from "../i18n";
-import { Language } from "../types";
+import { Language, OpenCodeFormField } from "../types";
 import {
+  ChatForm,
   ChatPermission,
   ChatState,
   ChatToolCall,
@@ -29,6 +30,7 @@ export interface ChatPanelOptions {
     requestId: string,
     decision: "once" | "always" | "reject",
   ) => void;
+  onFormReply: (formId: string, answer: Record<string, unknown>) => void;
 }
 
 function formatTokens(value: number): string {
@@ -63,6 +65,7 @@ export class ChatPanel {
   private stickToBottom = true;
   private drafts = new Map<string, string>();
   private draftSessionId: string | null = null;
+  private formDrafts = new Map<string, Record<string, unknown>>();
 
   constructor(options: ChatPanelOptions) {
     this.options = options;
@@ -673,15 +676,28 @@ export class ChatPanel {
 
   private renderRequests(): void {
     this.requestsEl.innerHTML = "";
-    const pending = this.state.permissions.filter(
+    const pendingPermissions = this.state.permissions.filter(
       (permission) => permission.status === "pending",
     );
-    if (pending.length === 0) {
+    const forms = this.state.forms;
+    const pendingFormIds = new Set(
+      forms
+        .filter((form) => form.status === "pending")
+        .map((form) => form.id),
+    );
+    for (const id of [...this.formDrafts.keys()]) {
+      if (!pendingFormIds.has(id)) this.formDrafts.delete(id);
+    }
+
+    if (pendingPermissions.length === 0 && forms.length === 0) {
       this.requestsEl.hidden = true;
       return;
     }
-    for (const permission of pending) {
+    for (const permission of pendingPermissions) {
       this.requestsEl.appendChild(this.renderPermission(permission));
+    }
+    for (const form of forms) {
+      this.requestsEl.appendChild(this.renderForm(form));
     }
     this.requestsEl.hidden = false;
   }
@@ -727,5 +743,326 @@ export class ChatPanel {
     add("reject", "chatPermissionReject", "danger");
     card.appendChild(actions);
     return card;
+  }
+
+  private formValue(formId: string, field: OpenCodeFormField): unknown {
+    const drafts = this.formDrafts.get(formId);
+    if (drafts && field.key in drafts) return drafts[field.key];
+    return field.default;
+  }
+
+  private setFormValue(formId: string, key: string, value: unknown): void {
+    const drafts = this.formDrafts.get(formId) ?? {};
+    drafts[key] = value;
+    this.formDrafts.set(formId, drafts);
+  }
+
+  private formAnswer(form: ChatForm): Record<string, unknown> {
+    const answer: Record<string, unknown> = {};
+    for (const field of form.fields) {
+      if (field.hidden || field.type === "external") continue;
+      let value = this.formValue(form.id, field);
+      if (value === undefined || value === null) continue;
+      if (typeof value === "string") {
+        value = value.trim();
+        if (!value) continue;
+      }
+      if (Array.isArray(value) && value.length === 0) continue;
+      if (field.type === "integer") {
+        const number = Number(value);
+        if (!Number.isFinite(number)) continue;
+        value = Math.trunc(number);
+      } else if (field.type === "number") {
+        const number = Number(value);
+        if (!Number.isFinite(number)) continue;
+        value = number;
+      }
+      answer[field.key] = value;
+    }
+    return answer;
+  }
+
+  private formReady(form: ChatForm): boolean {
+    for (const field of form.fields) {
+      if (!field.required || field.hidden || field.type === "external") {
+        continue;
+      }
+      if (field.type === "boolean") continue;
+      const value = this.formValue(form.id, field);
+      if (value === undefined || value === null) return false;
+      if (typeof value === "string" && !value.trim()) return false;
+      if (Array.isArray(value) && value.length === 0) return false;
+    }
+    return true;
+  }
+
+  private optionLabel(field: OpenCodeFormField, value: string): string {
+    return (
+      field.options?.find((option) => option.value === value)?.label ?? value
+    );
+  }
+
+  private formAnswerSummary(form: ChatForm): string {
+    if (!form.answer) return "";
+    const parts: string[] = [];
+    for (const field of form.fields) {
+      if (field.hidden || field.type === "external") continue;
+      const value = form.answer[field.key];
+      if (value === undefined || value === null) continue;
+      let display: string;
+      if (Array.isArray(value)) {
+        display = value
+          .map((item) => this.optionLabel(field, String(item)))
+          .join(", ");
+      } else if (typeof value === "boolean") {
+        display = value
+          ? t(this.options.language, "chatFormYes")
+          : t(this.options.language, "chatFormNo");
+      } else {
+        display = this.optionLabel(field, String(value));
+      }
+      parts.push(`${field.title || field.key}: ${display}`);
+    }
+    return parts.join(" · ");
+  }
+
+  private renderForm(form: ChatForm): HTMLElement {
+    const lang = this.options.language;
+    const card = document.createElement("div");
+    card.className = `chat-request chat-form ${form.status}`;
+    card.dataset.testid = `form-${form.id}`;
+    const title = document.createElement("div");
+    title.className = "chat-request-title";
+    title.textContent = t(lang, "chatFormTitle");
+    card.appendChild(title);
+
+    if (form.status === "answered") {
+      const status = document.createElement("div");
+      status.className = "chat-form-status answered";
+      status.textContent = t(lang, "chatFormAnswered");
+      card.appendChild(status);
+      const summary = this.formAnswerSummary(form);
+      if (summary) {
+        const detail = document.createElement("div");
+        detail.className = "chat-form-summary";
+        detail.textContent = summary;
+        card.appendChild(detail);
+      }
+      return card;
+    }
+
+    if (form.status === "cancelled") {
+      const status = document.createElement("div");
+      status.className = "chat-form-status cancelled";
+      status.textContent = t(lang, "chatFormCancelled");
+      card.appendChild(status);
+      if (form.message) {
+        const detail = document.createElement("div");
+        detail.className = "chat-form-summary";
+        detail.textContent = form.message;
+        card.appendChild(detail);
+      }
+      return card;
+    }
+
+    const fields = form.fields.filter((field) => !field.hidden);
+    if (fields.length === 0) {
+      const empty = document.createElement("div");
+      empty.className = "chat-form-summary";
+      empty.textContent = t(lang, "chatFormCancelled");
+      card.appendChild(empty);
+      return card;
+    }
+
+    const submit = document.createElement("button");
+    submit.type = "button";
+    submit.className = "chat-request-btn primary";
+    submit.dataset.testid = `form-submit-${form.id}`;
+    submit.textContent = t(lang, "chatFormSubmit");
+    const refresh = () => {
+      submit.disabled = !this.formReady(form);
+    };
+
+    for (const field of fields) {
+      card.appendChild(this.renderFormField(form, field, refresh));
+    }
+
+    const actions = document.createElement("div");
+    actions.className = "chat-request-actions";
+    submit.onclick = () => {
+      this.options.onFormReply(form.id, this.formAnswer(form));
+    };
+    refresh();
+    actions.appendChild(submit);
+    card.appendChild(actions);
+    return card;
+  }
+
+  private renderFormField(
+    form: ChatForm,
+    field: OpenCodeFormField,
+    changed: () => void,
+  ): HTMLElement {
+    const lang = this.options.language;
+    const wrapper = document.createElement("div");
+    wrapper.className = "chat-form-field";
+    wrapper.dataset.testid = `form-field-${form.id}-${field.key}`;
+    const label = document.createElement("div");
+    label.className = "chat-form-label";
+    label.textContent = field.title || field.key;
+    if (field.required) {
+      const required = document.createElement("span");
+      required.className = "chat-form-required";
+      required.textContent = " *";
+      label.appendChild(required);
+    }
+    wrapper.appendChild(label);
+    if (field.description) {
+      const description = document.createElement("div");
+      description.className = "chat-form-description";
+      description.textContent = field.description;
+      wrapper.appendChild(description);
+    }
+
+    const value = this.formValue(form.id, field);
+    if (field.type === "boolean") {
+      const row = document.createElement("label");
+      row.className = "chat-form-check";
+      const input = document.createElement("input");
+      input.type = "checkbox";
+      input.dataset.testid = `form-input-${form.id}-${field.key}`;
+      input.checked = Boolean(value);
+      input.onchange = () => {
+        this.setFormValue(form.id, field.key, input.checked);
+        changed();
+      };
+      const text = document.createElement("span");
+      text.textContent = field.description || field.title || field.key;
+      row.append(input, text);
+      wrapper.appendChild(row);
+      return wrapper;
+    }
+
+    if (field.type === "number" || field.type === "integer") {
+      const input = document.createElement("input");
+      input.type = "number";
+      input.className = "chat-form-input";
+      input.dataset.testid = `form-input-${form.id}-${field.key}`;
+      input.step = field.type === "integer" ? "1" : "any";
+      input.placeholder = field.placeholder ?? "";
+      input.value =
+        typeof value === "number" || typeof value === "string"
+          ? String(value)
+          : "";
+      input.oninput = () => {
+        this.setFormValue(
+          form.id,
+          field.key,
+          input.value === "" ? undefined : Number(input.value),
+        );
+        changed();
+      };
+      wrapper.appendChild(input);
+      return wrapper;
+    }
+
+    if (field.type === "multiselect") {
+      const selected = Array.isArray(value) ? value.map(String) : [];
+      for (const option of field.options ?? []) {
+        const row = document.createElement("label");
+        row.className = "chat-form-check";
+        const input = document.createElement("input");
+        input.type = "checkbox";
+        input.dataset.testid = `form-input-${form.id}-${field.key}-${option.value}`;
+        input.checked = selected.includes(option.value);
+        input.onchange = () => {
+          const next = new Set(
+            Array.isArray(this.formValue(form.id, field))
+              ? (this.formValue(form.id, field) as string[]).map(String)
+              : [],
+          );
+          if (input.checked) next.add(option.value);
+          else next.delete(option.value);
+          this.setFormValue(form.id, field.key, [...next]);
+          changed();
+        };
+        const text = document.createElement("span");
+        text.textContent = option.description
+          ? `${option.label} — ${option.description}`
+          : option.label;
+        row.append(input, text);
+        wrapper.appendChild(row);
+      }
+      return wrapper;
+    }
+
+    if (field.type === "external") {
+      const link = document.createElement("a");
+      link.className = "chat-form-link";
+      link.href = field.placeholder ?? "#";
+      link.target = "_blank";
+      link.rel = "noreferrer";
+      link.textContent = field.title || field.placeholder || "Abrir";
+      wrapper.appendChild(link);
+      return wrapper;
+    }
+
+    if (field.options && field.options.length > 0) {
+      const selected = typeof value === "string" ? value : "";
+      const radios: HTMLInputElement[] = [];
+      for (const option of field.options) {
+        const row = document.createElement("label");
+        row.className = "chat-form-check";
+        const input = document.createElement("input");
+        input.type = "radio";
+        input.name = `form-${form.id}-${field.key}`;
+        input.dataset.testid = `form-input-${form.id}-${field.key}-${option.value}`;
+        input.value = option.value;
+        input.checked = selected === option.value;
+        radios.push(input);
+        input.onchange = () => {
+          custom.value = "";
+          this.setFormValue(form.id, field.key, option.value);
+          changed();
+        };
+        const text = document.createElement("span");
+        text.textContent = option.description
+          ? `${option.label} — ${option.description}`
+          : option.label;
+        row.append(input, text);
+        wrapper.appendChild(row);
+      }
+      const custom = document.createElement("input");
+      custom.type = "text";
+      custom.className = "chat-form-input";
+      custom.dataset.testid = `form-input-${form.id}-${field.key}-custom`;
+      custom.placeholder = t(lang, "chatFormOther");
+      custom.value =
+        typeof value === "string" &&
+        !field.options.some((option) => option.value === value)
+          ? value
+          : "";
+      custom.hidden = !field.custom;
+      custom.oninput = () => {
+        for (const radio of radios) radio.checked = false;
+        this.setFormValue(form.id, field.key, custom.value);
+        changed();
+      };
+      wrapper.appendChild(custom);
+      return wrapper;
+    }
+
+    const input = document.createElement("input");
+    input.type = "text";
+    input.className = "chat-form-input";
+    input.dataset.testid = `form-input-${form.id}-${field.key}`;
+    input.placeholder = field.placeholder ?? t(lang, "chatFormFreeText");
+    input.value = typeof value === "string" ? value : "";
+    input.oninput = () => {
+      this.setFormValue(form.id, field.key, input.value);
+      changed();
+    };
+    wrapper.appendChild(input);
+    return wrapper;
   }
 }

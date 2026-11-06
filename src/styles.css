@@ -1426,6 +1426,87 @@ textarea.text-input {
   color: var(--danger);
 }
 
+.chat-request-btn:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.chat-form-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.chat-form-label {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.chat-form-required {
+  color: var(--danger);
+}
+
+.chat-form-description {
+  font-size: 10.5px;
+  line-height: 1.4;
+  color: var(--text-muted);
+}
+
+.chat-form-check {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  font-size: 11px;
+  line-height: 1.4;
+  color: var(--text-primary);
+  cursor: pointer;
+}
+
+.chat-form-check input {
+  margin-top: 1px;
+  accent-color: var(--accent);
+}
+
+.chat-form-input {
+  width: 100%;
+  padding: 5px 7px;
+  border: 1px solid var(--border-color);
+  border-radius: 5px;
+  background: var(--bg-input);
+  color: var(--text-primary);
+  font-family: var(--font-ui);
+  font-size: 11px;
+  outline: none;
+}
+
+.chat-form-input:focus {
+  border-color: var(--accent);
+}
+
+.chat-form-link {
+  font-size: 11px;
+  color: var(--accent);
+}
+
+.chat-form-status {
+  font-size: 9.5px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--success);
+}
+
+.chat-form-status.cancelled {
+  color: var(--text-muted);
+}
+
+.chat-form-summary {
+  font-size: 11px;
+  line-height: 1.45;
+  color: var(--text-muted);
+}
+
 .chat-composer {
   flex-shrink: 0;
   width: calc(100% - 20px);
