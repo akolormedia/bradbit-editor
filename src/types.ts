@@ -220,6 +220,38 @@ export interface OpenCodePermission {
   status: "pending" | "allowed" | "rejected";
 }
 
+export interface OpenCodeFormOption {
+  value: string;
+  label: string;
+  description?: string;
+}
+
+export interface OpenCodeFormField {
+  key: string;
+  type: "string" | "number" | "integer" | "boolean" | "multiselect" | "external";
+  title?: string;
+  description?: string;
+  required?: boolean;
+  hidden?: boolean;
+  options?: OpenCodeFormOption[];
+  custom?: boolean;
+  placeholder?: string;
+  default?: unknown;
+}
+
+export interface OpenCodeForm {
+  id: string;
+  sessionId: string;
+  title: string;
+  kind: string;
+  toolId: string | null;
+  messageId: string | null;
+  fields: OpenCodeFormField[];
+  status: "pending" | "answered" | "cancelled";
+  answer?: Record<string, unknown> | null;
+  message?: string | null;
+}
+
 export interface WorkspaceLayout {
   sessionWidth: number;
   chatVisible: boolean;

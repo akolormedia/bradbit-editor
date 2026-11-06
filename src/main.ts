@@ -17,6 +17,7 @@ import {
   MenuUiState,
   OpenCodeChatMessage,
   OpenCodeEvent,
+  OpenCodeForm,
   OpenCodePermission,
   OpenedFolder,
   OpenTab,
@@ -47,6 +48,8 @@ import {
   appendUserMessage,
   applyOpenCodeEvent,
   chatFailed,
+  chatFormAnswered,
+  chatFormFailed,
   chatFromHistory,
   chatPermissionFailed,
   chatPermissionReplied,
@@ -55,6 +58,7 @@ import {
   chatStopped,
   clearChatError,
   ChatState,
+  formsLoaded,
   initialChatState,
   permissionsLoaded,
 } from "./session/chatState";
@@ -1045,6 +1049,8 @@ class BradbitApp {
           void this.openChatToolFile(path, showDiff),
         onPermissionReply: (requestId, decision) =>
           void this.replyChatPermission(requestId, decision),
+        onFormReply: (formId, answer) =>
+          void this.replyChatForm(formId, answer),
       });
     }
     this.updateChatPanel();
@@ -1148,6 +1154,7 @@ class BradbitApp {
             };
           let messages: OpenCodeChatMessage[] = [];
           let permissions: OpenCodePermission[] = [];
+          let forms: OpenCodeForm[] = [];
           let error = "";
           try {
             messages = await backend.opencodeSessionMessages(id);
@@ -1161,9 +1168,16 @@ class BradbitApp {
               error = err instanceof Error ? err.message : String(err);
             }
           }
-          const state = permissionsLoaded(
-            chatFromHistory(session, messages),
-            permissions,
+          try {
+            forms = await backend.opencodePendingForms(id);
+          } catch (err) {
+            if (!error) {
+              error = err instanceof Error ? err.message : String(err);
+            }
+          }
+          const state = formsLoaded(
+            permissionsLoaded(chatFromHistory(session, messages), permissions),
+            forms,
           );
           return [id, error ? { ...state, error } : state] as const;
         }),
@@ -1285,6 +1299,37 @@ class BradbitApp {
       const failed = chatPermissionFailed(
         this.chatSessions.get(sessionId) ?? replied,
         requestId,
+        message,
+      );
+      this.chatSessions.set(sessionId, failed);
+      if (this.activeChatSessionId === sessionId) {
+        this.chatState = failed;
+      }
+      this.updateChatPanel();
+    }
+  }
+
+  private async replyChatForm(
+    formId: string,
+    answer: Record<string, unknown>,
+  ): Promise<void> {
+    const sessionId = this.activeChatSessionId;
+    if (!sessionId) return;
+    const current = this.chatSessions.get(sessionId);
+    if (!current) return;
+    const answered = chatFormAnswered(current, formId, answer);
+    this.chatSessions.set(sessionId, answered);
+    if (this.activeChatSessionId === sessionId) {
+      this.chatState = answered;
+    }
+    this.updateChatPanel();
+    try {
+      await backend.opencodeReplyForm(sessionId, formId, answer);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      const failed = chatFormFailed(
+        this.chatSessions.get(sessionId) ?? answered,
+        formId,
         message,
       );
       this.chatSessions.set(sessionId, failed);

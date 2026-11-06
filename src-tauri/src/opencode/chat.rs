@@ -71,6 +71,21 @@ pub struct OpenCodePermissionReply {
     pub status: String,
 }
 
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct OpenCodeForm {
+    pub id: String,
+    pub session_id: String,
+    pub title: String,
+    pub kind: String,
+    pub tool_id: Option<String>,
+    pub message_id: Option<String>,
+    pub fields: Value,
+    pub status: String,
+    pub answer: Option<Value>,
+    pub message: Option<String>,
+}
+
 /// Parse one `/api/session/{id}/message` entry into text parts, tool calls and
 /// usage metadata. Assistant messages with no visible content are dropped.
 pub fn parse_chat_message(value: &Value) -> Option<OpenCodeChatMessage> {
@@ -165,6 +180,58 @@ pub fn parse_permission(value: &Value) -> Option<OpenCodePermission> {
     })
 }
 
+/// Parse a pending form returned by the session form list or a `form.created`
+/// event. Fields are passed through as JSON because OpenCode supports several
+/// field types (string, number, boolean, multiselect and external).
+pub fn parse_form(value: &Value) -> Option<OpenCodeForm> {
+    let id = value.get("id").and_then(Value::as_str)?.to_string();
+    let session_id = value.get("sessionID").and_then(Value::as_str)?.to_string();
+    let title = value
+        .get("title")
+        .and_then(Value::as_str)
+        .unwrap_or("Pregunta")
+        .to_string();
+    let kind = value
+        .pointer("/metadata/kind")
+        .and_then(Value::as_str)
+        .unwrap_or("question")
+        .to_string();
+    let tool_id = value
+        .pointer("/metadata/tool/id")
+        .and_then(Value::as_str)
+        .map(str::to_string);
+    let message_id = value
+        .pointer("/metadata/tool/messageID")
+        .and_then(Value::as_str)
+        .map(str::to_string);
+    let fields = value
+        .get("fields")
+        .cloned()
+        .unwrap_or_else(|| Value::Array(Vec::new()));
+    let status = value
+        .pointer("/state/status")
+        .and_then(Value::as_str)
+        .unwrap_or("pending")
+        .to_string();
+    let answer = value.pointer("/state/answer").cloned();
+    let message = value
+        .pointer("/state/message")
+        .and_then(Value::as_str)
+        .map(str::to_string);
+    Some(OpenCodeForm {
+        id,
+        session_id,
+        title,
+        kind,
+        tool_id,
+        message_id,
+        fields,
+        status,
+        answer,
+        message,
+    })
+}
+
 /// Add a normalized `tool`, `permission` or `permissionReply` object to the
 /// raw SSE event without changing its type or routing fields.
 pub fn normalize_event(mut event: Value) -> Value {
@@ -232,6 +299,38 @@ pub fn normalize_event(mut event: Value) -> Value {
                 &mut event,
                 "permissionReply",
                 serde_json::to_value(reply).unwrap_or(Value::Null),
+            );
+        }
+        "form.created" => {
+            if let Some(form) = parse_form(data.get("form").unwrap_or(&Value::Null)) {
+                insert_data(
+                    &mut event,
+                    "form",
+                    serde_json::to_value(form).unwrap_or(Value::Null),
+                );
+            }
+        }
+        "form.replied" => {
+            insert_data(
+                &mut event,
+                "formReply",
+                json!({
+                    "id": data.get("id").and_then(Value::as_str).unwrap_or_default(),
+                    "sessionId": data.get("sessionID").and_then(Value::as_str).unwrap_or_default(),
+                    "status": "answered",
+                    "answer": data.get("answer").cloned().unwrap_or(Value::Null),
+                }),
+            );
+        }
+        "form.cancelled" => {
+            insert_data(
+                &mut event,
+                "formReply",
+                json!({
+                    "id": data.get("id").and_then(Value::as_str).unwrap_or_default(),
+                    "sessionId": data.get("sessionID").and_then(Value::as_str).unwrap_or_default(),
+                    "status": "cancelled",
+                }),
             );
         }
         _ => {}
@@ -554,6 +653,70 @@ mod tests {
         assert_eq!(
             called.pointer("/data/tool/files/0"),
             Some(&Value::String("capitulo.md".to_string()))
+        );
+    }
+
+    #[test]
+    fn parses_forms_and_normalizes_form_events() {
+        let form = parse_form(&json!({
+            "id": "frm_1",
+            "sessionID": "ses_a",
+            "title": "Questions",
+            "metadata": {
+                "kind": "question",
+                "tool": { "id": "tool_q", "messageID": "msg_q" }
+            },
+            "fields": [{
+                "key": "q0",
+                "title": "Color favorito",
+                "type": "string",
+                "options": [{ "value": "Rojo", "label": "Rojo" }],
+                "custom": true
+            }]
+        }))
+        .expect("form");
+        assert_eq!(form.kind, "question");
+        assert_eq!(form.tool_id.as_deref(), Some("tool_q"));
+        assert_eq!(form.status, "pending");
+        assert_eq!(form.fields.as_array().unwrap().len(), 1);
+
+        let created = normalize_event(json!({
+            "type": "form.created",
+            "data": {
+                "form": {
+                    "id": "frm_1",
+                    "sessionID": "ses_a",
+                    "title": "Questions",
+                    "metadata": { "kind": "question" },
+                    "fields": [{ "key": "q0", "type": "string" }]
+                }
+            }
+        }));
+        assert_eq!(
+            created.pointer("/data/form/id"),
+            Some(&Value::String("frm_1".to_string()))
+        );
+
+        let replied = normalize_event(json!({
+            "type": "form.replied",
+            "data": { "id": "frm_1", "sessionID": "ses_a", "answer": { "q0": "Rojo" } }
+        }));
+        assert_eq!(
+            replied.pointer("/data/formReply/status"),
+            Some(&Value::String("answered".to_string()))
+        );
+        assert_eq!(
+            replied.pointer("/data/formReply/answer/q0"),
+            Some(&Value::String("Rojo".to_string()))
+        );
+
+        let cancelled = normalize_event(json!({
+            "type": "form.cancelled",
+            "data": { "id": "frm_1", "sessionID": "ses_a" }
+        }));
+        assert_eq!(
+            cancelled.pointer("/data/formReply/status"),
+            Some(&Value::String("cancelled".to_string()))
         );
     }
 

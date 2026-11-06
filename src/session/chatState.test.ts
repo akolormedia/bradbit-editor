@@ -3,6 +3,8 @@ import {
   appendUserMessage,
   applyOpenCodeEvent,
   chatFailed,
+  chatFormAnswered,
+  chatFormFailed,
   chatFromHistory,
   chatPermissionFailed,
   chatPermissionReplied,
@@ -10,6 +12,7 @@ import {
   chatStarted,
   chatStarting,
   clearChatError,
+  formsLoaded,
   initialChatState,
   messageText,
   permissionsLoaded,
@@ -382,5 +385,82 @@ describe("chat tools and permissions (T-2.1.3)", () => {
       },
     });
     expect(state.permissions[0].status).toBe("rejected");
+  });
+});
+
+describe("chat forms and questions (T-2.1.4)", () => {
+  const form = {
+    id: "frm_1",
+    sessionId: "ses_test",
+    title: "Questions",
+    kind: "question",
+    toolId: "tool_q",
+    messageId: "msg_q",
+    status: "pending" as const,
+    fields: [
+      {
+        key: "q0",
+        title: "Color favorito",
+        description: "¿Cuál prefieres?",
+        type: "string" as const,
+        options: [
+          { value: "Rojo", label: "Rojo" },
+          { value: "Azul", label: "Azul" },
+        ],
+        custom: true,
+      },
+    ],
+  };
+
+  it("adds a pending form and marks it answered when OpenCode replies", () => {
+    let state = applyOpenCodeEvent(ready(), {
+      type: "form.created",
+      data: { sessionID: "ses_test", form },
+    });
+    expect(state.forms).toHaveLength(1);
+    expect(state.forms[0].status).toBe("pending");
+
+    state = applyOpenCodeEvent(state, {
+      type: "form.replied",
+      data: {
+        sessionID: "ses_test",
+        formReply: {
+          id: "frm_1",
+          sessionId: "ses_test",
+          status: "answered",
+          answer: { q0: "Rojo" },
+        },
+      },
+    });
+    expect(state.forms[0].status).toBe("answered");
+    expect(state.forms[0].answer).toEqual({ q0: "Rojo" });
+  });
+
+  it("marks a form as cancelled and can load pending forms", () => {
+    let state = formsLoaded(ready(), [form]);
+    expect(state.forms).toHaveLength(1);
+
+    state = applyOpenCodeEvent(state, {
+      type: "form.cancelled",
+      data: {
+        sessionID: "ses_test",
+        formReply: {
+          id: "frm_1",
+          sessionId: "ses_test",
+          status: "cancelled",
+        },
+      },
+    });
+    expect(state.forms[0].status).toBe("cancelled");
+  });
+
+  it("optimistically answers and rolls back on failure", () => {
+    let state = formsLoaded(ready(), [form]);
+    state = chatFormAnswered(state, "frm_1", { q0: "Azul" });
+    expect(state.forms[0].status).toBe("answered");
+    state = chatFormFailed(state, "frm_1", "sin conexión");
+    expect(state.forms[0].status).toBe("pending");
+    expect(state.forms[0].answer).toBeNull();
+    expect(state.error).toBe("sin conexión");
   });
 });

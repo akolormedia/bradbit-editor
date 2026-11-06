@@ -10,9 +10,9 @@ use std::time::Duration;
 
 use serde_json::{json, Value};
 
-use super::chat::{parse_chat_message, parse_permission};
+use super::chat::{parse_chat_message, parse_form, parse_permission};
 use super::event::read_events;
-use super::{OpenCodeChatMessage, OpenCodePermission, OpenCodeSession};
+use super::{OpenCodeChatMessage, OpenCodeForm, OpenCodePermission, OpenCodeSession};
 use crate::git::redact_secrets;
 
 const REQUEST_TIMEOUT: Duration = Duration::from_secs(20);
@@ -131,6 +131,40 @@ impl OpenCodeClient {
         self.post(
             &format!("/api/session/{session_id}/permission/{request_id}/reply"),
             &json!({ "decision": decision }),
+        )?;
+        Ok(())
+    }
+
+    pub fn pending_forms(&self, session_id: &str) -> Result<Vec<OpenCodeForm>, String> {
+        validate_session_id(session_id)?;
+        let payload = self.get(&format!("/api/session/{session_id}/form"))?;
+        let data = payload
+            .get("data")
+            .and_then(Value::as_array)
+            .ok_or_else(|| "OpenCode no devolvió los formularios pendientes".to_string())?;
+        Ok(data.iter().filter_map(parse_form).collect())
+    }
+
+    pub fn reply_form(
+        &self,
+        session_id: &str,
+        form_id: &str,
+        answer: &Value,
+    ) -> Result<(), String> {
+        validate_session_id(session_id)?;
+        if !form_id.starts_with("frm_")
+            || !form_id
+                .chars()
+                .all(|character| character.is_ascii_alphanumeric() || character == '_')
+        {
+            return Err("ID de formulario inválido".to_string());
+        }
+        if !answer.is_object() {
+            return Err("La respuesta del formulario debe ser un objeto".to_string());
+        }
+        self.post(
+            &format!("/api/session/{session_id}/form/{form_id}/reply"),
+            &json!({ "answer": answer }),
         )?;
         Ok(())
     }

@@ -12,6 +12,7 @@ Editor de texto de escritorio agnóstico para escritura creativa (`.md`, `.mdx`,
   - Inicia o reutiliza **`opencode serve`** automáticamente para la carpeta abierta, crea una sesión si no hay ninguna y transmite la respuesta en vivo.
   - Composer con **Enter para enviar**, **Shift+Enter** para nueva línea y botón **Detener** durante la generación.
   - **Herramientas en vivo con permisos (`T-2.1.3`):** tarjetas compactas para `read`, `edit`, `write`, `shell`, búsquedas y skills, con estado en curso/completado/error y detalle expandible de entrada y resultado. Al pulsar un archivo leído/editado se abre en el editor; si la herramienta lo modificó, el botón abre directamente su **Diff**. Si OpenCode pide permiso, aparece una tarjeta para **Permitir una vez**, **Permitir siempre** o **Rechazar**.
+  - **Preguntas interactivas (`T-2.1.4`):** cuando el agente usa la herramienta `question`, aparece una tarjeta con opciones, respuesta libre y varios campos; al responder, la tarjeta queda como **Respondida** o **Cancelada** y la conversación continúa automáticamente con la respuesta del escritor.
   - Muestra estado de conexión, errores accionables, uso de contexto/tokens y conserva el historial de la sesión mientras cambias de archivo.
   - Usa la configuración, agentes y modelos de OpenCode; Bradbit no almacena claves de modelo.
 

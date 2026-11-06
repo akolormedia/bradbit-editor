@@ -22,6 +22,7 @@ function options(overrides: Partial<ChatPanelOptions> = {}): ChatPanelOptions {
     onCloseSession: vi.fn(),
     onOpenToolFile: vi.fn(),
     onPermissionReply: vi.fn(),
+    onFormReply: vi.fn(),
     ...overrides,
   };
 }
@@ -329,5 +330,120 @@ describe("chat panel (T-2.1.1)", () => {
     expect(context.textContent).toContain("2.0k");
     expect(context.textContent).toContain("contexto");
     expect(context.title).toContain("Entrada 1.2k");
+  });
+
+  it("renders question forms, validates them and sends all answers (T-2.1.4)", () => {
+    const onFormReply = vi.fn();
+    const panel = new ChatPanel(options({ onFormReply }));
+    panel.update({
+      ...readyState(),
+      forms: [
+        {
+          id: "frm_1",
+          title: "Questions",
+          kind: "question",
+          toolId: "tool_q",
+          messageId: "msg_q",
+          status: "pending",
+          answer: null,
+          message: null,
+          fields: [
+            {
+              key: "q0",
+              title: "Color favorito",
+              description: "¿Cuál prefieres?",
+              type: "string",
+              required: true,
+              options: [
+                { value: "Rojo", label: "Rojo" },
+                { value: "Azul", label: "Azul" },
+              ],
+              custom: true,
+            },
+            {
+              key: "q1",
+              title: "¿Continuar?",
+              type: "boolean",
+            },
+          ],
+        },
+      ],
+    });
+
+    expect(panel.element.textContent).toContain("El agente tiene una pregunta");
+    expect(panel.element.textContent).toContain("Color favorito");
+    expect(panel.element.textContent).toContain("¿Continuar?");
+
+    const submit = panel.element.querySelector<HTMLButtonElement>(
+      '[data-testid="form-submit-frm_1"]',
+    )!;
+    expect(submit.disabled).toBe(true);
+
+    const azul = panel.element.querySelector<HTMLInputElement>(
+      '[data-testid="form-input-frm_1-q0-Azul"]',
+    )!;
+    azul.checked = true;
+    azul.dispatchEvent(new Event("change"));
+    expect(submit.disabled).toBe(false);
+    const continueInput = panel.element.querySelector<HTMLInputElement>(
+      '[data-testid="form-input-frm_1-q1"]',
+    )!;
+    continueInput.checked = true;
+    continueInput.dispatchEvent(new Event("change"));
+
+    submit.click();
+    expect(onFormReply).toHaveBeenCalledWith("frm_1", {
+      q0: "Azul",
+      q1: true,
+    });
+  });
+
+  it("accepts a free-text answer and shows answered forms", () => {
+    const onFormReply = vi.fn();
+    const panel = new ChatPanel(options({ onFormReply }));
+    const baseForm = {
+      id: "frm_1",
+      title: "Questions",
+      kind: "question",
+      toolId: null,
+      messageId: null,
+      status: "pending" as const,
+      answer: null,
+      message: null,
+      fields: [
+        {
+          key: "q0",
+          title: "Color favorito",
+          type: "string" as const,
+          required: true,
+          options: [{ value: "Rojo", label: "Rojo" }],
+          custom: true,
+        },
+      ],
+    };
+    panel.update({ ...readyState(), forms: [baseForm] });
+
+    const custom = panel.element.querySelector<HTMLInputElement>(
+      '[data-testid="form-input-frm_1-q0-custom"]',
+    )!;
+    custom.value = "Verde";
+    custom.dispatchEvent(new Event("input"));
+    panel.element
+      .querySelector<HTMLButtonElement>('[data-testid="form-submit-frm_1"]')
+      ?.click();
+    expect(onFormReply).toHaveBeenCalledWith("frm_1", { q0: "Verde" });
+
+    panel.update({
+      ...readyState(),
+      forms: [
+        {
+          ...baseForm,
+          status: "answered",
+          answer: { q0: "Rojo" },
+        },
+      ],
+    });
+    expect(panel.element.textContent).toContain("Respondida");
+    expect(panel.element.textContent).toContain("Color favorito: Rojo");
   });
 });

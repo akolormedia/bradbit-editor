@@ -16,7 +16,7 @@ use std::sync::Mutex;
 use serde::Serialize;
 use tauri::AppHandle;
 
-pub use chat::{OpenCodeChatMessage, OpenCodePermission};
+pub use chat::{OpenCodeChatMessage, OpenCodeForm, OpenCodePermission};
 pub use server::{find_binary, RunningServer, EVENT_NAME};
 
 #[derive(Debug, Clone, Serialize, PartialEq, Eq)]
@@ -166,6 +166,33 @@ impl OpenCodeState {
         server
             .client()
             .reply_permission(session_id, request_id, decision)
+    }
+
+    pub fn pending_forms(&self, session_id: &str) -> Result<Vec<OpenCodeForm>, String> {
+        let server = self
+            .server
+            .lock()
+            .map_err(|_| "No se pudo bloquear el estado de OpenCode".to_string())?;
+        let server = server
+            .as_ref()
+            .ok_or_else(|| "OpenCode no está iniciado".to_string())?;
+        server.client().pending_forms(session_id)
+    }
+
+    pub fn reply_form(
+        &self,
+        session_id: &str,
+        form_id: &str,
+        answer: &serde_json::Value,
+    ) -> Result<(), String> {
+        let server = self
+            .server
+            .lock()
+            .map_err(|_| "No se pudo bloquear el estado de OpenCode".to_string())?;
+        let server = server
+            .as_ref()
+            .ok_or_else(|| "OpenCode no está iniciado".to_string())?;
+        server.client().reply_form(session_id, form_id, answer)
     }
 
     pub fn status(&self) -> OpenCodeStatus {
