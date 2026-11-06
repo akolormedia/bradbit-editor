@@ -173,6 +173,26 @@ export interface GitHubPullRequest {
 export interface OpenCodeSession {
   id: string;
   title: string;
+  updated?: number | null;
+  directory?: string | null;
+}
+
+export interface OpenCodeChatMessage {
+  id: string;
+  role: "user" | "assistant";
+  text: string;
+}
+
+export interface WorkspaceLayout {
+  sessionWidth: number;
+  chatVisible: boolean;
+  editorVisible: boolean;
+}
+
+export interface ProjectWorkspaceState {
+  openSessionIds: string[];
+  activeSessionId: string | null;
+  layout: WorkspaceLayout;
 }
 
 export interface OpenCodeStatus {

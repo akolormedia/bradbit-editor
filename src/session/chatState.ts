@@ -1,4 +1,4 @@
-import { OpenCodeEvent, OpenCodeSession } from "../types";
+import { OpenCodeChatMessage, OpenCodeEvent, OpenCodeSession } from "../types";
 
 export type ChatStatus = "idle" | "starting" | "ready" | "error";
 
@@ -54,6 +54,21 @@ export function chatStarted(
     sessionId: session.id,
     title: session.title,
     error: "",
+  };
+}
+
+export function chatFromHistory(
+  session: OpenCodeSession,
+  messages: OpenCodeChatMessage[],
+): ChatState {
+  const state = chatStarted(chatStarting(initialChatState), session);
+  return {
+    ...state,
+    messages: messages.map((message) => ({
+      id: message.id,
+      role: message.role,
+      text: message.text,
+    })),
   };
 }
 

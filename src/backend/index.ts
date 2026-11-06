@@ -15,10 +15,12 @@ import {
   GitHubUser,
   MenuCommand,
   MenuUiState,
+  OpenCodeChatMessage,
   OpenCodeEvent,
   OpenCodeSession,
   OpenCodeStatus,
   OpenedFolder,
+  ProjectWorkspaceState,
   RecentProject,
   SearchMatch,
   TemplateInfo,
@@ -778,11 +780,11 @@ export const backend = {
     });
   },
 
-  async opencodeStart(rootPath: string): Promise<OpenCodeSession> {
+  async opencodeStart(rootPath: string): Promise<void> {
     if (!isTauriEnvironment()) {
       throw new Error("OpenCode requiere la app de escritorio");
     }
-    return tauriInvoke<OpenCodeSession>("opencode_start", { root: rootPath });
+    return tauriInvoke<void>("opencode_start", { root: rootPath });
   },
 
   async opencodeStop(): Promise<void> {
@@ -802,6 +804,27 @@ export const backend = {
       throw new Error("OpenCode requiere la app de escritorio");
     }
     return tauriInvoke<boolean>("opencode_abort", { sessionId });
+  },
+
+  async opencodeListSessions(): Promise<OpenCodeSession[]> {
+    if (!isTauriEnvironment()) return [];
+    return tauriInvoke<OpenCodeSession[]>("opencode_list_sessions");
+  },
+
+  async opencodeCreateSession(title: string): Promise<OpenCodeSession> {
+    if (!isTauriEnvironment()) {
+      throw new Error("OpenCode requiere la app de escritorio");
+    }
+    return tauriInvoke<OpenCodeSession>("opencode_create_session", { title });
+  },
+
+  async opencodeSessionMessages(
+    sessionId: string,
+  ): Promise<OpenCodeChatMessage[]> {
+    if (!isTauriEnvironment()) return [];
+    return tauriInvoke<OpenCodeChatMessage[]>("opencode_session_messages", {
+      sessionId,
+    });
   },
 
   async opencodeStatus(): Promise<OpenCodeStatus> {
@@ -826,6 +849,34 @@ export const backend = {
     return listen<OpenCodeEvent>("bradbit-opencode-event", (event) =>
       handler(event.payload),
     );
+  },
+
+  async loadWorkspaceState(rootPath: string): Promise<ProjectWorkspaceState> {
+    if (!isTauriEnvironment()) {
+      return {
+        openSessionIds: [],
+        activeSessionId: null,
+        layout: {
+          sessionWidth: 430,
+          chatVisible: true,
+          editorVisible: true,
+        },
+      };
+    }
+    return tauriInvoke<ProjectWorkspaceState>("load_workspace_state", {
+      root: rootPath,
+    });
+  },
+
+  async saveWorkspaceState(
+    rootPath: string,
+    state: ProjectWorkspaceState,
+  ): Promise<void> {
+    if (!isTauriEnvironment()) return;
+    return tauriInvoke<void>("save_workspace_state", {
+      root: rootPath,
+      state,
+    });
   },
 };
 

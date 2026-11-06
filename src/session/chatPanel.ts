@@ -1,14 +1,21 @@
 import { t } from "../i18n";
 import { Language } from "../types";
 import { ChatState, initialChatState } from "./chatState";
+import { SessionTabInfo } from "./sessionTabs";
 
 export interface ChatPanelOptions {
   language: Language;
   projectName: string;
+  sessions: SessionTabInfo[];
+  activeSessionId: string | null;
+  canCreateSession: boolean;
   onSend: (text: string) => void;
   onStop: () => void;
   onRetry: () => void;
   onToggleEditor: () => void;
+  onSelectSession: (id: string) => void;
+  onCreateSession: () => void;
+  onCloseSession: (id: string) => void;
 }
 
 function formatTokens(value: number): string {
@@ -35,30 +42,24 @@ export class ChatPanel {
   private statusEl: HTMLElement;
   private statusDot: HTMLElement;
   private contextEl: HTMLElement;
-  private tabLabel: HTMLElement;
+  private tabsEl: HTMLElement;
   private titleEl: HTMLElement;
   private subtitleEl: HTMLElement;
   private editorBtn: HTMLButtonElement;
   private stickToBottom = true;
+  private drafts = new Map<string, string>();
+  private draftSessionId: string | null = null;
 
   constructor(options: ChatPanelOptions) {
     this.options = options;
+    this.draftSessionId = options.activeSessionId;
     this.element = document.createElement("div");
     this.element.className = "chat-panel";
     this.element.dataset.testid = "chat-panel";
 
-    const tabs = document.createElement("div");
-    tabs.className = "session-tabs";
-    const tab = document.createElement("div");
-    tab.className = "session-tab active";
-    tab.dataset.testid = "session-tab";
-    const badge = document.createElement("span");
-    badge.className = "session-tab-badge";
-    badge.textContent = "B";
-    this.tabLabel = document.createElement("span");
-    this.tabLabel.className = "session-tab-label";
-    tab.append(badge, this.tabLabel);
-    tabs.appendChild(tab);
+    this.tabsEl = document.createElement("div");
+    this.tabsEl.className = "session-tabs";
+    this.element.dataset.testid = "chat-panel";
 
     const header = document.createElement("div");
     header.className = "session-header";
@@ -114,7 +115,12 @@ export class ChatPanel {
     this.composer.className = "chat-input";
     this.composer.dataset.testid = "chat-input";
     this.composer.rows = 3;
-    this.composer.oninput = () => this.updateSendState();
+    this.composer.oninput = () => {
+      if (this.draftSessionId) {
+        this.drafts.set(this.draftSessionId, this.composer.value);
+      }
+      this.updateSendState();
+    };
     this.composer.onkeydown = (event) => {
       if (event.key === "Enter" && !event.shiftKey) {
         event.preventDefault();
@@ -143,7 +149,7 @@ export class ChatPanel {
     footer.append(hint, buttons);
     composer.append(this.composer, footer);
 
-    this.element.append(tabs, header, this.errorEl, this.messagesEl, composer);
+    this.element.append(this.tabsEl, header, this.errorEl, this.messagesEl, composer);
     this.update(initialChatState, options);
   }
 
@@ -153,13 +159,29 @@ export class ChatPanel {
     }
     this.state = state;
     const lang = this.options.language;
-    this.tabLabel.textContent = t(lang, "chatTab");
+
+    const nextActive = this.options.activeSessionId;
+    if (this.draftSessionId !== nextActive) {
+      if (this.draftSessionId) {
+        this.drafts.set(this.draftSessionId, this.composer.value);
+      }
+      this.draftSessionId = nextActive;
+      this.composer.value = nextActive
+        ? this.drafts.get(nextActive) ?? ""
+        : "";
+    }
+    const sessionIds = new Set(this.options.sessions.map((session) => session.id));
+    for (const id of [...this.drafts.keys()]) {
+      if (!sessionIds.has(id)) this.drafts.delete(id);
+    }
+
     this.titleEl.textContent = t(lang, "chatHeaderTitle");
     this.editorBtn.title = t(lang, "chatToggleEditor");
     this.editorBtn.setAttribute("aria-label", t(lang, "chatToggleEditor"));
     this.composer.placeholder = t(lang, "chatPlaceholder");
     this.sendBtn.textContent = t(lang, "chatSend");
     this.stopBtn.textContent = t(lang, "chatStop");
+    this.renderTabs();
 
     const status = this.statusText(state);
     this.statusEl.textContent = status.text;
@@ -193,6 +215,9 @@ export class ChatPanel {
 
   public clearDraft(): void {
     this.composer.value = "";
+    if (this.draftSessionId) {
+      this.drafts.delete(this.draftSessionId);
+    }
     this.updateSendState();
     this.composer.focus();
   }
@@ -221,7 +246,9 @@ export class ChatPanel {
     this.sendBtn.hidden = Boolean(this.state.streaming);
     this.stopBtn.hidden = !this.state.streaming;
     this.composer.disabled =
-      this.state.status === "starting" || this.state.status === "idle";
+      !this.options.activeSessionId ||
+      this.state.status === "starting" ||
+      this.state.status === "idle";
   }
 
   private statusText(state: ChatState): { text: string; className: string } {
@@ -239,6 +266,64 @@ export class ChatPanel {
       default:
         return { text: t(lang, "chatStatusIdle"), className: "idle" };
     }
+  }
+
+  private renderTabs(): void {
+    this.tabsEl.innerHTML = "";
+    for (const session of this.options.sessions) {
+      const tab = document.createElement("button");
+      tab.type = "button";
+      tab.className = "session-tab";
+      tab.classList.toggle("active", session.id === this.options.activeSessionId);
+      tab.dataset.testid = `session-tab-${session.id}`;
+      tab.onclick = () => this.options.onSelectSession(session.id);
+
+      const badge = document.createElement("span");
+      badge.className = "session-tab-badge";
+      badge.textContent = "B";
+      const label = document.createElement("span");
+      label.className = "session-tab-label";
+      label.textContent = session.title;
+      tab.append(badge, label);
+
+      if (session.streaming) {
+        const busy = document.createElement("span");
+        busy.className = "session-tab-status busy";
+        busy.title = t(this.options.language, "chatStatusStreaming");
+        tab.appendChild(busy);
+      } else if (session.error) {
+        const error = document.createElement("span");
+        error.className = "session-tab-status error";
+        error.title = t(this.options.language, "chatStatusError");
+        tab.appendChild(error);
+      }
+
+      if (this.options.sessions.length > 1) {
+        const close = document.createElement("span");
+        close.className = "session-tab-close";
+        close.dataset.testid = `session-close-${session.id}`;
+        close.textContent = "×";
+        close.title = t(this.options.language, "chatCloseSession");
+        close.setAttribute("aria-label", t(this.options.language, "chatCloseSession"));
+        close.onclick = (event) => {
+          event.stopPropagation();
+          this.options.onCloseSession(session.id);
+        };
+        tab.appendChild(close);
+      }
+      this.tabsEl.appendChild(tab);
+    }
+
+    const add = document.createElement("button");
+    add.type = "button";
+    add.className = "session-tab-add";
+    add.dataset.testid = "session-new";
+    add.textContent = "＋";
+    add.title = t(this.options.language, "chatNewSession");
+    add.setAttribute("aria-label", t(this.options.language, "chatNewSession"));
+    add.disabled = !this.options.canCreateSession;
+    add.onclick = () => this.options.onCreateSession();
+    this.tabsEl.appendChild(add);
   }
 
   private renderMessages(): void {

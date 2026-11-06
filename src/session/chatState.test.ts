@@ -3,6 +3,7 @@ import {
   appendUserMessage,
   applyOpenCodeEvent,
   chatFailed,
+  chatFromHistory,
   chatSendFailed,
   chatStarted,
   chatStarting,
@@ -25,6 +26,17 @@ describe("chat state (T-2.1.1)", () => {
     expect(chatFailed(connected, "sin binario").status).toBe("error");
     expect(chatFailed(connected, "sin binario").error).toBe("sin binario");
     expect(clearChatError(chatFailed(connected, "x")).error).toBe("");
+  });
+
+  it("hydrates a session from persisted OpenCode history", () => {
+    const state = chatFromHistory(session, [
+      { id: "msg_user", role: "user", text: "Hola" },
+      { id: "msg_assistant", role: "assistant", text: "ok" },
+    ]);
+    expect(state.status).toBe("ready");
+    expect(state.sessionId).toBe("ses_test");
+    expect(state.streaming).toBe(false);
+    expect(state.messages.map((message) => message.text)).toEqual(["Hola", "ok"]);
   });
 
   it("streams text deltas into one assistant message", () => {

@@ -22,7 +22,7 @@ fn spawn_mock() -> (String, Arc<Mutex<Vec<Recorded>>>) {
     let recorded = Arc::new(Mutex::new(Vec::new()));
     let sink = Arc::clone(&recorded);
     thread::spawn(move || {
-        for _ in 0..6 {
+        for _ in 0..8 {
             let Ok((mut stream, _)) = listener.accept() else {
                 return;
             };
@@ -37,10 +37,21 @@ fn spawn_mock() -> (String, Arc<Mutex<Vec<Recorded>>>) {
                     "application/json",
                     r#"{"data":[{"id":"fake","modelID":"fake","name":"Fake"}]}"#.to_string(),
                 )
+            } else if request.target == "/api/session" && request.method == "GET" {
+                (
+                    "application/json",
+                    concat!(
+                        r#"{"data":["#,
+                        r#"{"id":"ses_test","title":"Sesión 1","time":{"created":1,"updated":42},"location":{"directory":"/proyecto"}},"#,
+                        r#"{"id":"ses_other","title":"Otra","time":{"created":1,"updated":2},"location":{"directory":"/otro"}}"#,
+                        r#"]}"#,
+                    )
+                    .to_string(),
+                )
             } else if request.target == "/api/session" {
                 (
                     "application/json",
-                    r#"{"data":{"id":"ses_test","title":"Bradbit"}}"#.to_string(),
+                    r#"{"data":{"id":"ses_test","title":"Sesión 1"}}"#.to_string(),
                 )
             } else if request.target == "/api/session/ses_test/prompt" {
                 (
@@ -49,6 +60,18 @@ fn spawn_mock() -> (String, Arc<Mutex<Vec<Recorded>>>) {
                 )
             } else if request.target == "/api/session/ses_test/interrupt" {
                 ("application/json", r#"{"interrupted":true}"#.to_string())
+            } else if request.target.starts_with("/api/session/ses_test/message") {
+                (
+                    "application/json",
+                    concat!(
+                        r#"{"data":["#,
+                        r#"{"id":"msg_user","type":"user","text":"Hola"},"#,
+                        r#"{"id":"msg_assistant","type":"assistant","content":[{"type":"reasoning","text":"pensando"},{"type":"text","text":"ok"}]},"#,
+                        r#"{"id":"msg_tool","type":"assistant","content":[{"type":"tool","name":"read"}]}"#,
+                        r#"]}"#,
+                    )
+                    .to_string(),
+                )
             } else if request.target == "/api/event" {
                 (
                     "text/event-stream",
@@ -128,10 +151,24 @@ fn client_covers_info_models_sessions_prompts_interrupts_and_events() {
 
     assert_eq!(client.info().unwrap(), "2.2.5");
     assert_eq!(client.list_models().unwrap().len(), 1);
-    let session = client.create_session("Bradbit").unwrap();
+
+    let sessions = client.list_sessions().unwrap();
+    assert_eq!(sessions.len(), 2);
+    assert_eq!(sessions[0].title, "Sesión 1");
+    assert_eq!(sessions[0].updated, Some(42));
+    assert_eq!(sessions[0].directory.as_deref(), Some("/proyecto"));
+
+    let session = client.create_session("Sesión 1").unwrap();
     assert_eq!(session.id, "ses_test");
     client.prompt("ses_test", "hola").unwrap();
     assert!(client.interrupt("ses_test").unwrap());
+
+    let messages = client.session_messages("ses_test").unwrap();
+    assert_eq!(messages.len(), 2);
+    assert_eq!(messages[0].role, "user");
+    assert_eq!(messages[0].text, "Hola");
+    assert_eq!(messages[1].role, "assistant");
+    assert_eq!(messages[1].text, "ok");
 
     let mut events = Vec::new();
     client.subscribe_events(|event| events.push(event)).unwrap();

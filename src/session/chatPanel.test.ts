@@ -7,10 +7,18 @@ function options(overrides: Partial<ChatPanelOptions> = {}): ChatPanelOptions {
   return {
     language: "es",
     projectName: "mi-guion",
+    sessions: [
+      { id: "ses_test", title: "Sesión 1", streaming: false, error: false },
+    ],
+    activeSessionId: "ses_test",
+    canCreateSession: true,
     onSend: vi.fn(),
     onStop: vi.fn(),
     onRetry: vi.fn(),
     onToggleEditor: vi.fn(),
+    onSelectSession: vi.fn(),
+    onCreateSession: vi.fn(),
+    onCloseSession: vi.fn(),
     ...overrides,
   };
 }
@@ -124,5 +132,76 @@ describe("chat panel (T-2.1.1)", () => {
       .querySelector<HTMLButtonElement>('[data-testid="session-toggle-editor"]')
       ?.click();
     expect(onToggleEditor).toHaveBeenCalledOnce();
+  });
+
+  it("renders session tabs, creates and switches sessions (T-2.1.2)", () => {
+    const onSelectSession = vi.fn();
+    const onCreateSession = vi.fn();
+    const panel = new ChatPanel(
+      options({
+        sessions: [
+          { id: "ses_a", title: "Sesión 1", streaming: false, error: false },
+          { id: "ses_b", title: "Sesión 2", streaming: false, error: false },
+        ],
+        activeSessionId: "ses_a",
+        onSelectSession,
+        onCreateSession,
+      }),
+    );
+
+    expect(panel.element.textContent).toContain("Sesión 1");
+    expect(panel.element.textContent).toContain("Sesión 2");
+    panel.element
+      .querySelector<HTMLButtonElement>('[data-testid="session-tab-ses_b"]')
+      ?.click();
+    expect(onSelectSession).toHaveBeenCalledWith("ses_b");
+    panel.element
+      .querySelector<HTMLButtonElement>('[data-testid="session-new"]')
+      ?.click();
+    expect(onCreateSession).toHaveBeenCalledOnce();
+  });
+
+  it("closes a non-last session and keeps drafts per tab", () => {
+    const onCloseSession = vi.fn();
+    const panel = new ChatPanel(
+      options({
+        sessions: [
+          { id: "ses_a", title: "Sesión 1", streaming: false, error: false },
+          { id: "ses_b", title: "Sesión 2", streaming: false, error: false },
+        ],
+        activeSessionId: "ses_a",
+        onCloseSession,
+      }),
+    );
+    const input = panel.element.querySelector<HTMLTextAreaElement>(
+      '[data-testid="chat-input"]',
+    )!;
+    input.value = "borrador A";
+    input.dispatchEvent(new Event("input"));
+
+    panel.update(readyState(), {
+      activeSessionId: "ses_b",
+      sessions: [
+        { id: "ses_a", title: "Sesión 1", streaming: false, error: false },
+        { id: "ses_b", title: "Sesión 2", streaming: false, error: false },
+      ],
+    });
+    expect(input.value).toBe("");
+    input.value = "borrador B";
+    input.dispatchEvent(new Event("input"));
+
+    panel.update(readyState(), {
+      activeSessionId: "ses_a",
+      sessions: [
+        { id: "ses_a", title: "Sesión 1", streaming: false, error: false },
+        { id: "ses_b", title: "Sesión 2", streaming: false, error: false },
+      ],
+    });
+    expect(input.value).toBe("borrador A");
+
+    panel.element
+      .querySelector<HTMLElement>('[data-testid="session-close-ses_b"]')
+      ?.click();
+    expect(onCloseSession).toHaveBeenCalledWith("ses_b");
   });
 });

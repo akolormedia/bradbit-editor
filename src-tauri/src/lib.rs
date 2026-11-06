@@ -9,6 +9,7 @@ pub mod search;
 pub mod settings;
 pub mod templates;
 pub mod watcher;
+pub mod workspace_state;
 
 use fs_ops::{FileTreeNode, OpenedFolder};
 use menu::{MenuContext, MenuUiState};
@@ -383,7 +384,7 @@ fn opencode_start(
     app: tauri::AppHandle,
     root: String,
     state: tauri::State<opencode::OpenCodeState>,
-) -> Result<opencode::OpenCodeSession, String> {
+) -> Result<(), String> {
     state.start(&app, &root)
 }
 
@@ -413,6 +414,42 @@ fn opencode_abort(
 #[tauri::command]
 fn opencode_status(state: tauri::State<opencode::OpenCodeState>) -> opencode::OpenCodeStatus {
     state.status()
+}
+
+#[tauri::command]
+fn opencode_list_sessions(
+    state: tauri::State<opencode::OpenCodeState>,
+) -> Result<Vec<opencode::OpenCodeSession>, String> {
+    state.list_sessions()
+}
+
+#[tauri::command]
+fn opencode_create_session(
+    state: tauri::State<opencode::OpenCodeState>,
+    title: String,
+) -> Result<opencode::OpenCodeSession, String> {
+    state.create_session(&title)
+}
+
+#[tauri::command]
+fn opencode_session_messages(
+    state: tauri::State<opencode::OpenCodeState>,
+    session_id: String,
+) -> Result<Vec<opencode::OpenCodeChatMessage>, String> {
+    state.session_messages(&session_id)
+}
+
+#[tauri::command]
+fn load_workspace_state(root: String) -> Result<workspace_state::ProjectWorkspaceState, String> {
+    workspace_state::load(&root)
+}
+
+#[tauri::command]
+fn save_workspace_state(
+    root: String,
+    state: workspace_state::ProjectWorkspaceState,
+) -> Result<(), String> {
+    workspace_state::save(&root, &state)
 }
 
 #[tauri::command]
@@ -454,7 +491,7 @@ fn delete_entry(root: String, rel_path: String) -> Result<(), String> {
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-    let app = tauri::Builder::default()
+    tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_opener::init())
         .manage(MenuContext::default())
@@ -529,6 +566,11 @@ pub fn run() {
             opencode_send,
             opencode_abort,
             opencode_status,
+            opencode_list_sessions,
+            opencode_create_session,
+            opencode_session_messages,
+            load_workspace_state,
+            save_workspace_state,
             open_folder,
             list_directory_tree,
             read_text_file,
@@ -537,14 +579,6 @@ pub fn run() {
             rename_entry,
             delete_entry,
         ])
-        .build(tauri::generate_context!())
-        .expect("error while building bradbit-editor");
-
-    app.run(|app_handle, event| {
-        if matches!(event, tauri::RunEvent::Exit) {
-            if let Some(state) = app_handle.try_state::<opencode::OpenCodeState>() {
-                state.stop();
-            }
-        }
-    });
+        .run(tauri::generate_context!())
+        .expect("error while running bradbit-editor");
 }

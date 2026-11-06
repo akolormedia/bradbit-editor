@@ -8,6 +8,8 @@ pub mod client;
 pub mod event;
 pub mod server;
 
+use std::fs;
+use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 
 use serde::Serialize;
@@ -20,6 +22,16 @@ pub use server::{find_binary, RunningServer, EVENT_NAME};
 pub struct OpenCodeSession {
     pub id: String,
     pub title: String,
+    pub updated: Option<i64>,
+    pub directory: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct OpenCodeChatMessage {
+    pub id: String,
+    pub role: String,
+    pub text: String,
 }
 
 #[derive(Debug, Clone, Serialize, PartialEq, Eq)]
@@ -38,7 +50,7 @@ pub struct OpenCodeState {
 }
 
 impl OpenCodeState {
-    pub fn start(&self, app: &AppHandle, root: &str) -> Result<OpenCodeSession, String> {
+    pub fn start(&self, app: &AppHandle, root: &str) -> Result<(), String> {
         let _start_guard = self
             .start_lock
             .lock()
@@ -50,16 +62,15 @@ impl OpenCodeState {
 
         if let Some(existing) = server.as_ref() {
             if existing.root == root {
-                return Ok(existing.session.clone());
+                return Ok(());
             }
             *server = None;
         }
 
         let running = RunningServer::spawn(root)?;
         running.start_event_stream(app.clone());
-        let session = running.session.clone();
         *server = Some(running);
-        Ok(session)
+        Ok(())
     }
 
     pub fn stop(&self) {
@@ -90,17 +101,69 @@ impl OpenCodeState {
         server.client().interrupt(session_id)
     }
 
+    pub fn list_sessions(&self) -> Result<Vec<OpenCodeSession>, String> {
+        let server = self
+            .server
+            .lock()
+            .map_err(|_| "No se pudo bloquear el estado de OpenCode".to_string())?;
+        let server = server
+            .as_ref()
+            .ok_or_else(|| "OpenCode no está iniciado".to_string())?;
+        let root = server.root.clone();
+        let sessions = server.client().list_sessions()?;
+        Ok(sessions
+            .into_iter()
+            .filter(|session| {
+                session
+                    .directory
+                    .as_deref()
+                    .map(|directory| same_directory(directory, &root))
+                    .unwrap_or(true)
+            })
+            .collect())
+    }
+
+    pub fn create_session(&self, title: &str) -> Result<OpenCodeSession, String> {
+        let server = self
+            .server
+            .lock()
+            .map_err(|_| "No se pudo bloquear el estado de OpenCode".to_string())?;
+        let server = server
+            .as_ref()
+            .ok_or_else(|| "OpenCode no está iniciado".to_string())?;
+        server.client().create_session(title)
+    }
+
+    pub fn session_messages(&self, session_id: &str) -> Result<Vec<OpenCodeChatMessage>, String> {
+        let server = self
+            .server
+            .lock()
+            .map_err(|_| "No se pudo bloquear el estado de OpenCode".to_string())?;
+        let server = server
+            .as_ref()
+            .ok_or_else(|| "OpenCode no está iniciado".to_string())?;
+        server.client().session_messages(session_id)
+    }
+
     pub fn status(&self) -> OpenCodeStatus {
-        let running = self.server.lock().ok().and_then(|server| {
-            server
-                .as_ref()
-                .map(|server| (server.session.id.clone(), server.root.clone()))
-        });
+        let running = self
+            .server
+            .lock()
+            .ok()
+            .and_then(|server| server.as_ref().map(|server| server.root.clone()));
         OpenCodeStatus {
             binary_found: find_binary().is_ok(),
             running: running.is_some(),
-            session_id: running.as_ref().map(|(id, _)| id.clone()),
-            root: running.map(|(_, root)| root),
+            session_id: None,
+            root: running,
         }
     }
+}
+
+fn canonical(path: &str) -> PathBuf {
+    fs::canonicalize(Path::new(path)).unwrap_or_else(|_| PathBuf::from(path))
+}
+
+fn same_directory(a: &str, b: &str) -> bool {
+    canonical(a) == canonical(b)
 }
