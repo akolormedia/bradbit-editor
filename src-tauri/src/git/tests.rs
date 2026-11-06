@@ -1,5 +1,7 @@
-use super::{DiffScope, OpOptions, Repository, WorktreeStatus};
+use super::{DiffScope, GitError, OpOptions, Repository, WorktreeStatus};
 use std::fs;
+use std::path::Path;
+use std::process::Command;
 use tempfile::tempdir;
 
 fn options() -> OpOptions {
@@ -10,6 +12,37 @@ fn initialized_repo() -> (tempfile::TempDir, Repository) {
     let dir = tempdir().unwrap();
     let repo = Repository::init_with_branch(dir.path(), "main", options()).unwrap();
     (dir, repo)
+}
+
+fn git(dir: &Path, args: &[&str]) {
+    let output = Command::new("git")
+        .args(args)
+        .current_dir(dir)
+        .output()
+        .expect("run git");
+    assert!(
+        output.status.success(),
+        "git {:?} failed: {}",
+        args,
+        String::from_utf8_lossy(&output.stderr)
+    );
+}
+
+fn init_bare_remote(dir: &Path) {
+    git(dir, &["init", "--bare"]);
+    git(dir, &["symbolic-ref", "HEAD", "refs/heads/main"]);
+}
+
+fn clone_repo(remote: &str, dest: &Path) {
+    let output = Command::new("git")
+        .args(["clone", remote, dest.to_str().unwrap()])
+        .output()
+        .expect("clone remote");
+    assert!(
+        output.status.success(),
+        "git clone failed: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
 }
 
 #[test]
@@ -205,4 +238,128 @@ fn parallel_drafts_create_switch_and_list_branches() {
     let back = super::api::checkout_branch(root, "main").unwrap();
     assert_eq!(back.branch.as_deref(), Some("main"));
     assert_eq!(fs::read_to_string(dir.path().join("a.md")).unwrap(), "base");
+}
+
+#[test]
+fn remotes_push_pull_and_token_hygiene_with_a_local_bare_remote() {
+    let (dir, repo) = initialized_repo();
+    fs::write(dir.path().join("a.md"), "base").unwrap();
+    repo.stage_all(options()).unwrap();
+    repo.commit("base", "Ana", "ana@example.com", options())
+        .unwrap();
+
+    let remote = tempdir().unwrap();
+    init_bare_remote(remote.path());
+    let remote_path = remote.path().to_str().unwrap();
+
+    repo.add_remote("origin", remote_path, options()).unwrap();
+    assert_eq!(
+        repo.remotes(options()).unwrap(),
+        vec![("origin".to_string(), remote_path.to_string())]
+    );
+    repo.push("origin", "main", options()).unwrap();
+
+    // Token-authenticated push against a local remote: the token must never
+    // reach argv or `.git/config`.
+    repo.push_with_token("origin", "main", "ghp_local_token", options())
+        .unwrap();
+    let config = fs::read_to_string(dir.path().join(".git/config")).unwrap();
+    assert!(!config.contains("ghp_local_token"), "{config}");
+    assert!(!config.contains("BRADBIT_GITHUB_TOKEN"), "{config}");
+
+    let clone = tempdir().unwrap();
+    clone_repo(remote_path, clone.path());
+    git(clone.path(), &["config", "user.name", "Otra"]);
+    git(clone.path(), &["config", "user.email", "otra@example.com"]);
+    fs::write(clone.path().join("b.md"), "desde el clon").unwrap();
+    git(clone.path(), &["add", "-A"]);
+    git(clone.path(), &["commit", "-m", "desde el clon"]);
+    git(clone.path(), &["push", "origin", "main"]);
+
+    repo.fetch("origin", options()).unwrap();
+    repo.pull_with_token("origin", "main", "ghp_local_token", options())
+        .unwrap();
+    assert_eq!(
+        fs::read_to_string(dir.path().join("b.md")).unwrap(),
+        "desde el clon"
+    );
+
+    fs::write(clone.path().join("c.md"), "segunda traída").unwrap();
+    git(clone.path(), &["add", "-A"]);
+    git(clone.path(), &["commit", "-m", "segunda"]);
+    git(clone.path(), &["push", "origin", "main"]);
+    repo.pull("origin", "main", options()).unwrap();
+    assert_eq!(
+        fs::read_to_string(dir.path().join("c.md")).unwrap(),
+        "segunda traída"
+    );
+}
+
+#[test]
+fn add_remote_rejects_credentials_and_remotes_are_redacted() {
+    let (dir, repo) = initialized_repo();
+    let error = repo
+        .add_remote(
+            "malo",
+            "https://user:secret@example.com/repo.git",
+            options(),
+        )
+        .unwrap_err();
+    assert!(matches!(error, GitError::InvalidInput(_)), "{error:?}");
+
+    git(
+        dir.path(),
+        &[
+            "remote",
+            "add",
+            "creds",
+            "https://user:secret@example.com/repo.git",
+        ],
+    );
+    let url = repo
+        .remotes(options())
+        .unwrap()
+        .into_iter()
+        .find(|(name, _)| name == "creds")
+        .map(|(_, url)| url)
+        .expect("remote");
+    assert_eq!(url, "https://***@example.com/repo.git");
+    assert!(!url.contains("secret"), "{url}");
+}
+
+#[test]
+fn api_remotes_push_and_pull_with_a_local_bare_remote() {
+    let (dir, _repo) = initialized_repo();
+    let root = dir.path().to_str().unwrap();
+    fs::write(dir.path().join("a.md"), "base").unwrap();
+    super::api::save_version(root, "base", "Ana", "ana@example.com").unwrap();
+
+    let remote = tempdir().unwrap();
+    init_bare_remote(remote.path());
+    let remote_path = remote.path().to_str().unwrap();
+    let remotes = super::api::add_remote(root, "origin", remote_path).unwrap();
+    assert_eq!(remotes.len(), 1);
+    assert_eq!(remotes[0].name, "origin");
+
+    let pushed = super::api::push(root, "origin", "main", None).unwrap();
+    assert_eq!(pushed.branch.as_deref(), Some("main"));
+
+    let clone = tempdir().unwrap();
+    clone_repo(remote_path, clone.path());
+    git(clone.path(), &["config", "user.name", "Otra"]);
+    git(clone.path(), &["config", "user.email", "otra@example.com"]);
+    fs::write(clone.path().join("b.md"), "remoto").unwrap();
+    git(clone.path(), &["add", "-A"]);
+    git(clone.path(), &["commit", "-m", "remoto"]);
+    git(clone.path(), &["push", "origin", "main"]);
+
+    let fetched = super::api::fetch(root, "origin").unwrap();
+    assert!(fetched.is_repository);
+    let pulled = super::api::pull(root, "origin", "main", None).unwrap();
+    assert!(pulled.is_repository);
+    assert_eq!(
+        fs::read_to_string(dir.path().join("b.md")).unwrap(),
+        "remoto"
+    );
+    assert_eq!(super::api::remotes(root).unwrap().len(), 1);
 }
