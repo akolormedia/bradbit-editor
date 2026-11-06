@@ -1126,6 +1126,7 @@ class BradbitApp {
         openIds = [session.id];
         available.push(session);
       }
+      this.chatSessionOrder = openIds;
 
       const loaded = await Promise.all(
         openIds.map(async (id) => {
