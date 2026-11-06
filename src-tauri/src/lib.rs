@@ -4,6 +4,7 @@ pub mod fs_ops;
 pub mod git;
 pub mod github;
 pub mod menu;
+pub mod opencode;
 pub mod search;
 pub mod settings;
 pub mod templates;
@@ -12,7 +13,7 @@ pub mod watcher;
 use fs_ops::{FileTreeNode, OpenedFolder};
 use menu::{MenuContext, MenuUiState};
 use settings::{AppSettings, RecentProject};
-use tauri::Emitter;
+use tauri::{Emitter, Manager};
 use tauri_plugin_opener::OpenerExt;
 
 #[tauri::command]
@@ -378,6 +379,43 @@ fn github_create_pull_request(
 }
 
 #[tauri::command]
+fn opencode_start(
+    app: tauri::AppHandle,
+    root: String,
+    state: tauri::State<opencode::OpenCodeState>,
+) -> Result<opencode::OpenCodeSession, String> {
+    state.start(&app, &root)
+}
+
+#[tauri::command]
+fn opencode_stop(state: tauri::State<opencode::OpenCodeState>) -> Result<(), String> {
+    state.stop();
+    Ok(())
+}
+
+#[tauri::command]
+fn opencode_send(
+    state: tauri::State<opencode::OpenCodeState>,
+    session_id: String,
+    text: String,
+) -> Result<(), String> {
+    state.send(&session_id, &text)
+}
+
+#[tauri::command]
+fn opencode_abort(
+    state: tauri::State<opencode::OpenCodeState>,
+    session_id: String,
+) -> Result<bool, String> {
+    state.abort(&session_id)
+}
+
+#[tauri::command]
+fn opencode_status(state: tauri::State<opencode::OpenCodeState>) -> opencode::OpenCodeStatus {
+    state.status()
+}
+
+#[tauri::command]
 fn open_folder(path: String, show_config: bool) -> Result<OpenedFolder, String> {
     let opened = fs_ops::open_folder(&path, show_config)?;
     let _ = settings::record_recent_project(&opened.root_path, &opened.name);
@@ -416,12 +454,13 @@ fn delete_entry(root: String, rel_path: String) -> Result<(), String> {
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-    tauri::Builder::default()
+    let app = tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_opener::init())
         .manage(MenuContext::default())
         .manage(watcher::WatcherState::default())
         .manage(github::secrets::GitHubSecrets::new())
+        .manage(opencode::OpenCodeState::default())
         .setup(|app| {
             let settings = settings::load_settings().unwrap_or_default();
             let state = MenuUiState {
@@ -437,6 +476,13 @@ pub fn run() {
             Ok(())
         })
         .on_menu_event(menu::handle_menu_event)
+        .on_window_event(|window, event| {
+            if matches!(event, tauri::WindowEvent::Destroyed) {
+                if let Some(state) = window.try_state::<opencode::OpenCodeState>() {
+                    state.stop();
+                }
+            }
+        })
         .invoke_handler(tauri::generate_handler![
             load_settings,
             save_settings,
@@ -478,6 +524,11 @@ pub fn run() {
             github_list_branches,
             github_list_pull_requests,
             github_create_pull_request,
+            opencode_start,
+            opencode_stop,
+            opencode_send,
+            opencode_abort,
+            opencode_status,
             open_folder,
             list_directory_tree,
             read_text_file,
@@ -486,6 +537,14 @@ pub fn run() {
             rename_entry,
             delete_entry,
         ])
-        .run(tauri::generate_context!())
-        .expect("error while running bradbit-editor");
+        .build(tauri::generate_context!())
+        .expect("error while building bradbit-editor");
+
+    app.run(|app_handle, event| {
+        if matches!(event, tauri::RunEvent::Exit) {
+            if let Some(state) = app_handle.try_state::<opencode::OpenCodeState>() {
+                state.stop();
+            }
+        }
+    });
 }

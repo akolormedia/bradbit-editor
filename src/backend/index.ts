@@ -15,6 +15,9 @@ import {
   GitHubUser,
   MenuCommand,
   MenuUiState,
+  OpenCodeEvent,
+  OpenCodeSession,
+  OpenCodeStatus,
   OpenedFolder,
   RecentProject,
   SearchMatch,
@@ -773,6 +776,56 @@ export const backend = {
       base,
       body,
     });
+  },
+
+  async opencodeStart(rootPath: string): Promise<OpenCodeSession> {
+    if (!isTauriEnvironment()) {
+      throw new Error("OpenCode requiere la app de escritorio");
+    }
+    return tauriInvoke<OpenCodeSession>("opencode_start", { root: rootPath });
+  },
+
+  async opencodeStop(): Promise<void> {
+    if (!isTauriEnvironment()) return;
+    return tauriInvoke<void>("opencode_stop");
+  },
+
+  async opencodeSend(sessionId: string, text: string): Promise<void> {
+    if (!isTauriEnvironment()) {
+      throw new Error("OpenCode requiere la app de escritorio");
+    }
+    return tauriInvoke<void>("opencode_send", { sessionId, text });
+  },
+
+  async opencodeAbort(sessionId: string): Promise<boolean> {
+    if (!isTauriEnvironment()) {
+      throw new Error("OpenCode requiere la app de escritorio");
+    }
+    return tauriInvoke<boolean>("opencode_abort", { sessionId });
+  },
+
+  async opencodeStatus(): Promise<OpenCodeStatus> {
+    if (!isTauriEnvironment()) {
+      return {
+        binaryFound: false,
+        running: false,
+        sessionId: null,
+        root: null,
+      };
+    }
+    return tauriInvoke<OpenCodeStatus>("opencode_status");
+  },
+
+  async listenOpenCodeEvents(
+    handler: (event: OpenCodeEvent) => void,
+  ): Promise<() => void> {
+    if (!isTauriEnvironment()) {
+      return () => {};
+    }
+    const { listen } = await import("@tauri-apps/api/event");
+    return listen<OpenCodeEvent>("bradbit-opencode-event", (event) =>
+      handler(event.payload),
+    );
   },
 };
 

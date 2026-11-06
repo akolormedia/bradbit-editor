@@ -2,7 +2,15 @@
 
 Editor de texto de escritorio agnóstico para escritura creativa (`.md`, `.mdx`, `.fountain`, `.txt`), construido con **Tauri v2**, **CodeMirror 6** y **Rust**.
 
-## Características (Stories 1.1–1.3)
+## Características (Fase 1 + inicio de Fase 2)
+
+- **Chat integrado con OpenCode (`T-2.1.1`):**
+  - Layout dividido estilo `opencode-desktop`: **sesión de escritura a la izquierda** y `EditorWorkspace` a la derecha, con divisor redimensionable.
+  - El botón **💬** muestra/oculta el chat y el botón **◫** de la sesión muestra/oculta el editor sin perder el estado de CodeMirror. Al ocultar uno, el otro ocupa todo el ancho de la ventana, con los mensajes y el composer centrados.
+  - Inicia o reutiliza **`opencode serve`** automáticamente para la carpeta abierta, crea una sesión y transmite la respuesta en vivo.
+  - Composer con **Enter para enviar**, **Shift+Enter** para nueva línea y botón **Detener** durante la generación.
+  - Muestra estado de conexión, errores accionables, uso de contexto/tokens y conserva el historial de la sesión mientras cambias de archivo.
+  - Usa la configuración, agentes y modelos de OpenCode; Bradbit no almacena claves de modelo.
 
 - **Menú nativo de macOS (`Story 1.1.1`):** La barra superior del sistema incluye **Bradbit Editor, Archivo, Edición, Visualización y Ventana**:
   - *Archivo:* Abrir carpeta (`⌘O`), Abrir reciente, Nuevo proyecto (`⇧⌘N`), Guardar como plantilla, Abrir carpeta de plantillas, Apertura rápida (`⌘P`), Nuevo archivo (`⌘N`), Guardar (`⌘S`), Exportar PDF (`⌘E`) y Cerrar pestaña (`⌘W`).
