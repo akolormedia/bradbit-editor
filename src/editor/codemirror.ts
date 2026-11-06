@@ -111,8 +111,8 @@ function buildAppearanceExtension(settings: AppSettings): Extension {
     },
     ".cm-content": {
       maxWidth: "820px",
-      margin: "0 auto",
-      padding: "28px 36px 96px 36px",
+      margin: "0",
+      padding: "24px 32px 96px 18px",
       caretColor: "var(--accent)",
     },
     ".cm-focused": {
