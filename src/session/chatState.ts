@@ -1,14 +1,12 @@
-import { OpenCodeChatMessage, OpenCodeEvent, OpenCodeSession } from "../types";
+import {
+  OpenCodeChatMessage,
+  OpenCodeEvent,
+  OpenCodePermission,
+  OpenCodeSession,
+  OpenCodeToolCall,
+} from "../types";
 
 export type ChatStatus = "idle" | "starting" | "ready" | "error";
-
-export interface ChatMessage {
-  id: string;
-  role: "user" | "assistant" | "system";
-  text: string;
-  streaming?: boolean;
-  error?: boolean;
-}
 
 export interface ChatTokens {
   input: number;
@@ -16,6 +14,39 @@ export interface ChatTokens {
   reasoning: number;
   cacheRead: number;
   cacheWrite: number;
+}
+
+export interface ChatToolCall {
+  id: string;
+  name: string;
+  status: "streaming" | "running" | "completed" | "error";
+  input: unknown;
+  output: string;
+  error: string;
+  executed: boolean;
+  files: string[];
+}
+
+export type ChatPart =
+  | { type: "text"; ordinal: number; text: string }
+  | { type: "tool"; tool: ChatToolCall };
+
+export interface ChatMessage {
+  id: string;
+  role: "user" | "assistant" | "system";
+  parts: ChatPart[];
+  streaming?: boolean;
+  error?: boolean;
+}
+
+export interface ChatPermission {
+  id: string;
+  action: string;
+  resources: string[];
+  save: string[];
+  message: string;
+  toolId: string | null;
+  status: "pending" | "allowed" | "rejected";
 }
 
 export interface ChatState {
@@ -27,6 +58,7 @@ export interface ChatState {
   streaming: boolean;
   error: string;
   tokens: ChatTokens | null;
+  permissions: ChatPermission[];
 }
 
 export const initialChatState: ChatState = {
@@ -38,7 +70,15 @@ export const initialChatState: ChatState = {
   streaming: false,
   error: "",
   tokens: null,
+  permissions: [],
 };
+
+export function messageText(message: ChatMessage): string {
+  return message.parts
+    .filter((part): part is Extract<ChatPart, { type: "text" }> => part.type === "text")
+    .map((part) => part.text)
+    .join("\n");
+}
 
 export function chatStarting(_state: ChatState): ChatState {
   return { ...initialChatState, status: "starting" };
@@ -57,18 +97,132 @@ export function chatStarted(
   };
 }
 
+function sumTokens(messages: OpenCodeChatMessage[]): ChatTokens | null {
+  let total: ChatTokens | null = null;
+  for (const message of messages) {
+    if (!message.tokens) continue;
+    total ??= {
+      input: 0,
+      output: 0,
+      reasoning: 0,
+      cacheRead: 0,
+      cacheWrite: 0,
+    };
+    total.input += message.tokens.input;
+    total.output += message.tokens.output;
+    total.reasoning += message.tokens.reasoning;
+    total.cacheRead += message.tokens.cacheRead;
+    total.cacheWrite += message.tokens.cacheWrite;
+  }
+  return total;
+}
+
+function toolFromHistory(tool: OpenCodeToolCall): ChatToolCall {
+  return {
+    id: tool.id,
+    name: tool.name,
+    status: tool.status,
+    input: tool.input,
+    output: tool.output,
+    error: tool.error,
+    executed: tool.executed,
+    files: [...tool.files],
+  };
+}
+
 export function chatFromHistory(
   session: OpenCodeSession,
   messages: OpenCodeChatMessage[],
 ): ChatState {
   const state = chatStarted(chatStarting(initialChatState), session);
+  const model = [...messages].reverse().find((message) => message.model)?.model;
   return {
     ...state,
+    model: model ?? null,
     messages: messages.map((message) => ({
       id: message.id,
       role: message.role,
-      text: message.text,
+      streaming: false,
+      parts: message.parts.map((part, index) =>
+        part.type === "text"
+          ? { type: "text" as const, ordinal: index, text: part.text }
+          : { type: "tool" as const, tool: toolFromHistory(part.tool) },
+      ),
     })),
+    tokens: sumTokens(messages),
+  };
+}
+
+function permissionFromOpenCode(
+  permission: OpenCodePermission,
+): ChatPermission {
+  return {
+    id: permission.id,
+    action: permission.action,
+    resources: [...permission.resources],
+    save: [...permission.save],
+    message: permission.message,
+    toolId: permission.toolId,
+    status: permission.status,
+  };
+}
+
+function mergePermissions(
+  current: ChatPermission[],
+  incoming: ChatPermission[],
+): ChatPermission[] {
+  const byId = new Map(current.map((permission) => [permission.id, permission]));
+  for (const permission of incoming) {
+    byId.set(permission.id, { ...byId.get(permission.id), ...permission });
+  }
+  return [...byId.values()];
+}
+
+export function permissionsLoaded(
+  state: ChatState,
+  permissions: OpenCodePermission[],
+): ChatState {
+  if (permissions.length === 0) return state;
+  return {
+    ...state,
+    permissions: mergePermissions(
+      state.permissions,
+      permissions.map(permissionFromOpenCode),
+    ),
+  };
+}
+
+export function chatPermissionReplied(
+  state: ChatState,
+  requestId: string,
+  decision: "once" | "always" | "reject",
+): ChatState {
+  return {
+    ...state,
+    permissions: state.permissions.map((permission) =>
+      permission.id === requestId
+        ? {
+            ...permission,
+            status: decision === "reject" ? "rejected" : "allowed",
+          }
+        : permission,
+    ),
+  };
+}
+
+export function chatPermissionFailed(
+  state: ChatState,
+  requestId: string,
+  message: string,
+): ChatState {
+  return {
+    ...state,
+    error: message,
+    permissions: state.permissions.map((permission) =>
+      permission.id === requestId
+        ? { ...permission, status: "pending" }
+        : permission,
+    ),
   };
 }
 
@@ -93,7 +247,7 @@ export function appendUserMessage(state: ChatState, text: string): ChatState {
   const message: ChatMessage = {
     id: `user-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
     role: "user",
-    text,
+    parts: [{ type: "text", ordinal: 0, text }],
   };
   return {
     ...state,
@@ -123,39 +277,185 @@ function numberOf(value: unknown): number {
   return typeof value === "number" && Number.isFinite(value) ? value : 0;
 }
 
-function messageKey(data: Record<string, unknown>, fallback: string): string {
-  const assistantID = textOf(data.assistantMessageID);
-  const ordinal = numberOf(data.ordinal);
-  return assistantID ? `${assistantID}:${ordinal}` : fallback;
+function assistantIDOf(state: ChatState, data: Record<string, unknown>): string {
+  return textOf(data.assistantMessageID) || `assistant-${state.messages.length}`;
 }
 
-function upsertAssistantMessage(
+function findOrCreateAssistant(
+  state: ChatState,
+  assistantID: string,
+): { state: ChatState; index: number } {
+  const id = `assistant:${assistantID}`;
+  const existing = state.messages.findIndex((message) => message.id === id);
+  if (existing !== -1) {
+    return { state, index: existing };
+  }
+  const message: ChatMessage = {
+    id,
+    role: "assistant",
+    parts: [],
+    streaming: true,
+  };
+  return {
+    state: { ...state, messages: [...state.messages, message] },
+    index: state.messages.length,
+  };
+}
+
+function replaceMessage(
+  state: ChatState,
+  index: number,
+  message: ChatMessage,
+): ChatState {
+  const messages = state.messages.map((current, position) =>
+    position === index ? message : current,
+  );
+  return { ...state, messages };
+}
+
+type TextMode = "started" | "delta" | "ended";
+
+function upsertTextPart(
   state: ChatState,
   data: Record<string, unknown>,
-  delta?: string,
-  finalText?: string,
-  streaming = true,
+  mode: TextMode,
+  text: string,
 ): ChatState {
-  const id = `assistant:${messageKey(data, `assistant-${state.messages.length}`)}`;
-  const existingIndex = state.messages.findIndex((message) => message.id === id);
-  if (existingIndex === -1) {
-    const message: ChatMessage = {
-      id,
-      role: "assistant",
-      text: finalText ?? delta ?? "",
-      streaming,
-    };
-    return { ...state, messages: [...state.messages, message] };
+  const assistantID = assistantIDOf(state, data);
+  const ordinal = numberOf(data.ordinal);
+  const located = findOrCreateAssistant(state, assistantID);
+  const message = located.state.messages[located.index];
+  const partIndex = message.parts.findIndex(
+    (part) => part.type === "text" && part.ordinal === ordinal,
+  );
+
+  let parts: ChatPart[];
+  if (partIndex === -1) {
+    if (mode === "ended" && text.length === 0) {
+      return located.state;
+    }
+    parts = [...message.parts, { type: "text", ordinal, text }];
+  } else {
+    parts = message.parts.map((part, index) => {
+      if (index !== partIndex || part.type !== "text") return part;
+      return {
+        ...part,
+        text: mode === "delta" ? `${part.text}${text}` : text || part.text,
+      };
+    });
   }
-  const messages = state.messages.map((message, index) => {
-    if (index !== existingIndex) return message;
-    return {
-      ...message,
-      text: finalText ?? `${message.text}${delta ?? ""}`,
-      streaming,
-    };
+
+  return replaceMessage(located.state, located.index, {
+    ...message,
+    parts,
+    streaming: mode !== "ended",
   });
-  return { ...state, messages };
+}
+
+function toolFromEvent(data: Record<string, unknown>): ChatToolCall | null {
+  const raw = data.tool;
+  if (!raw || typeof raw !== "object") return null;
+  const tool = raw as Partial<OpenCodeToolCall>;
+  if (!textOf(tool.id)) return null;
+  return {
+    id: textOf(tool.id),
+    name: textOf(tool.name),
+    status:
+      tool.status === "running" ||
+      tool.status === "completed" ||
+      tool.status === "error" ||
+      tool.status === "streaming"
+        ? tool.status
+        : "running",
+    input: tool.input ?? null,
+    output: textOf(tool.output),
+    error: textOf(tool.error),
+    executed: Boolean(tool.executed),
+    files: Array.isArray(tool.files)
+      ? tool.files.filter((file): file is string => typeof file === "string")
+      : [],
+  };
+}
+
+function upsertToolPart(
+  state: ChatState,
+  data: Record<string, unknown>,
+): ChatState {
+  const incoming = toolFromEvent(data);
+  if (!incoming) return state;
+  const assistantID = assistantIDOf(state, data);
+  const located = findOrCreateAssistant(state, assistantID);
+  const message = located.state.messages[located.index];
+  const toolIndex = message.parts.findIndex(
+    (part) => part.type === "tool" && part.tool.id === incoming.id,
+  );
+
+  let parts: ChatPart[];
+  if (toolIndex === -1) {
+    parts = [...message.parts, { type: "tool", tool: incoming }];
+  } else {
+    parts = message.parts.map((part, index) => {
+      if (index !== toolIndex || part.type !== "tool") return part;
+      return {
+        type: "tool",
+        tool: {
+          ...part.tool,
+          ...incoming,
+          name: incoming.name || part.tool.name,
+          input:
+            incoming.input === null || incoming.input === undefined
+              ? part.tool.input
+              : incoming.input,
+          output: incoming.output || part.tool.output,
+          error: incoming.error || part.tool.error,
+          executed: incoming.executed || part.tool.executed,
+          files: incoming.files.length > 0 ? incoming.files : part.tool.files,
+        },
+      };
+    });
+  }
+
+  return replaceMessage(located.state, located.index, {
+    ...message,
+    parts,
+    streaming: incoming.status === "streaming" || incoming.status === "running",
+  });
+}
+
+function upsertPermission(
+  state: ChatState,
+  data: Record<string, unknown>,
+): ChatState {
+  const raw = data.permission;
+  if (!raw || typeof raw !== "object") return state;
+  const permission = permissionFromOpenCode(raw as OpenCodePermission);
+  return {
+    ...state,
+    permissions: mergePermissions(state.permissions, [permission]),
+  };
+}
+
+function applyPermissionReply(
+  state: ChatState,
+  data: Record<string, unknown>,
+): ChatState {
+  const raw = data.permissionReply;
+  if (!raw || typeof raw !== "object") return state;
+  const reply = raw as Record<string, unknown>;
+  const requestId = textOf(reply.requestId);
+  if (!requestId) return state;
+  return {
+    ...state,
+    permissions: state.permissions.map((permission) =>
+      permission.id === requestId
+        ? {
+            ...permission,
+            status:
+              textOf(reply.status) === "rejected" ? "rejected" : "allowed",
+          }
+        : permission,
+    ),
+  };
 }
 
 function markAllMessagesIdle(state: ChatState): ChatMessage[] {
@@ -195,8 +495,9 @@ function eventError(data: Record<string, unknown>): string {
 }
 
 /**
- * Applies one OpenCode SSE event to the chat state. Unknown event types are
- * ignored so new server features never break the current UI.
+ * Applies one OpenCode SSE event to the chat state. Tool and permission events
+ * arrive with a normalized `data.tool` / `data.permission` object added by the
+ * Rust bridge; unknown event types are ignored.
  */
 export function applyOpenCodeEvent(
   state: ChatState,
@@ -230,25 +531,26 @@ export function applyOpenCodeEvent(
     }
 
     case "session.text.started":
-      return upsertAssistantMessage(state, data);
+      return upsertTextPart(state, data, "started", "");
 
     case "session.text.delta":
-      return upsertAssistantMessage(
-        state,
-        data,
-        textOf(data.delta),
-        undefined,
-        true,
-      );
+      return upsertTextPart(state, data, "delta", textOf(data.delta));
 
     case "session.text.ended":
-      return upsertAssistantMessage(
-        state,
-        data,
-        undefined,
-        textOf(data.text),
-        false,
-      );
+      return upsertTextPart(state, data, "ended", textOf(data.text));
+
+    case "session.tool.input.started":
+    case "session.tool.input.ended":
+    case "session.tool.called":
+    case "session.tool.success":
+    case "session.tool.failed":
+      return upsertToolPart(state, data);
+
+    case "permission.asked":
+      return upsertPermission(state, data);
+
+    case "permission.replied":
+      return applyPermissionReply(state, data);
 
     case "session.usage.updated": {
       const tokens = tokensFrom(data);
@@ -264,6 +566,7 @@ export function applyOpenCodeEvent(
     }
 
     case "session.execution.succeeded":
+    case "session.execution.interrupted":
       return {
         ...state,
         streaming: false,

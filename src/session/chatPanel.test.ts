@@ -7,6 +7,7 @@ function options(overrides: Partial<ChatPanelOptions> = {}): ChatPanelOptions {
   return {
     language: "es",
     projectName: "mi-guion",
+    projectRoot: "/proyecto",
     sessions: [
       { id: "ses_test", title: "Sesión 1", streaming: false, error: false },
     ],
@@ -19,6 +20,8 @@ function options(overrides: Partial<ChatPanelOptions> = {}): ChatPanelOptions {
     onSelectSession: vi.fn(),
     onCreateSession: vi.fn(),
     onCloseSession: vi.fn(),
+    onOpenToolFile: vi.fn(),
+    onPermissionReply: vi.fn(),
     ...overrides,
   };
 }
@@ -105,9 +108,15 @@ describe("chat panel (T-2.1.1)", () => {
       messages: [
         ...state.messages,
         {
-          id: "assistant:msg_a:0",
+          id: "assistant:msg_a",
           role: "assistant",
-          text: "Hola, ¿en qué trabajamos?",
+          parts: [
+            {
+              type: "text",
+              ordinal: 0,
+              text: "Hola, ¿en qué trabajamos?",
+            },
+          ],
         },
       ],
       streaming: false,
@@ -203,5 +212,122 @@ describe("chat panel (T-2.1.1)", () => {
       .querySelector<HTMLElement>('[data-testid="session-close-ses_b"]')
       ?.click();
     expect(onCloseSession).toHaveBeenCalledWith("ses_b");
+  });
+
+  it("renders tool calls, opens files and shows diffs for edits (T-2.1.3)", () => {
+    const onOpenToolFile = vi.fn();
+    const panel = new ChatPanel(options({ onOpenToolFile }));
+    const state = readyState();
+    panel.update({
+      ...state,
+      messages: [
+        {
+          id: "assistant:msg_a",
+          role: "assistant",
+          parts: [
+            {
+              type: "text",
+              ordinal: 0,
+              text: "Voy a editarlo.",
+            },
+            {
+              type: "tool",
+              tool: {
+                id: "tool_1",
+                name: "edit",
+                status: "completed",
+                input: { path: "notas.md" },
+                output: "Editado",
+                error: "",
+                executed: true,
+                files: ["/proyecto/notas.md"],
+              },
+            },
+          ],
+        },
+      ],
+    });
+
+    expect(panel.element.textContent).toContain("Editó notas.md");
+    expect(panel.element.textContent).not.toContain("/proyecto/notas.md");
+    const toggle = panel.element.querySelector<HTMLButtonElement>(
+      '[data-testid="tool-toggle-tool_1"]',
+    )!;
+    toggle.click();
+    expect(toggle.getAttribute("aria-expanded")).toBe("true");
+    expect(panel.element.textContent).toContain("Resultado");
+
+    panel.element
+      .querySelector<HTMLButtonElement>('[data-testid="tool-file-tool_1-0"]')
+      ?.click();
+    expect(onOpenToolFile).toHaveBeenCalledWith(
+      "/proyecto/notas.md",
+      true,
+    );
+  });
+
+  it("renders permission cards and sends allow/reject decisions (T-2.1.3)", () => {
+    const onPermissionReply = vi.fn();
+    const panel = new ChatPanel(options({ onPermissionReply }));
+    panel.update({
+      ...readyState(),
+      permissions: [
+        {
+          id: "per_1",
+          action: "edit",
+          resources: ["notas.md"],
+          save: ["*"],
+          message: "",
+          toolId: "tool_1",
+          status: "pending",
+        },
+      ],
+    });
+
+    expect(panel.element.textContent).toContain("OpenCode solicita permiso");
+    expect(panel.element.textContent).toContain("edit · notas.md");
+    panel.element
+      .querySelector<HTMLButtonElement>('[data-testid="permission-always-per_1"]')
+      ?.click();
+    expect(onPermissionReply).toHaveBeenCalledWith("per_1", "always");
+
+    panel.update({
+      ...readyState(),
+      permissions: [
+        {
+          id: "per_1",
+          action: "edit",
+          resources: ["notas.md"],
+          save: ["*"],
+          message: "",
+          toolId: "tool_1",
+          status: "allowed",
+        },
+      ],
+    });
+    expect(
+      panel.element.querySelector('[data-testid="permission-per_1"]'),
+    ).toBeNull();
+  });
+
+  it("shows context usage in the header (T-2.1.3)", () => {
+    const panel = new ChatPanel(options());
+    panel.update({
+      ...readyState(),
+      tokens: {
+        input: 1200,
+        output: 300,
+        reasoning: 100,
+        cacheRead: 800,
+        cacheWrite: 0,
+      },
+    });
+    const context = panel.element.querySelector<HTMLElement>(
+      ".session-context",
+    )!;
+    expect(context.hidden).toBe(false);
+    expect(context.textContent).toContain("2.0k");
+    expect(context.textContent).toContain("contexto");
+    expect(context.title).toContain("Entrada 1.2k");
   });
 });

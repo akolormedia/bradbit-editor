@@ -17,6 +17,7 @@ import {
   MenuUiState,
   OpenCodeChatMessage,
   OpenCodeEvent,
+  OpenCodePermission,
   OpenedFolder,
   OpenTab,
   ProjectWorkspaceState,
@@ -47,14 +48,18 @@ import {
   applyOpenCodeEvent,
   chatFailed,
   chatFromHistory,
+  chatPermissionFailed,
+  chatPermissionReplied,
   chatSendFailed,
   chatStarting,
   chatStopped,
   clearChatError,
   ChatState,
   initialChatState,
+  permissionsLoaded,
 } from "./session/chatState";
 import { addSessionTab, removeSessionTab, SessionTabInfo } from "./session/sessionTabs";
+import { projectRelativePath } from "./session/chatPaths";
 import { MenuSyncQueue } from "./workspace/menuSync";
 import { extractOutline, OutlineItem } from "./workspace/outline";
 import {
@@ -1025,6 +1030,7 @@ class BradbitApp {
       this.chatPanel = new ChatPanel({
         language: this.settings.language,
         projectName: this.folder?.name ?? "",
+        projectRoot: this.folder?.rootPath ?? "",
         sessions: this.chatSessionTabs(),
         activeSessionId: this.activeChatSessionId,
         canCreateSession: this.chatState.status === "ready",
@@ -1035,6 +1041,10 @@ class BradbitApp {
         onSelectSession: (id) => this.selectChatSession(id),
         onCreateSession: () => void this.createChatSession(),
         onCloseSession: (id) => void this.closeChatSession(id),
+        onOpenToolFile: (path, showDiff) =>
+          void this.openChatToolFile(path, showDiff),
+        onPermissionReply: (requestId, decision) =>
+          void this.replyChatPermission(requestId, decision),
       });
     }
     this.updateChatPanel();
@@ -1045,6 +1055,7 @@ class BradbitApp {
     this.chatPanel?.update(this.chatState, {
       language: this.settings.language,
       projectName: this.folder?.name ?? "",
+      projectRoot: this.folder?.rootPath ?? "",
       sessions: this.chatSessionTabs(),
       activeSessionId: this.activeChatSessionId,
       canCreateSession: this.chatState.status === "ready",
@@ -1136,13 +1147,24 @@ class BradbitApp {
               title: t(lang, "chatSessionDefaultTitle", { count: "?" }),
             };
           let messages: OpenCodeChatMessage[] = [];
+          let permissions: OpenCodePermission[] = [];
           let error = "";
           try {
             messages = await backend.opencodeSessionMessages(id);
           } catch (err) {
             error = err instanceof Error ? err.message : String(err);
           }
-          const state = chatFromHistory(session, messages);
+          try {
+            permissions = await backend.opencodePendingPermissions(id);
+          } catch (err) {
+            if (!error) {
+              error = err instanceof Error ? err.message : String(err);
+            }
+          }
+          const state = permissionsLoaded(
+            chatFromHistory(session, messages),
+            permissions,
+          );
           return [id, error ? { ...state, error } : state] as const;
         }),
       );
@@ -1240,6 +1262,58 @@ class BradbitApp {
       : chatStopped();
     this.updateChatPanel();
     this.persistWorkspaceState();
+  }
+
+  private async replyChatPermission(
+    requestId: string,
+    decision: "once" | "always" | "reject",
+  ): Promise<void> {
+    const sessionId = this.activeChatSessionId;
+    if (!sessionId) return;
+    const current = this.chatSessions.get(sessionId);
+    if (!current) return;
+    const replied = chatPermissionReplied(current, requestId, decision);
+    this.chatSessions.set(sessionId, replied);
+    if (this.activeChatSessionId === sessionId) {
+      this.chatState = replied;
+    }
+    this.updateChatPanel();
+    try {
+      await backend.opencodeReplyPermission(sessionId, requestId, decision);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      const failed = chatPermissionFailed(
+        this.chatSessions.get(sessionId) ?? replied,
+        requestId,
+        message,
+      );
+      this.chatSessions.set(sessionId, failed);
+      if (this.activeChatSessionId === sessionId) {
+        this.chatState = failed;
+      }
+      this.updateChatPanel();
+    }
+  }
+
+  private async openChatToolFile(
+    rawPath: string,
+    showDiff: boolean,
+  ): Promise<void> {
+    if (!this.folder) return;
+    const path = projectRelativePath(this.folder.rootPath, rawPath);
+    if (!path) {
+      this.statusNotice = t(
+        this.settings.language,
+        "chatFileOutsideProject",
+      );
+      this.render();
+      return;
+    }
+    if (showDiff) {
+      await this.openChangeDiff(path);
+    } else {
+      await this.openFileFromTree(path, true);
+    }
   }
 
   private handleOpenCodeEvent(event: OpenCodeEvent): void {

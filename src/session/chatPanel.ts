@@ -1,11 +1,19 @@
 import { t } from "../i18n";
 import { Language } from "../types";
-import { ChatState, initialChatState } from "./chatState";
+import {
+  ChatPermission,
+  ChatState,
+  ChatToolCall,
+  initialChatState,
+  messageText,
+} from "./chatState";
 import { SessionTabInfo } from "./sessionTabs";
+import { projectRelativePath } from "./chatPaths";
 
 export interface ChatPanelOptions {
   language: Language;
   projectName: string;
+  projectRoot: string;
   sessions: SessionTabInfo[];
   activeSessionId: string | null;
   canCreateSession: boolean;
@@ -16,6 +24,11 @@ export interface ChatPanelOptions {
   onSelectSession: (id: string) => void;
   onCreateSession: () => void;
   onCloseSession: (id: string) => void;
+  onOpenToolFile: (path: string, showDiff: boolean) => void;
+  onPermissionReply: (
+    requestId: string,
+    decision: "once" | "always" | "reject",
+  ) => void;
 }
 
 function formatTokens(value: number): string {
@@ -34,6 +47,7 @@ export class ChatPanel {
   private options: ChatPanelOptions;
   private state: ChatState = initialChatState;
   private messagesEl: HTMLElement;
+  private requestsEl: HTMLElement;
   private composer: HTMLTextAreaElement;
   private sendBtn: HTMLButtonElement;
   private stopBtn: HTMLButtonElement;
@@ -109,6 +123,10 @@ export class ChatPanel {
       this.stickToBottom = distance < 48;
     });
 
+    this.requestsEl = document.createElement("div");
+    this.requestsEl.className = "chat-requests";
+    this.requestsEl.hidden = true;
+
     const composer = document.createElement("div");
     composer.className = "chat-composer";
     this.composer = document.createElement("textarea");
@@ -149,7 +167,14 @@ export class ChatPanel {
     footer.append(hint, buttons);
     composer.append(this.composer, footer);
 
-    this.element.append(this.tabsEl, header, this.errorEl, this.messagesEl, composer);
+    this.element.append(
+      this.tabsEl,
+      header,
+      this.errorEl,
+      this.messagesEl,
+      this.requestsEl,
+      composer,
+    );
     this.update(initialChatState, options);
   }
 
@@ -190,12 +215,16 @@ export class ChatPanel {
     this.subtitleEl.title = this.options.projectName;
 
     if (state.tokens) {
-      const total =
-        state.tokens.input +
-        state.tokens.output +
-        state.tokens.reasoning;
-      this.contextEl.textContent = t(lang, "chatTokens", {
-        count: formatTokens(total),
+      const context = state.tokens.input + state.tokens.cacheRead;
+      this.contextEl.textContent = `${formatTokens(context)} ${t(
+        lang,
+        "chatContext",
+      )}`;
+      this.contextEl.title = t(lang, "chatContextDetail", {
+        input: formatTokens(state.tokens.input),
+        output: formatTokens(state.tokens.output),
+        reasoning: formatTokens(state.tokens.reasoning),
+        cache: formatTokens(state.tokens.cacheRead),
       });
       this.contextEl.hidden = false;
     } else {
@@ -210,6 +239,7 @@ export class ChatPanel {
     }
 
     this.renderMessages();
+    this.renderRequests();
     this.updateSendState();
   }
 
@@ -345,7 +375,7 @@ export class ChatPanel {
     }
 
     for (const message of this.state.messages) {
-      if (message.role === "assistant" && message.text.length === 0) {
+      if (message.role === "assistant" && message.parts.length === 0) {
         continue;
       }
       const row = document.createElement("div");
@@ -359,19 +389,50 @@ export class ChatPanel {
           : message.role === "assistant"
             ? t(this.options.language, "chatAgent")
             : t(this.options.language, "chatSystem");
-      const bubble = document.createElement("div");
-      bubble.className = "chat-message-bubble";
-      if (message.streaming) bubble.classList.add("streaming");
-      bubble.textContent = message.text;
-      if (message.error) bubble.classList.add("error");
-      row.append(role, bubble);
-      this.messagesEl.appendChild(row);
+      row.appendChild(role);
+
+      if (message.role === "user" || message.role === "system") {
+        const text = messageText(message);
+        if (text.length === 0) continue;
+        const bubble = document.createElement("div");
+        bubble.className = "chat-message-bubble";
+        if (message.streaming) bubble.classList.add("streaming");
+        bubble.textContent = text;
+        if (message.error) bubble.classList.add("error");
+        row.appendChild(bubble);
+      } else {
+        const lastText = [...message.parts]
+          .reverse()
+          .find((part) => part.type === "text" && part.text.length > 0);
+        for (const part of message.parts) {
+          if (part.type === "tool") {
+            row.appendChild(this.renderTool(part.tool));
+            continue;
+          }
+          if (part.text.length === 0) continue;
+          const bubble = document.createElement("div");
+          bubble.className = "chat-message-bubble";
+          if (message.streaming && part === lastText) {
+            bubble.classList.add("streaming");
+          }
+          bubble.textContent = part.text;
+          if (message.error) bubble.classList.add("error");
+          row.appendChild(bubble);
+        }
+      }
+      if (row.childElementCount > 1) {
+        this.messagesEl.appendChild(row);
+      }
     }
 
-    const hasAssistantText = this.state.messages.some(
-      (message) => message.role === "assistant" && message.text.length > 0,
+    const hasAssistantContent = this.state.messages.some(
+      (message) =>
+        message.role === "assistant" &&
+        message.parts.some(
+          (part) => part.type === "tool" || part.text.length > 0,
+        ),
     );
-    if (this.state.streaming && !hasAssistantText) {
+    if (this.state.streaming && !hasAssistantContent) {
       const thinking = document.createElement("div");
       thinking.className = "chat-thinking";
       thinking.textContent = t(this.options.language, "chatThinking");
@@ -383,5 +444,288 @@ export class ChatPanel {
     } else {
       this.messagesEl.scrollTop = previousScrollTop;
     }
+  }
+
+  private toolVerb(name: string): string {
+    const lang = this.options.language;
+    switch (name) {
+      case "read":
+        return t(lang, "chatToolRead");
+      case "edit":
+      case "multiedit":
+      case "patch":
+      case "apply_patch":
+        return t(lang, "chatToolEdit");
+      case "write":
+        return t(lang, "chatToolWrite");
+      case "shell":
+        return t(lang, "chatToolShell");
+      case "glob":
+      case "grep":
+        return t(lang, "chatToolSearch");
+      case "webfetch":
+      case "websearch":
+        return t(lang, "chatToolWeb");
+      case "skill":
+        return t(lang, "chatToolSkill");
+      case "question":
+        return t(lang, "chatToolQuestion");
+      default:
+        return t(lang, "chatToolDefault");
+    }
+  }
+
+  private toolSummary(tool: ChatToolCall): string {
+    const input =
+      tool.input && typeof tool.input === "object" && !Array.isArray(tool.input)
+        ? (tool.input as Record<string, unknown>)
+        : {};
+    const pick = (...keys: string[]): string => {
+      for (const key of keys) {
+        const value = input[key];
+        if (typeof value === "string" && value.trim().length > 0) {
+          return value.trim();
+        }
+      }
+      return "";
+    };
+    if (
+      ["read", "edit", "write", "patch", "multiedit"].includes(tool.name) &&
+      tool.files.length > 0
+    ) {
+      const path =
+        projectRelativePath(this.options.projectRoot, tool.files[0]) ??
+        tool.files[0];
+      return this.clip(path, 72);
+    }
+    if (tool.name === "shell") return this.clip(pick("command"), 72);
+    if (tool.name === "glob" || tool.name === "grep") {
+      return this.clip(pick("pattern", "query"), 72);
+    }
+    if (tool.name === "webfetch" || tool.name === "websearch") {
+      return this.clip(pick("url", "query"), 72);
+    }
+    if (tool.name === "skill") return this.clip(pick("name", "skill"), 72);
+    if (tool.name === "question") {
+      const questions = input.questions;
+      if (Array.isArray(questions) && questions.length > 0) {
+        const first = questions[0] as Record<string, unknown>;
+        if (typeof first?.question === "string") {
+          return this.clip(first.question, 72);
+        }
+      }
+    }
+    return this.clip(
+      pick(
+        "path",
+        "filePath",
+        "file",
+        "description",
+        "query",
+        "url",
+        "command",
+        "name",
+      ),
+      72,
+    );
+  }
+
+  private clip(text: string, max: number): string {
+    return text.length > max ? `${text.slice(0, max)}…` : text;
+  }
+
+  private formatInput(input: unknown): string {
+    if (input === null || input === undefined) return "";
+    if (typeof input === "string") return this.clip(input, 6000);
+    try {
+      return this.clip(JSON.stringify(input, null, 2), 6000);
+    } catch {
+      return this.clip(String(input), 6000);
+    }
+  }
+
+  private isEditTool(name: string): boolean {
+    return ["edit", "write", "patch", "multiedit", "apply_patch"].includes(
+      name,
+    );
+  }
+
+  private renderTool(tool: ChatToolCall): HTMLElement {
+    const lang = this.options.language;
+    const container = document.createElement("div");
+    container.className = `chat-tool chat-tool-${tool.status}`;
+    container.dataset.testid = `tool-${tool.id}`;
+
+    const header = document.createElement("button");
+    header.type = "button";
+    header.className = "chat-tool-header";
+    header.dataset.testid = `tool-toggle-${tool.id}`;
+    header.setAttribute("aria-expanded", "false");
+    const icon = document.createElement("span");
+    icon.className = `chat-tool-icon ${tool.status}`;
+    icon.textContent =
+      tool.status === "completed" ? "✓" : tool.status === "error" ? "✕" : "●";
+    icon.title =
+      tool.status === "completed"
+        ? t(lang, "chatToolCompleted")
+        : tool.status === "error"
+          ? t(lang, "chatToolFailed")
+          : t(lang, "chatToolRunning");
+    const label = document.createElement("span");
+    label.className = "chat-tool-label";
+    const summary = this.toolSummary(tool);
+    label.textContent = [this.toolVerb(tool.name), summary]
+      .filter(Boolean)
+      .join(" ");
+    const chevron = document.createElement("span");
+    chevron.className = "chat-tool-chevron";
+    chevron.textContent = "⌄";
+    header.append(icon, label, chevron);
+
+    const details = document.createElement("div");
+    details.className = "chat-tool-details";
+    details.hidden = true;
+    header.onclick = () => {
+      details.hidden = !details.hidden;
+      header.setAttribute("aria-expanded", String(!details.hidden));
+    };
+
+    const body = document.createElement("div");
+    body.className = "chat-tool-body";
+    const files = document.createElement("div");
+    files.className = "chat-tool-files";
+    if (tool.files.length > 0) {
+      tool.files.forEach((file, index) => {
+        const button = document.createElement("button");
+        button.type = "button";
+        button.className = "chat-tool-file";
+        button.dataset.testid = `tool-file-${tool.id}-${index}`;
+        const showDiff = this.isEditTool(tool.name) && tool.status === "completed";
+        const displayPath =
+          projectRelativePath(this.options.projectRoot, file) ?? file;
+        button.textContent = showDiff
+          ? `${displayPath} · ${t(lang, "chatShowDiff")}`
+          : displayPath;
+        button.title = showDiff
+          ? t(lang, "chatShowDiff")
+          : t(lang, "chatOpenFile");
+        button.onclick = () =>
+          this.options.onOpenToolFile(file, showDiff);
+        files.appendChild(button);
+      });
+    }
+
+    const inputText = this.formatInput(tool.input);
+    if (inputText) {
+      body.appendChild(
+        this.toolSection(lang, "chatToolInput", inputText, ""),
+      );
+    }
+    if (tool.output) {
+      body.appendChild(
+        this.toolSection(
+          lang,
+          "chatToolOutput",
+          this.clip(tool.output, 8000),
+          "",
+        ),
+      );
+    }
+    if (tool.error) {
+      body.appendChild(
+        this.toolSection(
+          lang,
+          "chatToolError",
+          this.clip(tool.error, 4000),
+          "error",
+        ),
+      );
+    }
+    details.appendChild(body);
+    container.append(header);
+    if (tool.files.length > 0) {
+      container.appendChild(files);
+    }
+    container.appendChild(details);
+    return container;
+  }
+
+  private toolSection(
+    lang: Language,
+    labelKey:
+      | "chatToolInput"
+      | "chatToolOutput"
+      | "chatToolError",
+    text: string,
+    className: string,
+  ): HTMLElement {
+    const section = document.createElement("div");
+    section.className = `chat-tool-section ${className}`.trim();
+    const label = document.createElement("div");
+    label.className = "chat-tool-section-label";
+    label.textContent = t(lang, labelKey);
+    const pre = document.createElement("pre");
+    pre.className = "chat-tool-pre";
+    pre.textContent = text;
+    section.append(label, pre);
+    return section;
+  }
+
+  private renderRequests(): void {
+    this.requestsEl.innerHTML = "";
+    const pending = this.state.permissions.filter(
+      (permission) => permission.status === "pending",
+    );
+    if (pending.length === 0) {
+      this.requestsEl.hidden = true;
+      return;
+    }
+    for (const permission of pending) {
+      this.requestsEl.appendChild(this.renderPermission(permission));
+    }
+    this.requestsEl.hidden = false;
+  }
+
+  private renderPermission(permission: ChatPermission): HTMLElement {
+    const lang = this.options.language;
+    const card = document.createElement("div");
+    card.className = "chat-request chat-permission";
+    card.dataset.testid = `permission-${permission.id}`;
+    const title = document.createElement("div");
+    title.className = "chat-request-title";
+    title.textContent = t(lang, "chatPermissionTitle");
+    const target = document.createElement("div");
+    target.className = "chat-request-target";
+    target.textContent = [permission.action, ...permission.resources]
+      .filter(Boolean)
+      .join(" · ");
+    card.append(title, target);
+    if (permission.message) {
+      const message = document.createElement("div");
+      message.className = "chat-request-message";
+      message.textContent = permission.message;
+      card.appendChild(message);
+    }
+    const actions = document.createElement("div");
+    actions.className = "chat-request-actions";
+    const add = (
+      decision: "once" | "always" | "reject",
+      labelKey: "chatPermissionOnce" | "chatPermissionAlways" | "chatPermissionReject",
+      className: string,
+    ) => {
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className = `chat-request-btn ${className}`;
+      button.dataset.testid = `permission-${decision}-${permission.id}`;
+      button.textContent = t(lang, labelKey);
+      button.onclick = () =>
+        this.options.onPermissionReply(permission.id, decision);
+      actions.appendChild(button);
+    };
+    add("once", "chatPermissionOnce", "primary");
+    add("always", "chatPermissionAlways", "");
+    add("reject", "chatPermissionReject", "danger");
+    card.appendChild(actions);
+    return card;
   }
 }

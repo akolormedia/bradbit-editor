@@ -4,6 +4,7 @@
 //! through the local HTTP API; events are forwarded to the frontend through
 //! [`server::EVENT_NAME`].
 
+pub mod chat;
 pub mod client;
 pub mod event;
 pub mod server;
@@ -15,6 +16,7 @@ use std::sync::Mutex;
 use serde::Serialize;
 use tauri::AppHandle;
 
+pub use chat::{OpenCodeChatMessage, OpenCodePermission};
 pub use server::{find_binary, RunningServer, EVENT_NAME};
 
 #[derive(Debug, Clone, Serialize, PartialEq, Eq)]
@@ -24,14 +26,6 @@ pub struct OpenCodeSession {
     pub title: String,
     pub updated: Option<i64>,
     pub directory: Option<String>,
-}
-
-#[derive(Debug, Clone, Serialize, PartialEq, Eq)]
-#[serde(rename_all = "camelCase")]
-pub struct OpenCodeChatMessage {
-    pub id: String,
-    pub role: String,
-    pub text: String,
 }
 
 #[derive(Debug, Clone, Serialize, PartialEq, Eq)]
@@ -143,6 +137,35 @@ impl OpenCodeState {
             .as_ref()
             .ok_or_else(|| "OpenCode no está iniciado".to_string())?;
         server.client().session_messages(session_id)
+    }
+
+    pub fn pending_permissions(&self, session_id: &str) -> Result<Vec<OpenCodePermission>, String> {
+        let server = self
+            .server
+            .lock()
+            .map_err(|_| "No se pudo bloquear el estado de OpenCode".to_string())?;
+        let server = server
+            .as_ref()
+            .ok_or_else(|| "OpenCode no está iniciado".to_string())?;
+        server.client().pending_permissions(session_id)
+    }
+
+    pub fn reply_permission(
+        &self,
+        session_id: &str,
+        request_id: &str,
+        decision: &str,
+    ) -> Result<(), String> {
+        let server = self
+            .server
+            .lock()
+            .map_err(|_| "No se pudo bloquear el estado de OpenCode".to_string())?;
+        let server = server
+            .as_ref()
+            .ok_or_else(|| "OpenCode no está iniciado".to_string())?;
+        server
+            .client()
+            .reply_permission(session_id, request_id, decision)
     }
 
     pub fn status(&self) -> OpenCodeStatus {
