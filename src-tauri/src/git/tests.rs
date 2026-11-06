@@ -328,6 +328,36 @@ fn add_remote_rejects_credentials_and_remotes_are_redacted() {
 }
 
 #[test]
+fn remotes_report_the_configured_url_not_the_insteadof_expansion() {
+    let (dir, repo) = initialized_repo();
+    let bare = tempdir().unwrap();
+    init_bare_remote(bare.path());
+    git(
+        dir.path(),
+        &[
+            "remote",
+            "add",
+            "origin",
+            "https://github.com/rafael/demo.git",
+        ],
+    );
+    let key = format!("url.{}.insteadOf", bare.path().display());
+    git(
+        dir.path(),
+        &["config", &key, "https://github.com/rafael/demo.git"],
+    );
+
+    let remotes = repo.remotes(options()).unwrap();
+    assert_eq!(
+        remotes,
+        vec![(
+            "origin".to_string(),
+            "https://github.com/rafael/demo.git".to_string()
+        )]
+    );
+}
+
+#[test]
 fn api_remotes_push_and_pull_with_a_local_bare_remote() {
     let (dir, _repo) = initialized_repo();
     let root = dir.path().to_str().unwrap();

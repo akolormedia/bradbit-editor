@@ -10,7 +10,9 @@ import {
   GitBranch,
   GitCommit,
   GitCommitFile,
+  GitRemote,
   GitStatus,
+  GitHubPullRequest,
   MenuCommand,
   MenuUiState,
   OpenedFolder,
@@ -27,6 +29,14 @@ import {
   isValidBranchName,
   isValidGitAuthor,
 } from "./git/versions";
+import {
+  defaultBaseBranch,
+  findGitHubRemote,
+  FoundGitHubRemote,
+  isDefaultBranchName,
+  sanitizeRepoName,
+  uniqueRemoteName,
+} from "./git/github";
 import { createVersionsPanel } from "./workspace/versionsPanel";
 import { MenuSyncQueue } from "./workspace/menuSync";
 import { extractOutline, OutlineItem } from "./workspace/outline";
@@ -75,6 +85,24 @@ type ModalState =
   | { kind: "save-template"; name: string; error?: string; saving?: boolean }
   | { kind: "entry-input"; mode: "new-file" | "new-folder" | "rename"; targetPath: string; value: string; error?: string }
   | { kind: "branch-input"; value: string; error?: string }
+  | {
+      kind: "github-publish";
+      name: string;
+      description: string;
+      isPrivate: boolean;
+      error?: string;
+      submitting?: boolean;
+    }
+  | {
+      kind: "github-pr";
+      title: string;
+      body: string;
+      base: string;
+      head: string;
+      branches: string[];
+      error?: string;
+      submitting?: boolean;
+    }
   | { kind: "confirm-delete"; targetPath: string; error?: string }
   | { kind: "confirm-discard"; path: string; name: string; error?: string }
   | {
@@ -117,6 +145,17 @@ class BradbitApp {
   private gitBusy = false;
   private gitHistoryLoading = false;
   private gitPanelError = "";
+  private gitRemotes: GitRemote[] = [];
+  private githubTokenPresent = false;
+  private githubAccount: string | null = null;
+  private githubAccountLoaded = false;
+  private githubAccountBusy = false;
+  private githubAccountError = "";
+  private githubTokenDraft = "";
+  private githubBusy = false;
+  private githubError = "";
+  private githubPullRequests: GitHubPullRequest[] = [];
+  private githubPrLoading = false;
   private menuQueue = new MenuSyncQueue<MenuUiState>(
     () => {
       const activeTab = this.getActiveTab();
@@ -200,6 +239,11 @@ class BradbitApp {
       this.gitExpandedCommitId = null;
       this.gitCommitFiles = {};
       this.gitPanelError = "";
+      this.gitRemotes = [];
+      this.githubPullRequests = [];
+      this.githubError = "";
+      this.githubPrLoading = false;
+      this.githubBusy = false;
       this.editor?.destroy();
       this.editor = null;
       this.recents = await backend.listRecentProjects();
@@ -252,15 +296,17 @@ class BradbitApp {
     ) {
       this.gitHistory = [];
       this.gitBranches = [];
+      this.gitRemotes = [];
       this.gitHistoryLoading = false;
       return;
     }
     const root = this.folder.rootPath;
     this.gitHistoryLoading = true;
     try {
-      const [branches, history] = await Promise.all([
+      const [branches, history, remotes] = await Promise.all([
         backend.gitBranches(root),
         backend.gitHistory(root, 30),
+        backend.gitRemotes(root),
       ]);
       if (!this.folder || this.folder.rootPath !== root) return;
       const currentBranch = this.gitStatus?.branch ?? null;
@@ -269,6 +315,7 @@ class BradbitApp {
           ? [{ name: currentBranch, id: "", current: true }]
           : branches;
       this.gitHistory = history;
+      this.gitRemotes = remotes;
       this.gitPanelError = "";
     } catch (err) {
       this.gitPanelError = err instanceof Error ? err.message : String(err);
@@ -279,8 +326,11 @@ class BradbitApp {
 
   private async refreshGitPanelData(): Promise<void> {
     if (!this.folder) return;
+    this.githubError = "";
     await this.refreshGitStatus();
     await this.refreshGitMeta();
+    await this.ensureGitHubAccount();
+    await this.refreshGitHubPullRequests();
     this.render();
   }
 
@@ -313,9 +363,8 @@ class BradbitApp {
     const name = this.settings.gitAuthorName.trim();
     const email = this.settings.gitAuthorEmail.trim();
     if (!isValidGitAuthor(name, email)) {
-      this.modal = { kind: "settings" };
       this.statusNotice = t(this.settings.language, "versionsAuthorMissing");
-      this.render();
+      this.openSettingsModal();
       return;
     }
 
@@ -522,6 +571,384 @@ class BradbitApp {
       gitAuthorName: name.trim(),
       gitAuthorEmail: email.trim(),
     });
+  }
+
+  private openSettingsModal(): void {
+    this.modal = { kind: "settings" };
+    this.githubTokenDraft = "";
+    this.githubAccountError = "";
+    this.render();
+    void this.ensureGitHubAccount(true).then(() => {
+      if (this.modal.kind === "settings") {
+        this.render();
+      }
+    });
+  }
+
+  private async ensureGitHubAccount(force = false): Promise<void> {
+    if (this.githubAccountLoaded && !force) return;
+    if (!isTauriEnvironment()) {
+      this.githubTokenPresent = false;
+      this.githubAccount = null;
+      this.githubAccountLoaded = true;
+      return;
+    }
+    this.githubAccountBusy = true;
+    try {
+      this.githubTokenPresent = await backend.githubTokenStatus();
+      this.githubAccount = this.githubTokenPresent
+        ? (await backend.githubVerifyAccount()).login
+        : null;
+      this.githubAccountError = "";
+    } catch (err) {
+      this.githubAccount = null;
+      this.githubAccountError = err instanceof Error ? err.message : String(err);
+      this.githubError = this.githubAccountError;
+    } finally {
+      this.githubAccountBusy = false;
+      this.githubAccountLoaded = true;
+    }
+  }
+
+  private foundGitHubRemote(): FoundGitHubRemote | null {
+    return findGitHubRemote(this.gitRemotes);
+  }
+
+  private async refreshGitHubPullRequests(): Promise<void> {
+    const found = this.foundGitHubRemote();
+    if (!this.folder || !this.githubTokenPresent || !found) {
+      this.githubPullRequests = [];
+      this.githubPrLoading = false;
+      return;
+    }
+    this.githubPrLoading = true;
+    try {
+      this.githubPullRequests = await backend.githubListPullRequests(
+        found.ref.owner,
+        found.ref.repo,
+        "open",
+        1,
+      );
+      this.githubError = "";
+    } catch (err) {
+      this.githubError = err instanceof Error ? err.message : String(err);
+    } finally {
+      this.githubPrLoading = false;
+    }
+  }
+
+  private async connectGitHub(): Promise<void> {
+    const token = this.githubTokenDraft.trim();
+    if (!token || this.githubAccountBusy) return;
+    this.githubAccountBusy = true;
+    this.githubAccountError = "";
+    this.render();
+    try {
+      await backend.githubSetToken(token);
+      this.githubTokenPresent = true;
+      const user = await backend.githubVerifyAccount();
+      this.githubAccount = user.login;
+      this.githubTokenDraft = "";
+      this.githubAccountLoaded = true;
+      this.statusNotice = t(this.settings.language, "githubConnected", {
+        login: user.login,
+      });
+      await this.refreshGitHubPullRequests();
+    } catch (err) {
+      this.githubAccount = null;
+      this.githubAccountError = err instanceof Error ? err.message : String(err);
+      this.githubError = this.githubAccountError;
+      this.githubTokenPresent = await backend
+        .githubTokenStatus()
+        .catch(() => this.githubTokenPresent);
+    } finally {
+      this.githubAccountBusy = false;
+      this.render();
+    }
+  }
+
+  private async disconnectGitHub(): Promise<void> {
+    if (this.githubAccountBusy) return;
+    this.githubAccountBusy = true;
+    this.githubAccountError = "";
+    this.render();
+    try {
+      await backend.githubClearToken();
+      this.githubTokenPresent = false;
+      this.githubAccount = null;
+      this.githubTokenDraft = "";
+      this.githubPullRequests = [];
+      this.githubError = "";
+      this.statusNotice = t(this.settings.language, "githubDisconnected");
+    } catch (err) {
+      this.githubAccountError = err instanceof Error ? err.message : String(err);
+    } finally {
+      this.githubAccountBusy = false;
+      this.render();
+    }
+  }
+
+  private openGitHubTokenPage(): void {
+    void backend
+      .openExternalUrl("https://github.com/settings/tokens")
+      .catch((err) =>
+        this.showStatusNotice(err instanceof Error ? err.message : String(err)),
+      );
+  }
+
+  private openPublishModal(): void {
+    if (!this.folder) return;
+    if (!this.githubTokenPresent) {
+      this.statusNotice = t(this.settings.language, "githubConnectHint");
+      this.openSettingsModal();
+      return;
+    }
+    if (this.foundGitHubRemote()) {
+      this.githubError = t(this.settings.language, "githubExistingRemote");
+      this.render();
+      return;
+    }
+    if (this.gitHistory.length === 0) {
+      this.githubError = t(this.settings.language, "githubNoVersion");
+      this.render();
+      return;
+    }
+    this.modal = {
+      kind: "github-publish",
+      name: sanitizeRepoName(this.folder.name),
+      description: "",
+      isPrivate: true,
+    };
+    this.render();
+  }
+
+  private async submitGitHubPublish(): Promise<void> {
+    const modal = this.modal;
+    if (modal.kind !== "github-publish" || !this.folder || modal.submitting) {
+      return;
+    }
+    const name = modal.name.trim();
+    if (!name) {
+      this.modal = {
+        ...modal,
+        error: t(this.settings.language, "githubRepoName"),
+      };
+      this.render();
+      return;
+    }
+
+    const root = this.folder.rootPath;
+    this.modal = { ...modal, submitting: true };
+    this.render();
+    try {
+      const repo = await backend.githubCreateRepository(
+        name,
+        modal.isPrivate,
+        modal.description.trim() || undefined,
+      );
+      const remoteName =
+        this.gitRemotes.length === 0
+          ? "origin"
+          : uniqueRemoteName(this.gitRemotes, "github");
+      await backend.gitAddRemote(root, remoteName, repo.cloneUrl);
+      const branch = this.gitStatus?.branch;
+      if (!branch) {
+        throw new Error(t(this.settings.language, "githubPrNoBranch"));
+      }
+      this.gitStatus = await backend.gitPush(root, remoteName, branch);
+      await this.refreshTree();
+      await this.refreshGitMeta();
+      await this.refreshGitHubPullRequests();
+      this.modal = { kind: "none" };
+      this.statusNotice = t(this.settings.language, "githubPublished");
+      this.render();
+    } catch (err) {
+      await this.refreshGitMeta().catch(() => {});
+      if (this.modal.kind === "github-publish") {
+        this.modal = {
+          ...this.modal,
+          submitting: false,
+          error: err instanceof Error ? err.message : String(err),
+        };
+      }
+      this.render();
+    }
+  }
+
+  private async pushToGitHub(): Promise<void> {
+    const found = this.foundGitHubRemote();
+    const branch = this.gitStatus?.branch;
+    if (!this.folder || !found || this.githubBusy) return;
+    if (!branch) {
+      this.githubError = t(this.settings.language, "githubPrNoBranch");
+      this.render();
+      return;
+    }
+    this.githubBusy = true;
+    this.githubError = "";
+    try {
+      this.gitStatus = await backend.gitPush(
+        this.folder.rootPath,
+        found.remote.name,
+        branch,
+      );
+      await this.refreshTree();
+      await this.refreshGitMeta();
+      this.statusNotice = t(this.settings.language, "githubPushDone");
+    } catch (err) {
+      this.githubError = err instanceof Error ? err.message : String(err);
+    } finally {
+      this.githubBusy = false;
+      this.render();
+    }
+  }
+
+  private async pullFromGitHub(): Promise<void> {
+    const found = this.foundGitHubRemote();
+    const branch = this.gitStatus?.branch;
+    if (!this.folder || !found || this.githubBusy) return;
+    if (!branch) {
+      this.githubError = t(this.settings.language, "githubPrNoBranch");
+      this.render();
+      return;
+    }
+    this.githubBusy = true;
+    this.githubError = "";
+    try {
+      this.gitStatus = await backend.gitPull(
+        this.folder.rootPath,
+        found.remote.name,
+        branch,
+      );
+      await this.refreshAfterGitOperation();
+      await this.refreshGitHubPullRequests();
+      this.statusNotice = t(this.settings.language, "githubPullDone");
+    } catch (err) {
+      this.githubError = err instanceof Error ? err.message : String(err);
+    } finally {
+      this.githubBusy = false;
+      this.render();
+    }
+  }
+
+  private async openPullRequestModal(): Promise<void> {
+    if (!this.folder) return;
+    if (!this.githubTokenPresent) {
+      this.statusNotice = t(this.settings.language, "githubConnectHint");
+      this.openSettingsModal();
+      return;
+    }
+    const found = this.foundGitHubRemote();
+    if (!found) {
+      this.githubError = t(this.settings.language, "githubNoRemote");
+      this.render();
+      return;
+    }
+    const branch = this.gitStatus?.branch;
+    if (!branch) {
+      this.githubError = t(this.settings.language, "githubPrNoBranch");
+      this.render();
+      return;
+    }
+    if (isDefaultBranchName(branch)) {
+      this.githubError = t(this.settings.language, "githubPrNeedBranch");
+      this.render();
+      return;
+    }
+    if (this.githubBusy) return;
+
+    this.githubBusy = true;
+    this.githubError = "";
+    try {
+      const repo = await backend.githubGetRepository(
+        found.ref.owner,
+        found.ref.repo,
+      );
+      const branches = await backend.githubListBranches(
+        found.ref.owner,
+        found.ref.repo,
+        1,
+      );
+      const names = branches.map((item) => item.name);
+      const base = defaultBaseBranch(names, repo.defaultBranch);
+      this.modal = {
+        kind: "github-pr",
+        title: "",
+        body: "",
+        base,
+        head: branch,
+        branches: names.length > 0 ? names : [base],
+      };
+    } catch (err) {
+      this.githubError = err instanceof Error ? err.message : String(err);
+    } finally {
+      this.githubBusy = false;
+      this.render();
+    }
+  }
+
+  private async submitPullRequest(): Promise<void> {
+    const modal = this.modal;
+    if (modal.kind !== "github-pr" || !this.folder || modal.submitting) return;
+    const found = this.foundGitHubRemote();
+    if (!found) {
+      this.modal = {
+        ...modal,
+        error: t(this.settings.language, "githubNoRemote"),
+      };
+      this.render();
+      return;
+    }
+    if (!modal.title.trim()) {
+      this.modal = {
+        ...modal,
+        error: t(this.settings.language, "githubPrTitleLabel"),
+      };
+      this.render();
+      return;
+    }
+
+    const root = this.folder.rootPath;
+    this.modal = { ...modal, submitting: true };
+    this.render();
+    try {
+      this.gitStatus = await backend.gitPush(
+        root,
+        found.remote.name,
+        modal.head,
+      );
+      await backend.githubCreatePullRequest(
+        found.ref.owner,
+        found.ref.repo,
+        modal.title.trim(),
+        modal.head,
+        modal.base,
+        modal.body.trim() || undefined,
+      );
+      await this.refreshTree();
+      await this.refreshGitMeta();
+      await this.refreshGitHubPullRequests();
+      this.modal = { kind: "none" };
+      this.statusNotice = t(this.settings.language, "githubPrCreated");
+      this.render();
+    } catch (err) {
+      if (this.modal.kind === "github-pr") {
+        this.modal = {
+          ...this.modal,
+          submitting: false,
+          error: err instanceof Error ? err.message : String(err),
+        };
+      }
+      this.render();
+    }
+  }
+
+  private openGitHubUrl(url: string): void {
+    void backend
+      .openExternalUrl(url)
+      .catch((err) =>
+        this.showStatusNotice(err instanceof Error ? err.message : String(err)),
+      );
   }
 
   private async openFileFromTree(relPath: string, pin: boolean): Promise<void> {
@@ -1083,8 +1510,7 @@ class BradbitApp {
 
     switch (command.id) {
       case "app.settings":
-        this.modal = { kind: "settings" };
-        this.render();
+        this.openSettingsModal();
         break;
       case "file.openFolder":
         await this.handleOpenFolderDialog();
@@ -1202,8 +1628,7 @@ class BradbitApp {
         this.requestCloseTab(this.tabState.activeTabPath);
       } else if (letter === ",") {
         e.preventDefault();
-        this.modal = { kind: "settings" };
-        this.render();
+        this.openSettingsModal();
       } else if (letter === "f" && e.shiftKey) {
         e.preventDefault();
         this.openGlobalSearch();
@@ -1416,6 +1841,11 @@ class BradbitApp {
         this.gitExpandedCommitId = null;
         this.gitCommitFiles = {};
         this.gitPanelError = "";
+        this.gitRemotes = [];
+        this.githubPullRequests = [];
+        this.githubError = "";
+        this.githubPrLoading = false;
+        this.githubBusy = false;
         this.editor?.destroy();
         this.editor = null;
         this.render();
@@ -1428,8 +1858,7 @@ class BradbitApp {
     settingsBtn.dataset.testid = "open-settings-btn";
     settingsBtn.textContent = `⚙ ${t(lang, "settings")}`;
     settingsBtn.onclick = () => {
-      this.modal = { kind: "settings" };
-      this.render();
+      this.openSettingsModal();
     };
     right.appendChild(settingsBtn);
 
@@ -1793,6 +2222,7 @@ class BradbitApp {
   }
 
   private renderVersions(lang: AppSettings["language"]): HTMLElement {
+    const found = this.foundGitHubRemote();
     return createVersionsPanel(
       {
         language: lang,
@@ -1811,6 +2241,16 @@ class BradbitApp {
         expandedCommitId: this.gitExpandedCommitId,
         commitFiles: this.gitCommitFiles,
         error: this.gitPanelError,
+        githubTokenPresent: this.githubTokenPresent,
+        githubAccount: this.githubAccount,
+        hasRemote: this.gitRemotes.length > 0,
+        githubRemote: found?.remote ?? null,
+        githubRepo: found?.ref ?? null,
+        githubBusy: this.githubBusy,
+        githubError: this.githubError,
+        githubPullRequests: this.githubPullRequests,
+        githubPrLoading: this.githubPrLoading,
+        currentBranch: this.gitStatus?.branch ?? null,
       },
       {
         onInit: () => void this.enableVersionHistory(),
@@ -1826,9 +2266,17 @@ class BradbitApp {
         onCreateBranch: () => this.requestNewBranch(),
         onCheckoutBranch: (name) => void this.checkoutBranch(name),
         onOpenSettings: () => {
-          this.modal = { kind: "settings" };
-          this.render();
+          this.openSettingsModal();
         },
+        onConnectGitHub: () => this.openSettingsModal(),
+        onPublishGitHub: () => this.openPublishModal(),
+        onPushGitHub: () => void this.pushToGitHub(),
+        onPullGitHub: () => void this.pullFromGitHub(),
+        onCreatePullRequest: () => void this.openPullRequestModal(),
+        onRefreshPullRequests: () => {
+          void this.refreshGitHubPullRequests().then(() => this.render());
+        },
+        onOpenGitHubUrl: (url) => this.openGitHubUrl(url),
       },
     );
   }
@@ -2515,6 +2963,98 @@ class BradbitApp {
         authorSave,
       );
 
+      const githubSection = document.createElement("div");
+      githubSection.className = "settings-github";
+      const githubTitle = document.createElement("div");
+      githubTitle.className = "settings-section-title";
+      githubTitle.textContent = t(lang, "githubAccountSection");
+      const githubHint = document.createElement("p");
+      githubHint.className = "settings-hint";
+      githubHint.textContent = t(lang, "githubConnectHint");
+      githubSection.append(githubTitle, githubHint);
+
+      if (this.githubAccount) {
+        const connected = document.createElement("p");
+        connected.className = "settings-github-status";
+        connected.textContent = t(lang, "githubConnectedAs", {
+          login: this.githubAccount,
+        });
+        githubSection.appendChild(connected);
+
+        const disconnect = document.createElement("button");
+        disconnect.className = "toolbar-btn";
+        disconnect.dataset.testid = "github-disconnect-btn";
+        disconnect.disabled = this.githubAccountBusy;
+        disconnect.textContent = this.githubAccountBusy
+          ? t(lang, "githubDisconnecting")
+          : t(lang, "githubDisconnect");
+        disconnect.onclick = () => void this.disconnectGitHub();
+        githubSection.appendChild(disconnect);
+      } else {
+        const tokenLabel = document.createElement("label");
+        tokenLabel.className = "form-label";
+        tokenLabel.textContent = t(lang, "githubTokenLabel");
+        const tokenInput = document.createElement("input");
+        tokenInput.className = "text-input";
+        tokenInput.dataset.testid = "github-token-input";
+        tokenInput.type = "password";
+        tokenInput.autocomplete = "off";
+        tokenInput.spellcheck = false;
+        tokenInput.value = this.githubTokenDraft;
+        tokenInput.placeholder = t(lang, "githubTokenPlaceholder");
+        tokenInput.oninput = () => {
+          this.githubTokenDraft = tokenInput.value;
+        };
+        tokenInput.onkeydown = (event) => {
+          if (event.key === "Enter") {
+            event.preventDefault();
+            void this.connectGitHub();
+          }
+        };
+
+        const tokenHint = document.createElement("p");
+        tokenHint.className = "settings-hint";
+        tokenHint.textContent = t(lang, "githubTokenHint");
+
+        const actions = document.createElement("div");
+        actions.className = "settings-github-actions";
+        const connect = document.createElement("button");
+        connect.className = "toolbar-btn primary";
+        connect.dataset.testid = "github-connect-btn";
+        connect.disabled = this.githubAccountBusy || !this.githubTokenDraft.trim();
+        connect.textContent = this.githubAccountBusy
+          ? t(lang, "githubConnecting")
+          : t(lang, "githubConnectAction");
+        connect.onclick = () => void this.connectGitHub();
+
+        const createToken = document.createElement("button");
+        createToken.className = "versions-link-btn";
+        createToken.dataset.testid = "github-token-link";
+        createToken.textContent = t(lang, "githubCreateToken");
+        createToken.onclick = () => this.openGitHubTokenPage();
+
+        actions.append(connect, createToken);
+
+        if (this.githubTokenPresent) {
+          const disconnect = document.createElement("button");
+          disconnect.className = "toolbar-btn";
+          disconnect.dataset.testid = "github-disconnect-btn";
+          disconnect.disabled = this.githubAccountBusy;
+          disconnect.textContent = t(lang, "githubDisconnect");
+          disconnect.onclick = () => void this.disconnectGitHub();
+          actions.appendChild(disconnect);
+        }
+
+        githubSection.append(tokenLabel, tokenInput, tokenHint, actions);
+      }
+
+      if (this.githubAccountError) {
+        const error = document.createElement("div");
+        error.className = "error-banner";
+        error.textContent = this.githubAccountError;
+        githubSection.appendChild(error);
+      }
+
       if (this.modal.error) {
         const errEl = document.createElement("div");
         errEl.className = "error-banner";
@@ -2541,6 +3081,7 @@ class BradbitApp {
         lnRow,
         cfgRow,
         authorSection,
+        githubSection,
         footer,
       );
     } else if (this.modal.kind === "quick-open" || this.modal.kind === "global-search") {
@@ -2793,6 +3334,197 @@ class BradbitApp {
       footer.append(cancelBtn, createBtn);
       dialog.appendChild(footer);
       setTimeout(() => input.focus(), 10);
+    } else if (this.modal.kind === "github-publish") {
+      const modalState = this.modal;
+      const h3 = document.createElement("h3");
+      h3.textContent = t(lang, "githubPublishTitle");
+      const p = document.createElement("p");
+      p.textContent = t(lang, "githubPublishHint");
+
+      const nameLabel = document.createElement("label");
+      nameLabel.className = "form-label";
+      nameLabel.textContent = t(lang, "githubRepoName");
+      const nameInput = document.createElement("input");
+      nameInput.className = "text-input";
+      nameInput.dataset.testid = "github-repo-name";
+      nameInput.value = modalState.name;
+      nameInput.placeholder = t(lang, "githubRepoNamePlaceholder");
+      nameInput.oninput = () => {
+        if (this.modal.kind === "github-publish") {
+          this.modal.name = nameInput.value;
+        }
+      };
+
+      const descriptionLabel = document.createElement("label");
+      descriptionLabel.className = "form-label";
+      descriptionLabel.textContent = t(lang, "githubRepoDescription");
+      const descriptionInput = document.createElement("textarea");
+      descriptionInput.className = "text-input";
+      descriptionInput.dataset.testid = "github-repo-description";
+      descriptionInput.rows = 3;
+      descriptionInput.value = modalState.description;
+      descriptionInput.placeholder = t(lang, "githubRepoDescriptionPlaceholder");
+      descriptionInput.oninput = () => {
+        if (this.modal.kind === "github-publish") {
+          this.modal.description = descriptionInput.value;
+        }
+      };
+
+      const privateRow = document.createElement("div");
+      privateRow.className = "form-row-inline";
+      const privateLabel = document.createElement("label");
+      privateLabel.className = "form-label";
+      privateLabel.textContent = t(lang, "githubRepoPrivate");
+      const privateCheck = document.createElement("input");
+      privateCheck.type = "checkbox";
+      privateCheck.dataset.testid = "github-repo-private";
+      privateCheck.checked = modalState.isPrivate;
+      privateCheck.onchange = () => {
+        if (this.modal.kind === "github-publish") {
+          this.modal.isPrivate = privateCheck.checked;
+        }
+      };
+      privateRow.append(privateLabel, privateCheck);
+
+      dialog.append(
+        h3,
+        p,
+        nameLabel,
+        nameInput,
+        descriptionLabel,
+        descriptionInput,
+        privateRow,
+      );
+      if (modalState.error) {
+        const errEl = document.createElement("div");
+        errEl.className = "error-banner";
+        errEl.textContent = modalState.error;
+        dialog.appendChild(errEl);
+      }
+
+      const footer = document.createElement("div");
+      footer.className = "modal-footer";
+      const cancelBtn = document.createElement("button");
+      cancelBtn.className = "toolbar-btn";
+      cancelBtn.textContent = t(lang, "cancel");
+      cancelBtn.onclick = () => {
+        this.modal = { kind: "none" };
+        this.render();
+      };
+
+      const publishBtn = document.createElement("button");
+      publishBtn.className = "toolbar-btn primary";
+      publishBtn.dataset.testid = "github-publish-submit";
+      publishBtn.disabled = Boolean(modalState.submitting);
+      publishBtn.textContent = modalState.submitting
+        ? t(lang, "githubPublishing")
+        : t(lang, "githubPublishAction");
+      publishBtn.onclick = () => void this.submitGitHubPublish();
+
+      footer.append(cancelBtn, publishBtn);
+      dialog.appendChild(footer);
+      setTimeout(() => nameInput.focus(), 10);
+    } else if (this.modal.kind === "github-pr") {
+      const modalState = this.modal;
+      const h3 = document.createElement("h3");
+      h3.textContent = t(lang, "githubPrTitle");
+      const p = document.createElement("p");
+      p.textContent = t(lang, "githubPrHint");
+
+      const titleLabel = document.createElement("label");
+      titleLabel.className = "form-label";
+      titleLabel.textContent = t(lang, "githubPrTitleLabel");
+      const titleInput = document.createElement("input");
+      titleInput.className = "text-input";
+      titleInput.dataset.testid = "github-pr-title";
+      titleInput.value = modalState.title;
+      titleInput.placeholder = t(lang, "githubPrTitlePlaceholder");
+      titleInput.oninput = () => {
+        if (this.modal.kind === "github-pr") {
+          this.modal.title = titleInput.value;
+        }
+      };
+
+      const bodyLabel = document.createElement("label");
+      bodyLabel.className = "form-label";
+      bodyLabel.textContent = t(lang, "githubPrBodyLabel");
+      const bodyInput = document.createElement("textarea");
+      bodyInput.className = "text-input";
+      bodyInput.dataset.testid = "github-pr-body";
+      bodyInput.rows = 4;
+      bodyInput.value = modalState.body;
+      bodyInput.placeholder = t(lang, "githubPrBodyPlaceholder");
+      bodyInput.oninput = () => {
+        if (this.modal.kind === "github-pr") {
+          this.modal.body = bodyInput.value;
+        }
+      };
+
+      const baseRow = document.createElement("div");
+      baseRow.className = "form-row";
+      const baseLabel = document.createElement("label");
+      baseLabel.className = "form-label";
+      baseLabel.textContent = t(lang, "githubPrBaseLabel");
+      const baseSelect = document.createElement("select");
+      baseSelect.className = "select-input";
+      baseSelect.dataset.testid = "github-pr-base";
+      const options = modalState.branches.includes(modalState.base)
+        ? modalState.branches
+        : [modalState.base, ...modalState.branches];
+      for (const branch of options) {
+        const option = document.createElement("option");
+        option.value = branch;
+        option.textContent = branch;
+        baseSelect.appendChild(option);
+      }
+      baseSelect.value = modalState.base;
+      baseSelect.onchange = () => {
+        if (this.modal.kind === "github-pr") {
+          this.modal.base = baseSelect.value;
+        }
+      };
+      baseRow.append(baseLabel, baseSelect);
+
+      const headRow = document.createElement("div");
+      headRow.className = "form-row";
+      const headLabel = document.createElement("label");
+      headLabel.className = "form-label";
+      headLabel.textContent = t(lang, "githubPrHeadLabel");
+      const headValue = document.createElement("div");
+      headValue.className = "modal-hint";
+      headValue.textContent = modalState.head;
+      headRow.append(headLabel, headValue);
+
+      dialog.append(h3, p, titleLabel, titleInput, bodyLabel, bodyInput, baseRow, headRow);
+      if (modalState.error) {
+        const errEl = document.createElement("div");
+        errEl.className = "error-banner";
+        errEl.textContent = modalState.error;
+        dialog.appendChild(errEl);
+      }
+
+      const footer = document.createElement("div");
+      footer.className = "modal-footer";
+      const cancelBtn = document.createElement("button");
+      cancelBtn.className = "toolbar-btn";
+      cancelBtn.textContent = t(lang, "cancel");
+      cancelBtn.onclick = () => {
+        this.modal = { kind: "none" };
+        this.render();
+      };
+
+      const createBtn = document.createElement("button");
+      createBtn.className = "toolbar-btn primary";
+      createBtn.dataset.testid = "github-pr-submit";
+      createBtn.disabled = Boolean(modalState.submitting);
+      createBtn.textContent = modalState.submitting
+        ? t(lang, "githubPrCreating")
+        : t(lang, "githubPrCreate");
+      createBtn.onclick = () => void this.submitPullRequest();
+
+      footer.append(cancelBtn, createBtn);
+      dialog.appendChild(footer);
+      setTimeout(() => titleInput.focus(), 10);
     } else if (this.modal.kind === "confirm-restore-version") {
       const { path, commitSubject } = this.modal;
       const h3 = document.createElement("h3");

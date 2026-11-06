@@ -128,3 +128,44 @@ export interface GitBranch {
   id: string;
   current: boolean;
 }
+
+export interface GitRemote {
+  name: string;
+  url: string;
+}
+
+export interface GitHubUser {
+  login: string;
+}
+
+export interface GitHubPermissions {
+  admin: boolean;
+  push: boolean;
+  pull: boolean;
+}
+
+export interface GitHubRepository {
+  fullName: string;
+  name: string;
+  defaultBranch: string;
+  cloneUrl: string;
+  htmlUrl: string;
+  private: boolean;
+  permissions: GitHubPermissions | null;
+}
+
+export interface GitHubBranch {
+  name: string;
+  sha: string;
+  protected: boolean;
+}
+
+export interface GitHubPullRequest {
+  number: number;
+  state: "open" | "closed";
+  merged: boolean;
+  title: string;
+  htmlUrl: string;
+  headRef: string;
+  baseRef: string;
+}

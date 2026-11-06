@@ -281,9 +281,17 @@ fn github_client(
         .map_err(|err| err.to_string())?
         .ok_or_else(|| "Conecta tu cuenta de GitHub en Ajustes".to_string())?;
     github::secrets::validate_github_token(&token).map_err(|err| err.to_string())?;
-    Ok(github::GitHubClient::new(github::GitHubConfig::github_com(
-        token,
-    )))
+    let mut config = github::GitHubConfig::github_com(token);
+    // Debug-only override so the full UI can be exercised against a local
+    // mock GitHub server. Release builds always talk to api.github.com.
+    #[cfg(debug_assertions)]
+    if let Ok(base) = std::env::var("BRADBIT_GITHUB_API_BASE_URL") {
+        let base = base.trim();
+        if !base.is_empty() {
+            config = config.with_base_url(base);
+        }
+    }
+    Ok(github::GitHubClient::new(config))
 }
 
 #[tauri::command]
@@ -292,6 +300,17 @@ fn github_verify_account(
 ) -> Result<github::User, String> {
     github_client(&state)?
         .authenticated_user()
+        .map_err(|err| err.to_string())
+}
+
+#[tauri::command]
+fn github_get_repository(
+    state: tauri::State<github::secrets::GitHubSecrets>,
+    owner: String,
+    repo: String,
+) -> Result<github::Repository, String> {
+    github_client(&state)?
+        .get_repository(&owner, &repo)
         .map_err(|err| err.to_string())
 }
 
@@ -454,6 +473,7 @@ pub fn run() {
             github_clear_token,
             github_token_status,
             github_verify_account,
+            github_get_repository,
             github_create_repository,
             github_list_branches,
             github_list_pull_requests,

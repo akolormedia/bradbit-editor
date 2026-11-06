@@ -1,10 +1,13 @@
 import { changeBadge, changeLabel, ChangeKind, commitFileKind, entryKind, formatVersionDate } from "../git/versions";
+import { githubRepoUrl, GitHubRepoRef, isDefaultBranchName } from "../git/github";
 import { t } from "../i18n";
 import {
   GitBranch,
   GitCommit,
   GitCommitFile,
+  GitRemote,
   GitStatusEntry,
+  GitHubPullRequest,
   Language,
 } from "../types";
 
@@ -22,6 +25,16 @@ export interface VersionsPanelState {
   expandedCommitId: string | null;
   commitFiles: Record<string, GitCommitFile[] | undefined>;
   error: string;
+  githubTokenPresent: boolean;
+  githubAccount: string | null;
+  hasRemote: boolean;
+  githubRemote: GitRemote | null;
+  githubRepo: GitHubRepoRef | null;
+  githubBusy: boolean;
+  githubError: string;
+  githubPullRequests: GitHubPullRequest[];
+  githubPrLoading: boolean;
+  currentBranch: string | null;
 }
 
 export interface VersionsPanelHandlers {
@@ -35,6 +48,13 @@ export interface VersionsPanelHandlers {
   onCreateBranch: () => void;
   onCheckoutBranch: (name: string) => void;
   onOpenSettings: () => void;
+  onConnectGitHub: () => void;
+  onPublishGitHub: () => void;
+  onPushGitHub: () => void;
+  onPullGitHub: () => void;
+  onCreatePullRequest: () => void;
+  onRefreshPullRequests: () => void;
+  onOpenGitHubUrl: (url: string) => void;
 }
 
 function changeClass(kind: ChangeKind): string {
@@ -69,6 +89,7 @@ export function createVersionsPanel(
   root.appendChild(renderChangesSection(state, handlers));
   root.appendChild(renderHistorySection(state, handlers));
   root.appendChild(renderBranchesSection(state, handlers));
+  root.appendChild(renderGitHubSection(state, handlers));
   return root;
 }
 
@@ -335,8 +356,7 @@ function renderCommitFile(
 function renderBranchesSection(
   state: VersionsPanelState,
   handlers: VersionsPanelHandlers,
-): HTMLElement {
-  const section = document.createElement("section");
+): HTMLElement {  const section = document.createElement("section");
   section.className = "versions-section";
 
   const header = document.createElement("div");
@@ -391,6 +411,166 @@ function renderBranchesSection(
     }
 
     section.appendChild(row);
+  }
+
+  return section;
+}
+
+function renderGitHubSection(
+  state: VersionsPanelState,
+  handlers: VersionsPanelHandlers,
+): HTMLElement {
+  const section = document.createElement("section");
+  section.className = "versions-section versions-github";
+
+  const title = document.createElement("h4");
+  title.className = "versions-section-title";
+  title.textContent = t(state.language, "githubSectionTitle");
+  section.appendChild(title);
+
+  if (state.githubError) {
+    const error = document.createElement("div");
+    error.className = "versions-error";
+    error.textContent = state.githubError;
+    section.appendChild(error);
+  }
+
+  if (!state.githubTokenPresent) {
+    const connectTitle = document.createElement("p");
+    connectTitle.className = "versions-github-connect-title";
+    connectTitle.textContent = t(state.language, "githubConnectTitle");
+    const hint = document.createElement("p");
+    hint.className = "versions-muted";
+    hint.textContent = t(state.language, "githubConnectHint");
+    const connect = document.createElement("button");
+    connect.className = "toolbar-btn primary versions-github-btn";
+    connect.dataset.testid = "connect-github-btn";
+    connect.textContent = t(state.language, "githubConnectAction");
+    connect.onclick = () => handlers.onConnectGitHub();
+    section.append(connectTitle, hint, connect);
+    return section;
+  }
+
+  if (state.githubAccount) {
+    const account = document.createElement("p");
+    account.className = "versions-github-account";
+    account.textContent = t(state.language, "githubConnectedAs", {
+      login: state.githubAccount,
+    });
+    section.appendChild(account);
+  }
+
+  const repo = state.githubRepo;
+  if (!state.githubRemote || !repo) {
+    const hint = document.createElement("p");
+    hint.className = "versions-muted";
+    hint.textContent = state.hasRemote
+      ? t(state.language, "githubRemoteNotGitHub")
+      : t(state.language, "githubNoRemote");
+    section.appendChild(hint);
+    const publish = document.createElement("button");
+    publish.className = "toolbar-btn primary versions-github-btn";
+    publish.dataset.testid = "publish-github-btn";
+    publish.textContent = t(state.language, "githubPublishAction");
+    publish.disabled = state.githubBusy;
+    publish.onclick = () => handlers.onPublishGitHub();
+    section.appendChild(publish);
+    return section;
+  }
+
+  const repoRow = document.createElement("div");
+  repoRow.className = "versions-github-repo";
+  const repoLink = document.createElement("button");
+  repoLink.className = "versions-link-btn versions-github-repo-link";
+  repoLink.dataset.testid = "github-repo-link";
+  repoLink.textContent = `${repo.owner}/${repo.repo}`;
+  repoLink.title = t(state.language, "githubOpenRepo");
+  repoLink.onclick = () => handlers.onOpenGitHubUrl(githubRepoUrl(repo));
+  repoRow.appendChild(repoLink);
+  section.appendChild(repoRow);
+
+  const actions = document.createElement("div");
+  actions.className = "versions-github-actions";
+
+  const push = document.createElement("button");
+  push.className = "toolbar-btn versions-github-btn";
+  push.dataset.testid = "github-push-btn";
+  push.textContent = t(state.language, "githubPush");
+  push.disabled = state.githubBusy;
+  push.onclick = () => handlers.onPushGitHub();
+
+  const pull = document.createElement("button");
+  pull.className = "toolbar-btn versions-github-btn";
+  pull.dataset.testid = "github-pull-btn";
+  pull.textContent = t(state.language, "githubPull");
+  pull.disabled = state.githubBusy;
+  pull.onclick = () => handlers.onPullGitHub();
+
+  const needsDraft = isDefaultBranchName(state.currentBranch);
+  const propose = document.createElement("button");
+  propose.className = "toolbar-btn versions-github-btn";
+  propose.dataset.testid = "github-pr-btn";
+  propose.textContent = t(state.language, "githubPrAction");
+  propose.disabled = state.githubBusy || needsDraft;
+  propose.title = needsDraft
+    ? t(state.language, "githubPrNeedBranch")
+    : t(state.language, "githubPrHint");
+  propose.onclick = () => handlers.onCreatePullRequest();
+
+  actions.append(push, pull, propose);
+  section.appendChild(actions);
+
+  if (needsDraft) {
+    const hint = document.createElement("p");
+    hint.className = "versions-github-note";
+    hint.textContent = t(state.language, "githubPrNeedBranch");
+    section.appendChild(hint);
+  }
+
+  const prHeader = document.createElement("div");
+  prHeader.className = "versions-section-header versions-github-pr-header";
+  const prTitle = document.createElement("span");
+  prTitle.className = "versions-github-pr-title";
+  prTitle.textContent = t(state.language, "githubPrOpenList");
+  const refresh = document.createElement("button");
+  refresh.className = "tree-mini-btn";
+  refresh.dataset.testid = "github-pr-refresh";
+  refresh.title = t(state.language, "githubPrRefresh");
+  refresh.textContent = "↻";
+  refresh.disabled = state.githubPrLoading;
+  refresh.onclick = () => handlers.onRefreshPullRequests();
+  prHeader.append(prTitle, refresh);
+  section.appendChild(prHeader);
+
+  if (state.githubPrLoading) {
+    const loading = document.createElement("p");
+    loading.className = "versions-muted";
+    loading.textContent = t(state.language, "githubPrLoading");
+    section.appendChild(loading);
+  } else if (state.githubPullRequests.length === 0) {
+    const empty = document.createElement("p");
+    empty.className = "versions-muted";
+    empty.textContent = t(state.language, "githubPrNone");
+    section.appendChild(empty);
+  } else {
+    for (const pr of state.githubPullRequests) {
+      const row = document.createElement("button");
+      row.className = "github-pr-row";
+      row.dataset.testid = `github-pr-${pr.number}`;
+      row.title = t(state.language, "githubOpenInBrowser");
+
+      const label = document.createElement("span");
+      label.className = "github-pr-title";
+      label.textContent = `#${pr.number} ${pr.title}`;
+
+      const meta = document.createElement("span");
+      meta.className = "github-pr-meta";
+      meta.textContent = `${pr.headRef} → ${pr.baseRef}`;
+
+      row.append(label, meta);
+      row.onclick = () => handlers.onOpenGitHubUrl(pr.htmlUrl);
+      section.appendChild(row);
+    }
   }
 
   return section;

@@ -56,6 +56,11 @@ Editor de texto de escritorio agnóstico para escritura creativa (`.md`, `.mdx`,
   - **Borradores paralelos:** lista de ramas Git, creación de un borrador nuevo desde la versión actual y cambio de borrador con recarga segura de las pestañas abiertas.
   - En carpetas sin Git, el panel ofrece **Activar historial** para crear el repositorio y empezar a guardar versiones.
   - Los archivos eliminados del disco ahora sí aparecen en *Cambios actuales* con su acción de restauración.
+- **Sincronización con GitHub (`T-1.5.4`):**
+  - **Cuenta de GitHub en Ajustes:** token guardado exclusivamente en el **Keychain de macOS** (nunca en `settings.json` ni en el proyecto), verificación de la cuenta, cierre de sesión y enlace para crear un Personal Access Token.
+  - **Publicar en GitHub:** crea el repositorio remoto (privado o público) y sube la versión actual. Si ya existía un remoto que no era de GitHub, añade un remoto `github` sin tocar `origin`.
+  - **Subir cambios / Traer cambios:** `push` y `pull --ff-only` con el token en el entorno del proceso Git, sin incrustarlo en la URL del remoto. La traída recarga las pestañas abiertas de forma segura.
+  - **Proponer cambios al equipo:** sube el borrador actual y abre un Pull Request con título, descripción y rama base; el panel lista los Pull Requests abiertos y permite abrirlos en GitHub.
 - **Edición profesional con CodeMirror 6:**
   - Deshacer/rehacer por pestaña, buscar y reemplazar en el archivo (`⌘F`), *word wrap*, números de línea opcionales, corrector ortográfico nativo y resaltado para Markdown y Fountain.
   - Negrita (`⌘B`) y cursiva (`⌘I`) en Markdown/MDX, con selección o cursor entre marcadores.

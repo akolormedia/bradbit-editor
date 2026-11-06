@@ -7,7 +7,12 @@ import {
   GitCommit,
   GitCommitFile,
   GitDiscardResult,
+  GitRemote,
   GitStatus,
+  GitHubBranch,
+  GitHubPullRequest,
+  GitHubRepository,
+  GitHubUser,
   MenuCommand,
   MenuUiState,
   OpenedFolder,
@@ -614,6 +619,159 @@ export const backend = {
     return tauriInvoke<GitStatus>("git_checkout_branch", {
       root: rootPath,
       name,
+    });
+  },
+
+  async gitRemotes(rootPath: string): Promise<GitRemote[]> {
+    if (!isTauriEnvironment()) return [];
+    return tauriInvoke<GitRemote[]>("git_remotes", { root: rootPath });
+  },
+
+  async gitAddRemote(
+    rootPath: string,
+    name: string,
+    url: string,
+  ): Promise<GitRemote[]> {
+    if (!isTauriEnvironment()) {
+      throw new Error("Git requiere la app de escritorio");
+    }
+    return tauriInvoke<GitRemote[]>("git_add_remote", {
+      root: rootPath,
+      name,
+      url,
+    });
+  },
+
+  async gitPush(
+    rootPath: string,
+    remote: string,
+    branch: string,
+  ): Promise<GitStatus> {
+    if (!isTauriEnvironment()) {
+      throw new Error("Git requiere la app de escritorio");
+    }
+    return tauriInvoke<GitStatus>("git_push", {
+      root: rootPath,
+      remote,
+      branch,
+    });
+  },
+
+  async gitPull(
+    rootPath: string,
+    remote: string,
+    branch: string,
+  ): Promise<GitStatus> {
+    if (!isTauriEnvironment()) {
+      throw new Error("Git requiere la app de escritorio");
+    }
+    return tauriInvoke<GitStatus>("git_pull", {
+      root: rootPath,
+      remote,
+      branch,
+    });
+  },
+
+  async githubTokenStatus(): Promise<boolean> {
+    if (!isTauriEnvironment()) return false;
+    return tauriInvoke<boolean>("github_token_status");
+  },
+
+  async githubSetToken(token: string): Promise<void> {
+    if (!isTauriEnvironment()) {
+      throw new Error("GitHub requiere la app de escritorio");
+    }
+    return tauriInvoke<void>("github_set_token", { token });
+  },
+
+  async githubClearToken(): Promise<void> {
+    if (!isTauriEnvironment()) {
+      throw new Error("GitHub requiere la app de escritorio");
+    }
+    return tauriInvoke<void>("github_clear_token");
+  },
+
+  async githubVerifyAccount(): Promise<GitHubUser> {
+    if (!isTauriEnvironment()) {
+      throw new Error("GitHub requiere la app de escritorio");
+    }
+    return tauriInvoke<GitHubUser>("github_verify_account");
+  },
+
+  async githubGetRepository(
+    owner: string,
+    repo: string,
+  ): Promise<GitHubRepository> {
+    if (!isTauriEnvironment()) {
+      throw new Error("GitHub requiere la app de escritorio");
+    }
+    return tauriInvoke<GitHubRepository>("github_get_repository", {
+      owner,
+      repo,
+    });
+  },
+
+  async githubCreateRepository(
+    name: string,
+    isPrivate: boolean,
+    description?: string,
+  ): Promise<GitHubRepository> {
+    if (!isTauriEnvironment()) {
+      throw new Error("GitHub requiere la app de escritorio");
+    }
+    return tauriInvoke<GitHubRepository>("github_create_repository", {
+      name,
+      isPrivate,
+      description,
+    });
+  },
+
+  async githubListBranches(
+    owner: string,
+    repo: string,
+    maxPages = 1,
+  ): Promise<GitHubBranch[]> {
+    if (!isTauriEnvironment()) return [];
+    return tauriInvoke<GitHubBranch[]>("github_list_branches", {
+      owner,
+      repo,
+      maxPages,
+    });
+  },
+
+  async githubListPullRequests(
+    owner: string,
+    repo: string,
+    prState = "open",
+    maxPages = 1,
+  ): Promise<GitHubPullRequest[]> {
+    if (!isTauriEnvironment()) return [];
+    return tauriInvoke<GitHubPullRequest[]>("github_list_pull_requests", {
+      owner,
+      repo,
+      prState,
+      maxPages,
+    });
+  },
+
+  async githubCreatePullRequest(
+    owner: string,
+    repo: string,
+    title: string,
+    head: string,
+    base: string,
+    body?: string,
+  ): Promise<GitHubPullRequest> {
+    if (!isTauriEnvironment()) {
+      throw new Error("GitHub requiere la app de escritorio");
+    }
+    return tauriInvoke<GitHubPullRequest>("github_create_pull_request", {
+      owner,
+      repo,
+      title,
+      head,
+      base,
+      body,
     });
   },
 };
