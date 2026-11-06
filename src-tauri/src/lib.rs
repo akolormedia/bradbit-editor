@@ -222,6 +222,91 @@ fn github_token_status(
     state.has_token().map_err(|err| err.to_string())
 }
 
+fn github_client(
+    state: &tauri::State<github::secrets::GitHubSecrets>,
+) -> Result<github::GitHubClient, String> {
+    let token = state
+        .token()
+        .map_err(|err| err.to_string())?
+        .ok_or_else(|| "Conecta tu cuenta de GitHub en Ajustes".to_string())?;
+    github::secrets::validate_github_token(&token).map_err(|err| err.to_string())?;
+    Ok(github::GitHubClient::new(github::GitHubConfig::github_com(
+        token,
+    )))
+}
+
+#[tauri::command]
+fn github_verify_account(
+    state: tauri::State<github::secrets::GitHubSecrets>,
+) -> Result<github::User, String> {
+    github_client(&state)?
+        .authenticated_user()
+        .map_err(|err| err.to_string())
+}
+
+#[tauri::command]
+fn github_create_repository(
+    state: tauri::State<github::secrets::GitHubSecrets>,
+    name: String,
+    is_private: bool,
+    description: Option<String>,
+) -> Result<github::Repository, String> {
+    let mut input = github::NewRepository::new(name);
+    if is_private {
+        input = input.private();
+    }
+    input.description = description;
+    github_client(&state)?
+        .create_repository(&input)
+        .map_err(|err| err.to_string())
+}
+
+#[tauri::command]
+fn github_list_branches(
+    state: tauri::State<github::secrets::GitHubSecrets>,
+    owner: String,
+    repo: String,
+    max_pages: usize,
+) -> Result<Vec<github::Branch>, String> {
+    github_client(&state)?
+        .list_branches(&owner, &repo, max_pages)
+        .map_err(|err| err.to_string())
+}
+
+#[tauri::command]
+fn github_list_pull_requests(
+    state: tauri::State<github::secrets::GitHubSecrets>,
+    owner: String,
+    repo: String,
+    pr_state: String,
+    max_pages: usize,
+) -> Result<Vec<github::PullRequest>, String> {
+    github_client(&state)?
+        .list_pull_requests(&owner, &repo, &pr_state, max_pages)
+        .map_err(|err| err.to_string())
+}
+
+#[tauri::command]
+fn github_create_pull_request(
+    state: tauri::State<github::secrets::GitHubSecrets>,
+    owner: String,
+    repo: String,
+    title: String,
+    head: String,
+    base: String,
+    body: Option<String>,
+) -> Result<github::PullRequest, String> {
+    let input = github::NewPullRequest {
+        title,
+        head,
+        base,
+        body,
+    };
+    github_client(&state)?
+        .create_pull_request(&owner, &repo, &input)
+        .map_err(|err| err.to_string())
+}
+
 #[tauri::command]
 fn open_folder(path: String, show_config: bool) -> Result<OpenedFolder, String> {
     let opened = fs_ops::open_folder(&path, show_config)?;
@@ -312,6 +397,11 @@ pub fn run() {
             github_set_token,
             github_clear_token,
             github_token_status,
+            github_verify_account,
+            github_create_repository,
+            github_list_branches,
+            github_list_pull_requests,
+            github_create_pull_request,
             open_folder,
             list_directory_tree,
             read_text_file,

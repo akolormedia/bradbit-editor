@@ -315,6 +315,26 @@ pub fn github_token(
     resolve_secret(store, GITHUB_TOKEN_ACCOUNT, env_token)
 }
 
+/// Reject values that can never be a GitHub token and could break the
+/// `Authorization` header (whitespace/control characters).
+pub fn validate_github_token(token: &str) -> Result<(), SecretError> {
+    let token = token.trim();
+    if token.is_empty() {
+        return Err(SecretError::InvalidInput {
+            detail: "el token de GitHub no puede estar vacío".to_string(),
+        });
+    }
+    if token
+        .chars()
+        .any(|character| character.is_whitespace() || character.is_control())
+    {
+        return Err(SecretError::InvalidInput {
+            detail: "el token de GitHub contiene caracteres inválidos".to_string(),
+        });
+    }
+    Ok(())
+}
+
 /// Session service used by Tauri commands. It owns the cached Keychain store
 /// and exposes only presence/read/save/clear operations, never the raw token
 /// to the frontend.
@@ -353,11 +373,7 @@ impl GitHubSecrets {
 
     pub fn save(&self, token: &str) -> Result<(), SecretError> {
         let token = token.trim();
-        if token.is_empty() {
-            return Err(SecretError::InvalidInput {
-                detail: "el token de GitHub no puede estar vacío".to_string(),
-            });
-        }
+        validate_github_token(token)?;
         self.store.set(GITHUB_TOKEN_ACCOUNT, token)
     }
 
@@ -482,6 +498,15 @@ mod tests {
         let error = secrets.save("   ").expect_err("empty token");
         assert!(matches!(error, SecretError::InvalidInput { .. }), "{error}");
         assert!(!error.to_string().contains("ghp_"), "{error}");
+    }
+
+    #[test]
+    fn github_secrets_reject_header_injection() {
+        let secrets = GitHubSecrets::with_store(Box::new(MemorySecretStore::default()));
+        let error = secrets
+            .save("ghp_ok\nX-Evil: 1")
+            .expect_err("control characters");
+        assert!(matches!(error, SecretError::InvalidInput { .. }), "{error}");
     }
 
     #[test]
