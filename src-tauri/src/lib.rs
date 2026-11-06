@@ -202,6 +202,57 @@ fn git_checkout_branch(root: String, name: String) -> Result<git::api::GitStatus
     git::api::checkout_branch(&root, &name)
 }
 
+fn session_github_token(
+    state: &tauri::State<github::secrets::GitHubSecrets>,
+) -> Result<Option<String>, String> {
+    let token = state.token().map_err(|err| err.to_string())?;
+    if let Some(value) = &token {
+        github::secrets::validate_github_token(value).map_err(|err| err.to_string())?;
+    }
+    Ok(token)
+}
+
+#[tauri::command]
+fn git_remotes(root: String) -> Result<Vec<git::api::GitRemote>, String> {
+    git::api::remotes(&root)
+}
+
+#[tauri::command]
+fn git_add_remote(
+    root: String,
+    name: String,
+    url: String,
+) -> Result<Vec<git::api::GitRemote>, String> {
+    git::api::add_remote(&root, &name, &url)
+}
+
+#[tauri::command]
+fn git_fetch(root: String, remote: String) -> Result<git::api::GitStatus, String> {
+    git::api::fetch(&root, &remote)
+}
+
+#[tauri::command]
+fn git_push(
+    root: String,
+    remote: String,
+    branch: String,
+    state: tauri::State<github::secrets::GitHubSecrets>,
+) -> Result<git::api::GitStatus, String> {
+    let token = session_github_token(&state)?;
+    git::api::push(&root, &remote, &branch, token.as_deref())
+}
+
+#[tauri::command]
+fn git_pull(
+    root: String,
+    remote: String,
+    branch: String,
+    state: tauri::State<github::secrets::GitHubSecrets>,
+) -> Result<git::api::GitStatus, String> {
+    let token = session_github_token(&state)?;
+    git::api::pull(&root, &remote, &branch, token.as_deref())
+}
+
 #[tauri::command]
 fn github_set_token(
     token: String,
@@ -394,6 +445,11 @@ pub fn run() {
             git_branches,
             git_create_branch,
             git_checkout_branch,
+            git_remotes,
+            git_add_remote,
+            git_fetch,
+            git_push,
+            git_pull,
             github_set_token,
             github_clear_token,
             github_token_status,

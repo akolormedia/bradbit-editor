@@ -298,6 +298,83 @@ pub fn checkout_branch(root: &str, name: &str) -> Result<GitStatus, String> {
     status(root)
 }
 
+#[derive(Debug, Clone, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct GitRemote {
+    pub name: String,
+    pub url: String,
+}
+
+pub fn remotes(root: &str) -> Result<Vec<GitRemote>, String> {
+    let repo =
+        Repository::open(Path::new(root), OpOptions::default()).map_err(|e| e.to_string())?;
+    let remotes = repo
+        .remotes(OpOptions::default())
+        .map_err(|e| e.to_string())?;
+    Ok(remotes
+        .into_iter()
+        .map(|(name, url)| GitRemote { name, url })
+        .collect())
+}
+
+pub fn add_remote(root: &str, name: &str, url: &str) -> Result<Vec<GitRemote>, String> {
+    let repo =
+        Repository::open(Path::new(root), OpOptions::default()).map_err(|e| e.to_string())?;
+    repo.add_remote(name.trim(), url.trim(), OpOptions::default())
+        .map_err(|e| e.to_string())?;
+    remotes(root)
+}
+
+pub fn fetch(root: &str, remote: &str) -> Result<GitStatus, String> {
+    let repo =
+        Repository::open(Path::new(root), OpOptions::default()).map_err(|e| e.to_string())?;
+    repo.fetch(remote.trim(), OpOptions::default())
+        .map_err(|e| e.to_string())?;
+    status(root)
+}
+
+/// Push `branch` to `remote`. When a token is present it travels only in the
+/// child environment; it is never written to `.git/config` or argv.
+pub fn push(
+    root: &str,
+    remote: &str,
+    branch: &str,
+    token: Option<&str>,
+) -> Result<GitStatus, String> {
+    let repo =
+        Repository::open(Path::new(root), OpOptions::default()).map_err(|e| e.to_string())?;
+    match token.filter(|value| !value.trim().is_empty()) {
+        Some(token) => repo
+            .push_with_token(remote.trim(), branch.trim(), token, OpOptions::default())
+            .map_err(|e| e.to_string())?,
+        None => repo
+            .push(remote.trim(), branch.trim(), OpOptions::default())
+            .map_err(|e| e.to_string())?,
+    }
+    status(root)
+}
+
+/// Fast-forward pull. Conflicts and divergent branches fail instead of
+/// creating surprise merge commits.
+pub fn pull(
+    root: &str,
+    remote: &str,
+    branch: &str,
+    token: Option<&str>,
+) -> Result<GitStatus, String> {
+    let repo =
+        Repository::open(Path::new(root), OpOptions::default()).map_err(|e| e.to_string())?;
+    match token.filter(|value| !value.trim().is_empty()) {
+        Some(token) => repo
+            .pull_with_token(remote.trim(), branch.trim(), token, OpOptions::default())
+            .map_err(|e| e.to_string())?,
+        None => repo
+            .pull(remote.trim(), branch.trim(), OpOptions::default())
+            .map_err(|e| e.to_string())?,
+    }
+    status(root)
+}
+
 fn label(status: WorktreeStatus) -> &'static str {
     match status {
         WorktreeStatus::Unmodified => "unmodified",

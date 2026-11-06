@@ -704,9 +704,10 @@ impl Repository {
         Ok(remotes)
     }
 
-    /// Fetch from `remote` (no merge, no working-tree changes).
-    /// Add a credential-free remote URL. Tokens must never be embedded in a
-    /// remote URL; authenticated pushes use `push_with_token` instead.
+    /// Add a credential-free remote URL.
+    ///
+    /// Tokens must never be embedded in a remote URL; authenticated pushes
+    /// use `push_with_token` instead.
     pub fn add_remote(&self, name: &str, url: &str, options: OpOptions) -> Result<(), GitError> {
         validate_remote_name(name)?;
         if url.contains('@')
@@ -747,7 +748,8 @@ impl Repository {
         if token.trim().is_empty() {
             return Err(GitError::InvalidInput("GitHub token must not be empty"));
         }
-        let helper = "!f() { echo username=x-access-token; echo password=$NARRA_GITHUB_TOKEN; }; f";
+        let helper =
+            "!f() { echo username=x-access-token; echo password=$BRADBIT_GITHUB_TOKEN; }; f";
         let output = run_git_env(
             Some(&self.root),
             "push",
@@ -758,7 +760,7 @@ impl Repository {
                 remote,
                 branch,
             ],
-            &[("NARRA_GITHUB_TOKEN", token)],
+            &[("BRADBIT_GITHUB_TOKEN", token)],
             options,
         )?;
         if !output.status.success() {
@@ -780,7 +782,8 @@ impl Repository {
         if token.trim().is_empty() {
             return Err(GitError::InvalidInput("GitHub token must not be empty"));
         }
-        let helper = "!f() { echo username=x-access-token; echo password=$NARRA_GITHUB_TOKEN; }; f";
+        let helper =
+            "!f() { echo username=x-access-token; echo password=$BRADBIT_GITHUB_TOKEN; }; f";
         let output = run_git_env(
             Some(&self.root),
             "pull",
@@ -792,7 +795,7 @@ impl Repository {
                 remote,
                 branch,
             ],
-            &[("NARRA_GITHUB_TOKEN", token)],
+            &[("BRADBIT_GITHUB_TOKEN", token)],
             options,
         )?;
         if !output.status.success() {
@@ -801,6 +804,7 @@ impl Repository {
         Ok(())
     }
 
+    /// Fetch from `remote` (no merge, no working-tree changes).
     pub fn fetch(&self, remote: &str, options: OpOptions) -> Result<(), GitError> {
         validate_remote_name(remote)?;
         let output = run_git(Some(&self.root), "fetch", &["fetch", remote], options)?;
