@@ -2,6 +2,7 @@ pub mod cancel;
 pub mod fountain;
 pub mod fs_ops;
 pub mod git;
+pub mod github;
 pub mod menu;
 pub mod search;
 pub mod settings;
@@ -202,6 +203,26 @@ fn git_checkout_branch(root: String, name: String) -> Result<git::api::GitStatus
 }
 
 #[tauri::command]
+fn github_set_token(
+    token: String,
+    state: tauri::State<github::secrets::GitHubSecrets>,
+) -> Result<(), String> {
+    state.save(&token).map_err(|err| err.to_string())
+}
+
+#[tauri::command]
+fn github_clear_token(state: tauri::State<github::secrets::GitHubSecrets>) -> Result<(), String> {
+    state.clear().map_err(|err| err.to_string())
+}
+
+#[tauri::command]
+fn github_token_status(
+    state: tauri::State<github::secrets::GitHubSecrets>,
+) -> Result<bool, String> {
+    state.has_token().map_err(|err| err.to_string())
+}
+
+#[tauri::command]
 fn open_folder(path: String, show_config: bool) -> Result<OpenedFolder, String> {
     let opened = fs_ops::open_folder(&path, show_config)?;
     let _ = settings::record_recent_project(&opened.root_path, &opened.name);
@@ -245,6 +266,7 @@ pub fn run() {
         .plugin(tauri_plugin_opener::init())
         .manage(MenuContext::default())
         .manage(watcher::WatcherState::default())
+        .manage(github::secrets::GitHubSecrets::new())
         .setup(|app| {
             let settings = settings::load_settings().unwrap_or_default();
             let state = MenuUiState {
@@ -287,6 +309,9 @@ pub fn run() {
             git_branches,
             git_create_branch,
             git_checkout_branch,
+            github_set_token,
+            github_clear_token,
+            github_token_status,
             open_folder,
             list_directory_tree,
             read_text_file,
