@@ -15,6 +15,7 @@ import {
   GitHubPullRequest,
   MenuCommand,
   MenuUiState,
+  OpenCodeEvent,
   OpenedFolder,
   OpenTab,
   RecentProject,
@@ -38,6 +39,19 @@ import {
   uniqueRemoteName,
 } from "./git/github";
 import { createVersionsPanel } from "./workspace/versionsPanel";
+import { ChatPanel } from "./session/chatPanel";
+import {
+  appendUserMessage,
+  applyOpenCodeEvent,
+  chatFailed,
+  chatSendFailed,
+  chatStarted,
+  chatStarting,
+  chatStopped,
+  clearChatError,
+  ChatState,
+  initialChatState,
+} from "./session/chatState";
 import { MenuSyncQueue } from "./workspace/menuSync";
 import { extractOutline, OutlineItem } from "./workspace/outline";
 import {
@@ -156,6 +170,12 @@ class BradbitApp {
   private githubError = "";
   private githubPullRequests: GitHubPullRequest[] = [];
   private githubPrLoading = false;
+  private chatState: ChatState = { ...initialChatState };
+  private chatPanel: ChatPanel | null = null;
+  private chatVisible = true;
+  private editorVisible = true;
+  private sessionWidth = 430;
+  private opencodeUnlisten: (() => void) | null = null;
   private menuQueue = new MenuSyncQueue<MenuUiState>(
     () => {
       const activeTab = this.getActiveTab();
@@ -230,6 +250,8 @@ class BradbitApp {
   public async openFolderByPath(path: string): Promise<void> {
     try {
       const opened = await backend.openFolder(path, this.settings.showConfigFiles);
+      await this.stopChatSession();
+      this.chatPanel = null;
       this.folder = opened;
       this.tabState = { tabs: [], activeTabPath: null };
       this.collapsedDirs.clear();
@@ -256,6 +278,7 @@ class BradbitApp {
       await this.refreshGitStatus();
       await this.refreshGitMeta();
       this.render();
+      void this.startChatSession();
     } catch (err) {
       this.statusNotice = err instanceof Error ? err.message : String(err);
       this.render();
@@ -949,6 +972,163 @@ class BradbitApp {
       .catch((err) =>
         this.showStatusNotice(err instanceof Error ? err.message : String(err)),
       );
+  }
+
+  private ensureChatPanel(): ChatPanel {
+    if (!this.chatPanel) {
+      this.chatPanel = new ChatPanel({
+        language: this.settings.language,
+        projectName: this.folder?.name ?? "",
+        onSend: (text) => void this.sendChatMessage(text),
+        onStop: () => void this.stopChatGeneration(),
+        onRetry: () => void this.retryChat(),
+        onToggleEditor: () => this.toggleEditorPanel(),
+      });
+    }
+    this.chatPanel.update(this.chatState, {
+      language: this.settings.language,
+      projectName: this.folder?.name ?? "",
+    });
+    return this.chatPanel;
+  }
+
+  private updateChatPanel(): void {
+    this.chatPanel?.update(this.chatState, {
+      language: this.settings.language,
+      projectName: this.folder?.name ?? "",
+    });
+  }
+
+  private async startChatSession(force = false): Promise<void> {
+    if (!this.folder) return;
+    if (
+      !force &&
+      (this.chatState.status === "starting" || this.chatState.status === "ready")
+    ) {
+      return;
+    }
+    const root = this.folder.rootPath;
+    this.chatState = chatStarting(this.chatState);
+    this.ensureChatPanel();
+    this.updateChatPanel();
+
+    if (!isTauriEnvironment()) {
+      this.chatState = chatFailed(
+        this.chatState,
+        t(this.settings.language, "chatNoDesktop"),
+      );
+      this.updateChatPanel();
+      return;
+    }
+
+    try {
+      this.opencodeUnlisten?.();
+      this.opencodeUnlisten = null;
+      await backend.opencodeStop();
+      if (!this.folder || this.folder.rootPath !== root) return;
+      const session = await backend.opencodeStart(root);
+      if (!this.folder || this.folder.rootPath !== root) {
+        await backend.opencodeStop();
+        return;
+      }
+      this.opencodeUnlisten = await backend.listenOpenCodeEvents((event) =>
+        this.handleOpenCodeEvent(event),
+      );
+      this.chatState = chatStarted(this.chatState, session);
+    } catch (err) {
+      this.chatState = chatFailed(
+        this.chatState,
+        err instanceof Error ? err.message : String(err),
+      );
+    }
+    this.updateChatPanel();
+  }
+
+  private async stopChatSession(): Promise<void> {
+    this.opencodeUnlisten?.();
+    this.opencodeUnlisten = null;
+    if (isTauriEnvironment()) {
+      try {
+        await backend.opencodeStop();
+      } catch (err) {
+        console.error("No se pudo detener OpenCode", err);
+      }
+    }
+    this.chatState = chatStopped();
+    this.updateChatPanel();
+  }
+
+  private handleOpenCodeEvent(event: OpenCodeEvent): void {
+    this.chatState = applyOpenCodeEvent(this.chatState, event);
+    this.updateChatPanel();
+  }
+
+  private async sendChatMessage(rawText: string): Promise<void> {
+    const sessionId = this.chatState.sessionId;
+    if (
+      !sessionId ||
+      this.chatState.status !== "ready" ||
+      this.chatState.streaming
+    ) {
+      return;
+    }
+    const text = rawText.trim();
+    if (!text) return;
+
+    this.chatState = appendUserMessage(this.chatState, text);
+    this.chatPanel?.clearDraft();
+    this.updateChatPanel();
+    try {
+      await backend.opencodeSend(sessionId, text);
+    } catch (err) {
+      this.chatState = chatSendFailed(
+        this.chatState,
+        err instanceof Error ? err.message : String(err),
+      );
+      this.updateChatPanel();
+    }
+  }
+
+  private async stopChatGeneration(): Promise<void> {
+    const sessionId = this.chatState.sessionId;
+    if (!sessionId) return;
+    this.chatState = { ...this.chatState, streaming: false };
+    this.updateChatPanel();
+    try {
+      await backend.opencodeAbort(sessionId);
+    } catch (err) {
+      this.chatState = chatSendFailed(
+        this.chatState,
+        err instanceof Error ? err.message : String(err),
+      );
+      this.updateChatPanel();
+    }
+  }
+
+  private async retryChat(): Promise<void> {
+    if (this.chatState.status === "error" || this.chatState.status === "idle") {
+      await this.startChatSession(true);
+      return;
+    }
+    this.chatState = clearChatError(this.chatState);
+    this.updateChatPanel();
+    this.chatPanel?.focus();
+  }
+
+  private toggleChatPanel(): void {
+    this.chatVisible = !this.chatVisible;
+    if (!this.chatVisible) {
+      this.editorVisible = true;
+    }
+    this.render();
+  }
+
+  private toggleEditorPanel(): void {
+    this.editorVisible = !this.editorVisible;
+    if (!this.editorVisible) {
+      this.chatVisible = true;
+    }
+    this.render();
   }
 
   private async openFileFromTree(relPath: string, pin: boolean): Promise<void> {
@@ -1675,12 +1855,27 @@ class BradbitApp {
       const body = document.createElement("div");
       body.className = "workspace-body";
 
-      if (this.sidebarVisible) {
-        body.appendChild(this.renderSidebar(lang));
-        body.appendChild(this.renderSidebarResizer());
+      if (!this.chatVisible && !this.editorVisible) {
+        this.chatVisible = true;
       }
 
-      body.appendChild(this.renderEditorColumn(lang, activeTab));
+      if (this.chatVisible) {
+        body.appendChild(this.renderSessionColumn(lang));
+        if (this.editorVisible) {
+          body.appendChild(this.renderSessionResizer());
+        }
+      }
+
+      if (this.editorVisible) {
+        const workspace = document.createElement("div");
+        workspace.className = "workspace-panel";
+        if (this.sidebarVisible) {
+          workspace.appendChild(this.renderSidebar(lang));
+          workspace.appendChild(this.renderSidebarResizer());
+        }
+        workspace.appendChild(this.renderEditorColumn(lang, activeTab));
+        body.appendChild(workspace);
+      }
       shell.appendChild(body);
     }
 
@@ -1773,6 +1968,16 @@ class BradbitApp {
       toggleBtn.onclick = () => this.toggleSidebar();
       left.appendChild(toggleBtn);
 
+      const chatBtn = document.createElement("button");
+      chatBtn.className = "icon-btn";
+      chatBtn.dataset.testid = "toggle-chat-btn";
+      chatBtn.title = t(lang, "chatToggleChat");
+      chatBtn.setAttribute("aria-pressed", String(this.chatVisible));
+      chatBtn.classList.toggle("active", this.chatVisible);
+      chatBtn.textContent = "💬";
+      chatBtn.onclick = () => this.toggleChatPanel();
+      left.appendChild(chatBtn);
+
       const badge = document.createElement("span");
       badge.className = "project-badge";
       badge.textContent = this.folder.name;
@@ -1832,6 +2037,8 @@ class BradbitApp {
         void backend.stopWatching().catch((err) => {
           console.error("No se pudo detener el watcher", err);
         });
+        void this.stopChatSession();
+        this.chatPanel = null;
         this.folder = null;
         this.tabState = { tabs: [], activeTabPath: null };
         this.gitStatus = null;
@@ -2345,6 +2552,44 @@ class BradbitApp {
       window.addEventListener("mouseup", onUp);
     };
     return resizer;
+  }
+
+  private renderSessionResizer(): HTMLElement {
+    const resizer = document.createElement("div");
+    resizer.className = "session-resizer";
+    resizer.onmousedown = (e) => {
+      e.preventDefault();
+      resizer.classList.add("dragging");
+      const onMove = (moveEvent: MouseEvent) => {
+        const nextWidth = Math.min(640, Math.max(320, moveEvent.clientX));
+        this.sessionWidth = nextWidth;
+        const column = this.rootEl.querySelector(".session-column") as HTMLElement | null;
+        if (column) {
+          column.style.width = `${nextWidth}px`;
+        }
+      };
+      const onUp = () => {
+        resizer.classList.remove("dragging");
+        window.removeEventListener("mousemove", onMove);
+        window.removeEventListener("mouseup", onUp);
+      };
+      window.addEventListener("mousemove", onMove);
+      window.addEventListener("mouseup", onUp);
+    };
+    return resizer;
+  }
+
+  private renderSessionColumn(lang: AppSettings["language"]): HTMLElement {
+    const column = document.createElement("section");
+    column.className = "session-column";
+    column.style.width = this.editorVisible ? `${this.sessionWidth}px` : "100%";
+    const panel = this.ensureChatPanel();
+    panel.update(this.chatState, {
+      language: lang,
+      projectName: this.folder?.name ?? "",
+    });
+    column.appendChild(panel.element);
+    return column;
   }
 
   private renderEditorColumn(lang: AppSettings["language"], activeTab: OpenTab | null): HTMLElement {

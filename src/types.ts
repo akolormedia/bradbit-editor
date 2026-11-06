@@ -169,3 +169,21 @@ export interface GitHubPullRequest {
   headRef: string;
   baseRef: string;
 }
+
+export interface OpenCodeSession {
+  id: string;
+  title: string;
+}
+
+export interface OpenCodeStatus {
+  binaryFound: boolean;
+  running: boolean;
+  sessionId: string | null;
+  root: string | null;
+}
+
+export interface OpenCodeEvent {
+  type: string;
+  data?: Record<string, unknown>;
+  [key: string]: unknown;
+}
