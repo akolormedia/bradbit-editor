@@ -1,4 +1,4 @@
-use super::{DiffScope, OpOptions, Repository, WorktreeStatus};
+use super::{DiffScope, GitError, OpOptions, Repository, WorktreeStatus};
 use crate::fs_ops;
 use serde::Serialize;
 use std::fs;
@@ -139,6 +139,163 @@ pub fn discard_file(root: &str, rel_path: &str) -> Result<DiscardResult, String>
         deleted: true,
         status: status(root)?,
     })
+}
+
+#[derive(Debug, Clone, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct GitCommit {
+    pub id: String,
+    pub author: String,
+    pub email: String,
+    pub date: String,
+    pub subject: String,
+}
+
+#[derive(Debug, Clone, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct GitCommitFile {
+    pub path: String,
+    pub old_path: Option<String>,
+    pub status: String,
+}
+
+#[derive(Debug, Clone, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct GitBranch {
+    pub name: String,
+    pub id: String,
+    pub current: bool,
+}
+
+/// Stage every change and create a version signed by the configured author.
+pub fn save_version(
+    root: &str,
+    message: &str,
+    author_name: &str,
+    author_email: &str,
+) -> Result<GitStatus, String> {
+    let name = author_name.trim();
+    let email = author_email.trim();
+    if name.is_empty() {
+        return Err("Configura tu nombre de autor en Ajustes para guardar versiones".to_string());
+    }
+    if !email.contains('@') || email.starts_with('@') || email.ends_with('@') {
+        return Err("Configura un correo de autor válido en Ajustes".to_string());
+    }
+    if message.trim().is_empty() {
+        return Err("Escribe un resumen para la versión".to_string());
+    }
+    let repo =
+        Repository::open(Path::new(root), OpOptions::default()).map_err(|e| e.to_string())?;
+    let (_, entries) = repo
+        .status(OpOptions::default())
+        .map_err(|e| e.to_string())?;
+    if entries.is_empty() {
+        return Err("No hay cambios para guardar".to_string());
+    }
+    repo.stage_all(OpOptions::default())
+        .map_err(|e| e.to_string())?;
+    repo.commit(message.trim(), name, email, OpOptions::default())
+        .map_err(|e| e.to_string())?;
+    status(root)
+}
+
+/// Recent versions, newest first. A freshly initialized repository has no
+/// commits yet, which is reported as an empty history instead of an error.
+pub fn history(root: &str, limit: usize) -> Result<Vec<GitCommit>, String> {
+    if !Path::new(root).join(".git").exists() {
+        return Ok(Vec::new());
+    }
+    let repo =
+        Repository::open(Path::new(root), OpOptions::default()).map_err(|e| e.to_string())?;
+    match repo.log(limit, OpOptions::default()) {
+        Ok(commits) => Ok(commits
+            .into_iter()
+            .map(|commit| GitCommit {
+                id: commit.id,
+                author: commit.author,
+                email: commit.email,
+                date: commit.date,
+                subject: commit.subject,
+            })
+            .collect()),
+        Err(GitError::CommandFailed { stderr, .. })
+            if stderr.contains("does not have any commits yet")
+                || stderr.contains("unknown revision") =>
+        {
+            Ok(Vec::new())
+        }
+        Err(err) => Err(err.to_string()),
+    }
+}
+
+pub fn commit_files(root: &str, commit_id: &str) -> Result<Vec<GitCommitFile>, String> {
+    let repo =
+        Repository::open(Path::new(root), OpOptions::default()).map_err(|e| e.to_string())?;
+    let files = repo
+        .commit_files(commit_id, OpOptions::default())
+        .map_err(|e| e.to_string())?;
+    Ok(files
+        .into_iter()
+        .map(|file| GitCommitFile {
+            path: file.path,
+            old_path: file.old_path,
+            status: file.status,
+        })
+        .collect())
+}
+
+/// Write a file from an older version back to the working tree. The change
+/// stays uncommitted so the writer can compare it and save a new version.
+pub fn restore_from_commit(
+    root: &str,
+    commit_id: &str,
+    rel_path: &str,
+) -> Result<GitStatus, String> {
+    let root_path = fs::canonicalize(root)
+        .map_err(|e| format!("No se pudo abrir la carpeta '{}': {}", root, e))?;
+    let repo = Repository::open(&root_path, OpOptions::default()).map_err(|e| e.to_string())?;
+    let content = repo
+        .show_file(commit_id, rel_path, OpOptions::default())
+        .map_err(|e| e.to_string())?;
+    fs_ops::write_text_file(root, rel_path, &content)?;
+    status(root)
+}
+
+pub fn branches(root: &str) -> Result<Vec<GitBranch>, String> {
+    if !Path::new(root).join(".git").exists() {
+        return Ok(Vec::new());
+    }
+    let repo =
+        Repository::open(Path::new(root), OpOptions::default()).map_err(|e| e.to_string())?;
+    let branches = repo
+        .branches(OpOptions::default())
+        .map_err(|e| e.to_string())?;
+    Ok(branches
+        .into_iter()
+        .map(|branch| GitBranch {
+            name: branch.name,
+            id: branch.id,
+            current: branch.current,
+        })
+        .collect())
+}
+
+/// Create a parallel draft from HEAD and switch to it.
+pub fn create_branch(root: &str, name: &str) -> Result<GitStatus, String> {
+    let repo =
+        Repository::open(Path::new(root), OpOptions::default()).map_err(|e| e.to_string())?;
+    repo.checkout_new(name.trim(), OpOptions::default())
+        .map_err(|e| e.to_string())?;
+    status(root)
+}
+
+pub fn checkout_branch(root: &str, name: &str) -> Result<GitStatus, String> {
+    let repo =
+        Repository::open(Path::new(root), OpOptions::default()).map_err(|e| e.to_string())?;
+    repo.checkout(name.trim(), OpOptions::default())
+        .map_err(|e| e.to_string())?;
+    status(root)
 }
 
 fn label(status: WorktreeStatus) -> &'static str {

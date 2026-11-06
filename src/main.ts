@@ -7,6 +7,9 @@ import {
   AppSettings,
   FileTreeNode,
   FsChangeEvent,
+  GitBranch,
+  GitCommit,
+  GitCommitFile,
   GitStatus,
   MenuCommand,
   MenuUiState,
@@ -19,6 +22,12 @@ import {
 import { copyTextToClipboard } from "./workspace/clipboard";
 import { createDocumentHeader } from "./workspace/documentHeader";
 import { badgeClass, buildGitBadgeMap } from "./git/status";
+import {
+  defaultVersionMessage,
+  isValidBranchName,
+  isValidGitAuthor,
+} from "./git/versions";
+import { createVersionsPanel } from "./workspace/versionsPanel";
 import { MenuSyncQueue } from "./workspace/menuSync";
 import { extractOutline, OutlineItem } from "./workspace/outline";
 import {
@@ -51,7 +60,7 @@ import {
 
 type ModalState =
   | { kind: "none" }
-  | { kind: "settings" }
+  | { kind: "settings"; error?: string }
   | { kind: "quick-open" }
   | { kind: "global-search" }
   | {
@@ -65,16 +74,25 @@ type ModalState =
     }
   | { kind: "save-template"; name: string; error?: string; saving?: boolean }
   | { kind: "entry-input"; mode: "new-file" | "new-folder" | "rename"; targetPath: string; value: string; error?: string }
+  | { kind: "branch-input"; value: string; error?: string }
   | { kind: "confirm-delete"; targetPath: string; error?: string }
   | { kind: "confirm-discard"; path: string; name: string; error?: string }
+  | {
+      kind: "confirm-restore-version";
+      commitId: string;
+      commitSubject: string;
+      path: string;
+      error?: string;
+    }
   | { kind: "confirm-unsaved"; tabPath: string; tabName: string };
 
 /** Shortcuts owned by the native menu when running inside Tauri. */
 const NATIVE_MENU_KEYS = new Set(["b", "i", "s", "o", "n", "w", ",", "f"]);
 
-function isNativeMenuShortcut(key: string, _shift: boolean, _alt: boolean): boolean {
+function isNativeMenuShortcut(key: string, _shift: boolean, alt: boolean): boolean {
   if (key === "e") return true;
   if (key === "p") return true;
+  if (key === "g" && alt) return true;
   return NATIVE_MENU_KEYS.has(key);
 }
 
@@ -85,12 +103,20 @@ class BradbitApp {
   private tabState: TabListState = { tabs: [], activeTabPath: null };
   private collapsedDirs = new Set<string>();
   private sidebarVisible = true;
-  private sidebarTab: "files" | "outline" = "files";
+  private sidebarTab: "files" | "outline" | "versions" = "files";
   private sidebarWidth = 260;
   private outlineRefreshTimer: number | null = null;
   private modal: ModalState = { kind: "none" };
   private statusNotice = "";
   private gitStatus: GitStatus | null = null;
+  private gitHistory: GitCommit[] = [];
+  private gitBranches: GitBranch[] = [];
+  private gitCommitMessage = "";
+  private gitExpandedCommitId: string | null = null;
+  private gitCommitFiles: Record<string, GitCommitFile[] | undefined> = {};
+  private gitBusy = false;
+  private gitHistoryLoading = false;
+  private gitPanelError = "";
   private menuQueue = new MenuSyncQueue<MenuUiState>(
     () => {
       const activeTab = this.getActiveTab();
@@ -168,6 +194,12 @@ class BradbitApp {
       this.folder = opened;
       this.tabState = { tabs: [], activeTabPath: null };
       this.collapsedDirs.clear();
+      this.gitHistory = [];
+      this.gitBranches = [];
+      this.gitCommitMessage = "";
+      this.gitExpandedCommitId = null;
+      this.gitCommitFiles = {};
+      this.gitPanelError = "";
       this.editor?.destroy();
       this.editor = null;
       this.recents = await backend.listRecentProjects();
@@ -178,6 +210,7 @@ class BradbitApp {
         this.statusNotice = err instanceof Error ? err.message : String(err);
       }
       await this.refreshGitStatus();
+      await this.refreshGitMeta();
       this.render();
     } catch (err) {
       this.statusNotice = err instanceof Error ? err.message : String(err);
@@ -209,6 +242,286 @@ class BradbitApp {
       console.error("No se pudo leer el estado de Git", err);
       this.gitStatus = null;
     }
+  }
+
+  private async refreshGitMeta(): Promise<void> {
+    if (
+      !this.folder ||
+      !isTauriEnvironment() ||
+      !this.gitStatus?.isRepository
+    ) {
+      this.gitHistory = [];
+      this.gitBranches = [];
+      this.gitHistoryLoading = false;
+      return;
+    }
+    const root = this.folder.rootPath;
+    this.gitHistoryLoading = true;
+    try {
+      const [branches, history] = await Promise.all([
+        backend.gitBranches(root),
+        backend.gitHistory(root, 30),
+      ]);
+      if (!this.folder || this.folder.rootPath !== root) return;
+      const currentBranch = this.gitStatus?.branch ?? null;
+      this.gitBranches =
+        branches.length === 0 && currentBranch
+          ? [{ name: currentBranch, id: "", current: true }]
+          : branches;
+      this.gitHistory = history;
+      this.gitPanelError = "";
+    } catch (err) {
+      this.gitPanelError = err instanceof Error ? err.message : String(err);
+    } finally {
+      this.gitHistoryLoading = false;
+    }
+  }
+
+  private async refreshGitPanelData(): Promise<void> {
+    if (!this.folder) return;
+    await this.refreshGitStatus();
+    await this.refreshGitMeta();
+    this.render();
+  }
+
+  private openVersionsPanel(): void {
+    this.sidebarVisible = true;
+    this.sidebarTab = "versions";
+    this.render();
+    void this.refreshGitPanelData();
+  }
+
+  private async enableVersionHistory(): Promise<void> {
+    if (!this.folder || this.gitBusy) return;
+    this.gitBusy = true;
+    this.gitPanelError = "";
+    try {
+      this.gitStatus = await backend.gitInit(this.folder.rootPath);
+      this.statusNotice = t(this.settings.language, "versionsEnabled");
+      await this.refreshTree();
+      await this.refreshGitMeta();
+    } catch (err) {
+      this.gitPanelError = err instanceof Error ? err.message : String(err);
+    } finally {
+      this.gitBusy = false;
+      this.render();
+    }
+  }
+
+  private async saveVersion(): Promise<void> {
+    if (!this.folder || this.gitBusy) return;
+    const name = this.settings.gitAuthorName.trim();
+    const email = this.settings.gitAuthorEmail.trim();
+    if (!isValidGitAuthor(name, email)) {
+      this.modal = { kind: "settings" };
+      this.statusNotice = t(this.settings.language, "versionsAuthorMissing");
+      this.render();
+      return;
+    }
+
+    const message =
+      this.gitCommitMessage.trim() ||
+      defaultVersionMessage(this.settings.language);
+    this.gitBusy = true;
+    this.gitPanelError = "";
+    try {
+      this.gitStatus = await backend.gitSaveVersion(
+        this.folder.rootPath,
+        message,
+        name,
+        email,
+      );
+      this.gitCommitMessage = "";
+      this.gitExpandedCommitId = null;
+      await this.refreshTree();
+      await this.refreshGitMeta();
+      this.statusNotice = t(this.settings.language, "versionsSaved");
+    } catch (err) {
+      this.gitPanelError = err instanceof Error ? err.message : String(err);
+    } finally {
+      this.gitBusy = false;
+      this.render();
+    }
+  }
+
+  private async toggleCommit(commitId: string): Promise<void> {
+    if (this.gitExpandedCommitId === commitId) {
+      this.gitExpandedCommitId = null;
+      this.render();
+      return;
+    }
+    this.gitExpandedCommitId = commitId;
+    this.render();
+    if (this.gitCommitFiles[commitId] || !this.folder) return;
+
+    const root = this.folder.rootPath;
+    try {
+      const files = await backend.gitCommitFiles(root, commitId);
+      if (!this.folder || this.folder.rootPath !== root) return;
+      this.gitCommitFiles = { ...this.gitCommitFiles, [commitId]: files };
+    } catch (err) {
+      this.gitPanelError = err instanceof Error ? err.message : String(err);
+      this.gitCommitFiles = { ...this.gitCommitFiles, [commitId]: [] };
+    }
+    this.render();
+  }
+
+  private requestRestoreFromCommit(commitId: string, path: string): void {
+    const commit = this.gitHistory.find((item) => item.id === commitId);
+    this.modal = {
+      kind: "confirm-restore-version",
+      commitId,
+      commitSubject: commit?.subject ?? commitId.slice(0, 7),
+      path,
+    };
+    this.render();
+  }
+
+  private async restoreFromCommit(): Promise<void> {
+    const modal = this.modal;
+    if (modal.kind !== "confirm-restore-version" || !this.folder) return;
+    this.gitPanelError = "";
+    try {
+      this.gitStatus = await backend.gitRestoreFromCommit(
+        this.folder.rootPath,
+        modal.commitId,
+        modal.path,
+      );
+      this.editor?.closeDocumentState(modal.path);
+      const tab = this.tabState.tabs.find((item) => item.path === modal.path);
+      if (tab) {
+        const content = await backend.readTextFile(
+          this.folder.rootPath,
+          modal.path,
+        );
+        this.tabState = updateTabContent(this.tabState, modal.path, content);
+        this.tabState = markTabSaved(this.tabState, modal.path);
+        this.tabState = setTabViewMode(this.tabState, modal.path, "edit");
+      }
+      await this.refreshTree();
+      await this.refreshGitMeta();
+      this.modal = { kind: "none" };
+      if (!tab) {
+        await this.openFileFromTree(modal.path, true);
+      }
+      this.statusNotice = t(this.settings.language, "versionsRestored");
+      this.render();
+    } catch (err) {
+      if (this.modal.kind === "confirm-restore-version") {
+        this.modal.error = err instanceof Error ? err.message : String(err);
+        this.render();
+      }
+    }
+  }
+
+  private requestNewBranch(): void {
+    this.modal = { kind: "branch-input", value: "" };
+    this.render();
+  }
+
+  private async submitBranchInput(): Promise<void> {
+    const modal = this.modal;
+    if (modal.kind !== "branch-input" || !this.folder || this.gitBusy) return;
+    const name = modal.value.trim();
+    if (!isValidBranchName(name)) {
+      this.modal = {
+        ...modal,
+        error: t(this.settings.language, "versionsBranchNameInvalid"),
+      };
+      this.render();
+      return;
+    }
+
+    this.gitBusy = true;
+    this.gitPanelError = "";
+    try {
+      this.gitStatus = await backend.gitCreateBranch(
+        this.folder.rootPath,
+        name,
+      );
+      await this.refreshAfterGitOperation();
+      this.gitCommitMessage = "";
+      this.gitExpandedCommitId = null;
+      this.modal = { kind: "none" };
+      this.statusNotice = t(this.settings.language, "versionsBranchCreated", {
+        name,
+      });
+    } catch (err) {
+      if (this.modal.kind === "branch-input") {
+        this.modal.error = err instanceof Error ? err.message : String(err);
+      }
+    } finally {
+      this.gitBusy = false;
+      this.render();
+    }
+  }
+
+  private async checkoutBranch(name: string): Promise<void> {
+    if (!this.folder || this.gitBusy || name === this.gitStatus?.branch) return;
+    this.gitBusy = true;
+    this.gitPanelError = "";
+    try {
+      this.gitStatus = await backend.gitCheckoutBranch(
+        this.folder.rootPath,
+        name,
+      );
+      await this.refreshAfterGitOperation();
+      this.gitCommitMessage = "";
+      this.gitExpandedCommitId = null;
+      this.statusNotice = t(this.settings.language, "versionsBranchSwitched", {
+        name,
+      });
+    } catch (err) {
+      this.gitPanelError = err instanceof Error ? err.message : String(err);
+    } finally {
+      this.gitBusy = false;
+      this.render();
+    }
+  }
+
+  private async refreshAfterGitOperation(): Promise<void> {
+    await this.refreshTree();
+    await this.refreshGitMeta();
+    await this.reloadOpenTabsFromDisk();
+  }
+
+  private async reloadOpenTabsFromDisk(): Promise<void> {
+    if (!this.folder) return;
+    const root = this.folder.rootPath;
+    const paths = this.tabState.tabs.map((tab) => tab.path);
+    if (paths.length === 0) return;
+    const diskContents = new Map<string, string | null>();
+    for (const path of paths) {
+      try {
+        diskContents.set(path, await backend.readTextFile(root, path));
+      } catch {
+        diskContents.set(path, null);
+      }
+    }
+    if (!this.folder || this.folder.rootPath !== root) return;
+    const result = reconcileTabsWithDisk(this.tabState, paths, diskContents);
+    for (const path of [...result.closed, ...result.reloaded]) {
+      this.editor?.closeDocumentState(path);
+    }
+    this.tabState = result.state;
+  }
+
+  private async saveGitAuthor(name: string, email: string): Promise<void> {
+    if (!isValidGitAuthor(name, email)) {
+      if (this.modal.kind === "settings") {
+        this.modal.error = t(this.settings.language, "gitAuthorInvalid");
+      }
+      this.render();
+      return;
+    }
+    this.statusNotice = t(this.settings.language, "gitAuthorSaved");
+    if (this.modal.kind === "settings") {
+      this.modal = { kind: "settings" };
+    }
+    await this.updateSettings({
+      gitAuthorName: name.trim(),
+      gitAuthorEmail: email.trim(),
+    });
   }
 
   private async openFileFromTree(relPath: string, pin: boolean): Promise<void> {
@@ -352,6 +665,9 @@ class BradbitApp {
 
   private async updateSettings(patch: Partial<AppSettings>): Promise<void> {
     const prevShowConfig = this.settings.showConfigFiles;
+    if (this.modal.kind === "settings" && this.modal.error) {
+      this.modal = { kind: "settings" };
+    }
     this.settings = await backend.saveSettings({
       ...this.settings,
       ...patch,
@@ -459,8 +775,7 @@ class BradbitApp {
   private requestDiscard(): void {
     const active = this.getActiveTab();
     if (!active || !this.folder) return;
-    this.modal = { kind: "confirm-discard", path: active.path, name: active.name };
-    this.render();
+    this.requestDiscardPath(active.path);
   }
 
   private async discardChanges(): Promise<void> {
@@ -833,6 +1148,9 @@ class BradbitApp {
       case "view.toggleSidebar":
         this.toggleSidebar();
         break;
+      case "view.versions":
+        this.openVersionsPanel();
+        break;
       case "view.togglePreview":
         this.togglePreview();
         break;
@@ -898,6 +1216,9 @@ class BradbitApp {
       } else if (letter === "p") {
         e.preventDefault();
         this.openQuickOpen();
+      } else if (letter === "g" && e.altKey) {
+        e.preventDefault();
+        this.openVersionsPanel();
       }
     });
   }
@@ -1089,6 +1410,12 @@ class BradbitApp {
         this.folder = null;
         this.tabState = { tabs: [], activeTabPath: null };
         this.gitStatus = null;
+        this.gitHistory = [];
+        this.gitBranches = [];
+        this.gitCommitMessage = "";
+        this.gitExpandedCommitId = null;
+        this.gitCommitFiles = {};
+        this.gitPanelError = "";
         this.editor?.destroy();
         this.editor = null;
         this.render();
@@ -1211,7 +1538,12 @@ class BradbitApp {
     const header = document.createElement("div");
     header.className = "sidebar-header";
     const title = document.createElement("span");
-    title.textContent = t(lang, this.sidebarTab === "files" ? "explorerTitle" : "outlineTitle");
+    const titles = {
+      files: "explorerTitle",
+      outline: "outlineTitle",
+      versions: "versionsTitle",
+    } as const;
+    title.textContent = t(lang, titles[this.sidebarTab]);
 
     const actions = document.createElement("div");
     actions.className = "sidebar-actions";
@@ -1239,8 +1571,10 @@ class BradbitApp {
 
     if (this.sidebarTab === "files") {
       aside.appendChild(this.renderFileTree(lang));
-    } else {
+    } else if (this.sidebarTab === "outline") {
       aside.appendChild(this.renderOutline(lang));
+    } else {
+      aside.appendChild(this.renderVersions(lang));
     }
     return aside;
   }
@@ -1249,7 +1583,10 @@ class BradbitApp {
     const tabs = document.createElement("div");
     tabs.className = "sidebar-tabs";
 
-    const makeTab = (label: string, tab: "files" | "outline"): HTMLButtonElement => {
+    const makeTab = (
+      label: string,
+      tab: "files" | "outline" | "versions",
+    ): HTMLButtonElement => {
       const button = document.createElement("button");
       button.type = "button";
       button.className = "sidebar-tab";
@@ -1260,6 +1597,9 @@ class BradbitApp {
         if (this.sidebarTab === tab) return;
         this.sidebarTab = tab;
         this.render();
+        if (tab === "versions") {
+          void this.refreshGitPanelData();
+        }
       };
       return button;
     };
@@ -1267,6 +1607,7 @@ class BradbitApp {
     tabs.append(
       makeTab(t(lang, "filesTab"), "files"),
       makeTab(t(lang, "outlineTab"), "outline"),
+      makeTab(t(lang, "versionsTab"), "versions"),
     );
     return tabs;
   }
@@ -1449,6 +1790,63 @@ class BradbitApp {
     message.className = "outline-empty";
     message.textContent = text;
     return message;
+  }
+
+  private renderVersions(lang: AppSettings["language"]): HTMLElement {
+    return createVersionsPanel(
+      {
+        language: lang,
+        isRepository: Boolean(this.gitStatus?.isRepository),
+        branch: this.gitStatus?.branch ?? null,
+        entries: this.gitStatus?.entries ?? [],
+        history: this.gitHistory,
+        branches: this.gitBranches,
+        commitMessage: this.gitCommitMessage,
+        authorReady: isValidGitAuthor(
+          this.settings.gitAuthorName,
+          this.settings.gitAuthorEmail,
+        ),
+        busy: this.gitBusy,
+        historyLoading: this.gitHistoryLoading,
+        expandedCommitId: this.gitExpandedCommitId,
+        commitFiles: this.gitCommitFiles,
+        error: this.gitPanelError,
+      },
+      {
+        onInit: () => void this.enableVersionHistory(),
+        onCommitMessageChange: (value) => {
+          this.gitCommitMessage = value;
+        },
+        onSaveVersion: () => void this.saveVersion(),
+        onOpenChange: (path) => void this.openChangeDiff(path),
+        onDiscardChange: (path) => this.requestDiscardPath(path),
+        onToggleCommit: (id) => void this.toggleCommit(id),
+        onRestoreFile: (commitId, path) =>
+          this.requestRestoreFromCommit(commitId, path),
+        onCreateBranch: () => this.requestNewBranch(),
+        onCheckoutBranch: (name) => void this.checkoutBranch(name),
+        onOpenSettings: () => {
+          this.modal = { kind: "settings" };
+          this.render();
+        },
+      },
+    );
+  }
+
+  private async openChangeDiff(path: string): Promise<void> {
+    await this.openFileFromTree(path, true);
+    const active = this.getActiveTab();
+    if (!active || active.path !== path || active.viewMode === "diff") return;
+    this.toggleDiff();
+  }
+
+  private requestDiscardPath(path: string): void {
+    this.modal = {
+      kind: "confirm-discard",
+      path,
+      name: this.fileName(path),
+    };
+    this.render();
   }
 
   private refreshOutlineSoon(): void {
@@ -2068,6 +2466,62 @@ class BradbitApp {
         void this.updateSettings({ showConfigFiles: cfgCheck.checked });
       cfgRow.append(cfgLabel, cfgCheck);
 
+      const authorSection = document.createElement("div");
+      authorSection.className = "settings-author";
+      const authorTitle = document.createElement("div");
+      authorTitle.className = "settings-section-title";
+      authorTitle.textContent = t(lang, "gitAuthorSection");
+      const authorHint = document.createElement("p");
+      authorHint.className = "settings-hint";
+      authorHint.textContent = t(lang, "gitAuthorHint");
+
+      const authorNameRow = document.createElement("div");
+      authorNameRow.className = "form-row";
+      const authorNameLabel = document.createElement("label");
+      authorNameLabel.className = "form-label";
+      authorNameLabel.textContent = t(lang, "gitAuthorName");
+      const authorNameInput = document.createElement("input");
+      authorNameInput.className = "text-input";
+      authorNameInput.dataset.testid = "git-author-name";
+      authorNameInput.value = this.settings.gitAuthorName;
+      authorNameInput.placeholder = "Ada Lovelace";
+      authorNameRow.append(authorNameLabel, authorNameInput);
+
+      const authorEmailRow = document.createElement("div");
+      authorEmailRow.className = "form-row";
+      const authorEmailLabel = document.createElement("label");
+      authorEmailLabel.className = "form-label";
+      authorEmailLabel.textContent = t(lang, "gitAuthorEmail");
+      const authorEmailInput = document.createElement("input");
+      authorEmailInput.className = "text-input";
+      authorEmailInput.dataset.testid = "git-author-email";
+      authorEmailInput.type = "email";
+      authorEmailInput.value = this.settings.gitAuthorEmail;
+      authorEmailInput.placeholder = "ada@example.com";
+      authorEmailRow.append(authorEmailLabel, authorEmailInput);
+
+      const authorSave = document.createElement("button");
+      authorSave.className = "toolbar-btn";
+      authorSave.dataset.testid = "save-git-author";
+      authorSave.textContent = t(lang, "save");
+      authorSave.onclick = () =>
+        void this.saveGitAuthor(authorNameInput.value, authorEmailInput.value);
+
+      authorSection.append(
+        authorTitle,
+        authorHint,
+        authorNameRow,
+        authorEmailRow,
+        authorSave,
+      );
+
+      if (this.modal.error) {
+        const errEl = document.createElement("div");
+        errEl.className = "error-banner";
+        errEl.textContent = this.modal.error;
+        dialog.appendChild(errEl);
+      }
+
       const footer = document.createElement("div");
       footer.className = "modal-footer";
       const closeBtn = document.createElement("button");
@@ -2079,7 +2533,16 @@ class BradbitApp {
       };
       footer.appendChild(closeBtn);
 
-      dialog.append(langRow, themeRow, fontRow, wrapRow, lnRow, cfgRow, footer);
+      dialog.append(
+        langRow,
+        themeRow,
+        fontRow,
+        wrapRow,
+        lnRow,
+        cfgRow,
+        authorSection,
+        footer,
+      );
     } else if (this.modal.kind === "quick-open" || this.modal.kind === "global-search") {
       backdrop.classList.add("palette-backdrop");
       dialog.classList.add("search-palette-dialog");
@@ -2274,6 +2737,100 @@ class BradbitApp {
       discardBtn.onclick = () => void this.discardChanges();
 
       footer.append(cancelBtn, discardBtn);
+      dialog.appendChild(footer);
+      setTimeout(() => cancelBtn.focus(), 10);
+    } else if (this.modal.kind === "branch-input") {
+      const modalState = this.modal;
+      const h3 = document.createElement("h3");
+      h3.textContent = t(lang, "versionsBranchCreateTitle");
+      const p = document.createElement("p");
+      p.textContent = t(lang, "versionsBranchCreateHint");
+
+      const label = document.createElement("label");
+      label.className = "form-label";
+      label.textContent = t(lang, "versionsBranchNameLabel");
+      const input = document.createElement("input");
+      input.className = "text-input";
+      input.dataset.testid = "branch-name-input";
+      input.value = modalState.value;
+      input.placeholder = t(lang, "versionsBranchNamePlaceholder");
+      input.oninput = () => {
+        if (this.modal.kind === "branch-input") {
+          this.modal.value = input.value;
+        }
+      };
+      input.onkeydown = (event) => {
+        if (event.key === "Enter") {
+          event.preventDefault();
+          void this.submitBranchInput();
+        }
+      };
+
+      dialog.append(h3, p, label, input);
+      if (modalState.error) {
+        const errEl = document.createElement("div");
+        errEl.className = "error-banner";
+        errEl.textContent = modalState.error;
+        dialog.appendChild(errEl);
+      }
+
+      const footer = document.createElement("div");
+      footer.className = "modal-footer";
+      const cancelBtn = document.createElement("button");
+      cancelBtn.className = "toolbar-btn";
+      cancelBtn.textContent = t(lang, "cancel");
+      cancelBtn.onclick = () => {
+        this.modal = { kind: "none" };
+        this.render();
+      };
+
+      const createBtn = document.createElement("button");
+      createBtn.className = "toolbar-btn primary";
+      createBtn.dataset.testid = "branch-submit";
+      createBtn.textContent = t(lang, "create");
+      createBtn.onclick = () => void this.submitBranchInput();
+
+      footer.append(cancelBtn, createBtn);
+      dialog.appendChild(footer);
+      setTimeout(() => input.focus(), 10);
+    } else if (this.modal.kind === "confirm-restore-version") {
+      const { path, commitSubject } = this.modal;
+      const h3 = document.createElement("h3");
+      h3.textContent = t(lang, "versionsRestoreTitle");
+      const p = document.createElement("p");
+      p.textContent = t(lang, "versionsRestorePrompt", {
+        path,
+        subject: commitSubject,
+      });
+      const pathEl = document.createElement("p");
+      pathEl.className = "modal-hint";
+      pathEl.textContent = path;
+      dialog.append(h3, p, pathEl);
+
+      if (this.modal.error) {
+        const errEl = document.createElement("div");
+        errEl.className = "error-banner";
+        errEl.textContent = this.modal.error;
+        dialog.appendChild(errEl);
+      }
+
+      const footer = document.createElement("div");
+      footer.className = "modal-footer";
+      const cancelBtn = document.createElement("button");
+      cancelBtn.className = "toolbar-btn";
+      cancelBtn.textContent = t(lang, "cancel");
+      cancelBtn.onclick = () => {
+        this.modal = { kind: "none" };
+        this.render();
+      };
+
+      const restoreBtn = document.createElement("button");
+      restoreBtn.className = "toolbar-btn danger";
+      restoreBtn.dataset.testid = "confirm-restore-btn";
+      restoreBtn.textContent = t(lang, "versionsRestore");
+      restoreBtn.onclick = () => void this.restoreFromCommit();
+
+      footer.append(cancelBtn, restoreBtn);
       dialog.appendChild(footer);
       setTimeout(() => cancelBtn.focus(), 10);
     }

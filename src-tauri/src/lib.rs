@@ -155,6 +155,53 @@ fn git_discard_file(root: String, rel_path: String) -> Result<git::api::DiscardR
 }
 
 #[tauri::command]
+fn git_save_version(
+    root: String,
+    message: String,
+    author_name: String,
+    author_email: String,
+) -> Result<git::api::GitStatus, String> {
+    git::api::save_version(&root, &message, &author_name, &author_email)
+}
+
+#[tauri::command]
+fn git_history(root: String, limit: usize) -> Result<Vec<git::api::GitCommit>, String> {
+    git::api::history(&root, limit)
+}
+
+#[tauri::command]
+fn git_commit_files(
+    root: String,
+    commit_id: String,
+) -> Result<Vec<git::api::GitCommitFile>, String> {
+    git::api::commit_files(&root, &commit_id)
+}
+
+#[tauri::command]
+fn git_restore_from_commit(
+    root: String,
+    commit_id: String,
+    rel_path: String,
+) -> Result<git::api::GitStatus, String> {
+    git::api::restore_from_commit(&root, &commit_id, &rel_path)
+}
+
+#[tauri::command]
+fn git_branches(root: String) -> Result<Vec<git::api::GitBranch>, String> {
+    git::api::branches(&root)
+}
+
+#[tauri::command]
+fn git_create_branch(root: String, name: String) -> Result<git::api::GitStatus, String> {
+    git::api::create_branch(&root, &name)
+}
+
+#[tauri::command]
+fn git_checkout_branch(root: String, name: String) -> Result<git::api::GitStatus, String> {
+    git::api::checkout_branch(&root, &name)
+}
+
+#[tauri::command]
 fn open_folder(path: String, show_config: bool) -> Result<OpenedFolder, String> {
     let opened = fs_ops::open_folder(&path, show_config)?;
     let _ = settings::record_recent_project(&opened.root_path, &opened.name);
@@ -233,6 +280,13 @@ pub fn run() {
             git_restore_file,
             git_head_file,
             git_discard_file,
+            git_save_version,
+            git_history,
+            git_commit_files,
+            git_restore_from_commit,
+            git_branches,
+            git_create_branch,
+            git_checkout_branch,
             open_folder,
             list_directory_tree,
             read_text_file,

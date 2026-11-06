@@ -7,6 +7,8 @@ export const DEFAULT_SETTINGS: AppSettings = {
   wordWrap: true,
   lineNumbers: false,
   showConfigFiles: false,
+  gitAuthorName: "",
+  gitAuthorEmail: "",
 };
 
 const CONFIG_NAMES = new Set([

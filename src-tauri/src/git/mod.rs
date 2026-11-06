@@ -132,6 +132,15 @@ pub struct Commit {
     pub subject: String,
 }
 
+/// A file touched by a commit, parsed from `git show --name-status -z`.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CommitFile {
+    pub path: String,
+    pub old_path: Option<String>,
+    /// Raw Git status code: `M`, `A`, `D`, `R100`, `C75`, `T`…
+    pub status: String,
+}
+
 /// Per-file insertions/deletions from `git diff --numstat`.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct FileChange {
@@ -295,6 +304,34 @@ impl Repository {
             return Err(command_failed("log", &output.stderr));
         }
         Ok(parse::parse_log(&String::from_utf8_lossy(&output.stdout)))
+    }
+
+    /// Files changed by a commit. `-z` keeps paths with spaces or accents safe.
+    pub fn commit_files(
+        &self,
+        commit: &str,
+        options: OpOptions,
+    ) -> Result<Vec<CommitFile>, GitError> {
+        validate_commitish(commit)?;
+        let output = run_git(
+            Some(&self.root),
+            "show",
+            &[
+                "show",
+                "--name-status",
+                "--format=",
+                "--find-renames",
+                "-z",
+                commit,
+            ],
+            options,
+        )?;
+        if !output.status.success() {
+            return Err(command_failed("show", &output.stderr));
+        }
+        Ok(parse::parse_commit_files(&String::from_utf8_lossy(
+            &output.stdout,
+        )))
     }
 
     /// Unified diff for the given scope. Empty string means "no changes".

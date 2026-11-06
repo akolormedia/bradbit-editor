@@ -3,6 +3,9 @@ import {
   CreatedProject,
   FileTreeNode,
   FsChangeEvent,
+  GitBranch,
+  GitCommit,
+  GitCommitFile,
   GitDiscardResult,
   GitStatus,
   MenuCommand,
@@ -541,6 +544,76 @@ export const backend = {
     return tauriInvoke<GitDiscardResult>("git_discard_file", {
       root: rootPath,
       relPath,
+    });
+  },
+
+  async gitSaveVersion(
+    rootPath: string,
+    message: string,
+    authorName: string,
+    authorEmail: string,
+  ): Promise<GitStatus> {
+    if (!isTauriEnvironment()) {
+      throw new Error("Git requiere la app de escritorio");
+    }
+    return tauriInvoke<GitStatus>("git_save_version", {
+      root: rootPath,
+      message,
+      authorName,
+      authorEmail,
+    });
+  },
+
+  async gitHistory(rootPath: string, limit = 30): Promise<GitCommit[]> {
+    if (!isTauriEnvironment()) return [];
+    return tauriInvoke<GitCommit[]>("git_history", { root: rootPath, limit });
+  },
+
+  async gitCommitFiles(
+    rootPath: string,
+    commitId: string,
+  ): Promise<GitCommitFile[]> {
+    if (!isTauriEnvironment()) return [];
+    return tauriInvoke<GitCommitFile[]>("git_commit_files", {
+      root: rootPath,
+      commitId,
+    });
+  },
+
+  async gitRestoreFromCommit(
+    rootPath: string,
+    commitId: string,
+    relPath: string,
+  ): Promise<GitStatus> {
+    if (!isTauriEnvironment()) {
+      throw new Error("Git requiere la app de escritorio");
+    }
+    return tauriInvoke<GitStatus>("git_restore_from_commit", {
+      root: rootPath,
+      commitId,
+      relPath,
+    });
+  },
+
+  async gitBranches(rootPath: string): Promise<GitBranch[]> {
+    if (!isTauriEnvironment()) return [];
+    return tauriInvoke<GitBranch[]>("git_branches", { root: rootPath });
+  },
+
+  async gitCreateBranch(rootPath: string, name: string): Promise<GitStatus> {
+    if (!isTauriEnvironment()) {
+      throw new Error("Git requiere la app de escritorio");
+    }
+    return tauriInvoke<GitStatus>("git_create_branch", { root: rootPath, name });
+  },
+
+  async gitCheckoutBranch(rootPath: string, name: string): Promise<GitStatus> {
+    if (!isTauriEnvironment()) {
+      throw new Error("Git requiere la app de escritorio");
+    }
+    return tauriInvoke<GitStatus>("git_checkout_branch", {
+      root: rootPath,
+      name,
     });
   },
 };

@@ -14,6 +14,10 @@ pub struct AppSettings {
     pub word_wrap: bool,
     pub line_numbers: bool,
     pub show_config_files: bool,
+    #[serde(default)]
+    pub git_author_name: String,
+    #[serde(default)]
+    pub git_author_email: String,
 }
 
 impl Default for AppSettings {
@@ -25,6 +29,8 @@ impl Default for AppSettings {
             word_wrap: true,
             line_numbers: false,
             show_config_files: false,
+            git_author_name: String::new(),
+            git_author_email: String::new(),
         }
     }
 }
@@ -132,6 +138,8 @@ mod tests {
             word_wrap: false,
             line_numbers: true,
             show_config_files: true,
+            git_author_name: "Ada".to_string(),
+            git_author_email: "ada@example.com".to_string(),
         };
         save_settings(&updated).unwrap();
         assert_eq!(load_settings().unwrap(), updated);
@@ -143,5 +151,20 @@ mod tests {
 
         let after_remove = remove_recent_project(proj_path).unwrap();
         assert!(after_remove.is_empty());
+    }
+
+    #[test]
+    fn loads_legacy_settings_without_git_author_fields() {
+        let raw = r#"{
+            "language": "es",
+            "theme": "dark",
+            "fontSize": 15,
+            "wordWrap": true,
+            "lineNumbers": false,
+            "showConfigFiles": false
+        }"#;
+        let parsed: AppSettings = serde_json::from_str(raw).unwrap();
+        assert_eq!(parsed.git_author_name, "");
+        assert_eq!(parsed.git_author_email, "");
     }
 }
