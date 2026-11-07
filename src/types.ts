@@ -170,6 +170,34 @@ export interface GitHubPullRequest {
   baseRef: string;
 }
 
+export interface KitAgent {
+  id: string;
+  name: string;
+  description: string;
+  path: string;
+}
+
+export interface KitCommand {
+  id: string;
+  name: string;
+  description: string;
+  agent: string | null;
+  path: string;
+}
+
+export interface KitSkill {
+  id: string;
+  name: string;
+  description: string;
+  path: string;
+}
+
+export interface KitCatalog {
+  agents: KitAgent[];
+  commands: KitCommand[];
+  skills: KitSkill[];
+}
+
 export interface OpenCodeSession {
   id: string;
   title: string;
