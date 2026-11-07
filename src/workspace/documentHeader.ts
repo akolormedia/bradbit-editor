@@ -1,5 +1,7 @@
 import { t } from "../i18n";
 import { Language, OpenTab } from "../types";
+import { createIcon } from "../ui/icons";
+import { createIconButton } from "../ui/iconButton";
 import { isFountainPath, isMarkdownPath } from "./state";
 
 export interface DocumentHeaderOptions {
@@ -44,82 +46,83 @@ export function createDocumentHeader(options: DocumentHeaderOptions): HTMLElemen
   actions.className = "document-actions";
 
   if (options.onSendSelection) {
-    const sendBtn = document.createElement("button");
-    sendBtn.className = "icon-btn document-action";
+    const sendBtn = createIconButton({
+      icon: "arrow-up-right",
+      label: t(language, "chatSendSelection"),
+      className: "document-action",
+      onClick: () => options.onSendSelection?.(),
+    });
     sendBtn.dataset.action = "send-selection";
-    sendBtn.title = t(language, "chatSendSelection");
-    sendBtn.setAttribute("aria-label", t(language, "chatSendSelection"));
-    sendBtn.textContent = "↗";
-    sendBtn.onclick = () => options.onSendSelection?.();
     actions.appendChild(sendBtn);
   }
 
   if (isMarkdownPath(tab.path)) {
-    const previewBtn = document.createElement("button");
     const previewing = tab.viewMode === "preview";
-    previewBtn.className = "icon-btn document-action";
-    previewBtn.classList.toggle("active", previewing);
+    const previewBtn = createIconButton({
+      icon: previewing ? "pencil" : "eye",
+      label: t(language, previewing ? "editDocument" : "previewDocument"),
+      title: `${t(language, previewing ? "editDocument" : "previewDocument")} (⌘⌥P)`,
+      className: "document-action",
+      active: previewing,
+      onClick: () => options.onTogglePreview(),
+    });
     previewBtn.dataset.action = "preview";
-    previewBtn.setAttribute("aria-pressed", String(previewing));
-    previewBtn.title = `${t(language, previewing ? "editDocument" : "previewDocument")} (⌘⌥P)`;
-    previewBtn.setAttribute(
-      "aria-label",
-      t(language, previewing ? "editDocument" : "previewDocument"),
-    );
-    previewBtn.textContent = "</>";
-    previewBtn.onclick = () => options.onTogglePreview();
     actions.appendChild(previewBtn);
   }
 
   if (options.canDiff && options.onToggleDiff) {
-    const diffBtn = document.createElement("button");
-    diffBtn.className = "icon-btn document-action";
-    diffBtn.classList.toggle("active", Boolean(options.diffActive));
+    const diffBtn = createIconButton({
+      icon: "file-diff",
+      label: t(language, "diffButton"),
+      className: "document-action",
+      active: Boolean(options.diffActive),
+      onClick: () => options.onToggleDiff?.(),
+    });
     diffBtn.dataset.action = "diff";
-    diffBtn.setAttribute("aria-pressed", String(Boolean(options.diffActive)));
-    diffBtn.title = t(language, "diffButton");
-    diffBtn.setAttribute("aria-label", t(language, "diffButton"));
-    diffBtn.textContent = "Diff";
-    diffBtn.onclick = () => options.onToggleDiff?.();
     actions.appendChild(diffBtn);
   }
 
   if (options.canDiscard && options.onDiscard) {
-    const discardBtn = document.createElement("button");
-    discardBtn.className = "icon-btn document-action";
+    const discardBtn = createIconButton({
+      icon: "rotate-ccw",
+      label: t(language, "discardChangesTitle"),
+      className: "document-action",
+      onClick: () => options.onDiscard?.(),
+    });
     discardBtn.dataset.action = "discard";
-    discardBtn.title = t(language, "discardChangesTitle");
-    discardBtn.setAttribute("aria-label", t(language, "discardChangesTitle"));
-    discardBtn.textContent = "↺";
-    discardBtn.onclick = () => options.onDiscard?.();
     actions.appendChild(discardBtn);
   }
 
   if (isFountainPath(tab.path) && options.onExportPdf) {
-    const exportBtn = document.createElement("button");
-    exportBtn.className = "icon-btn document-action";
+    const exportBtn = createIconButton({
+      icon: "download",
+      label: t(language, "exportPdf"),
+      title: `${t(language, "exportPdf")} (⌘E)`,
+      className: "document-action",
+      onClick: () => options.onExportPdf?.(),
+    });
     exportBtn.dataset.action = "export-pdf";
-    exportBtn.title = `${t(language, "exportPdf")} (⌘E)`;
-    exportBtn.setAttribute("aria-label", t(language, "exportPdf"));
-    exportBtn.textContent = "PDF";
-    exportBtn.onclick = () => options.onExportPdf?.();
     actions.appendChild(exportBtn);
   }
 
-  const copyBtn = document.createElement("button");
-  copyBtn.className = "icon-btn document-action";
+  const copyBtn = createIconButton({
+    icon: "copy",
+    label: t(language, "copyDocument"),
+    className: "document-action",
+  });
   copyBtn.dataset.action = "copy";
-  copyBtn.title = t(language, "copyDocument");
-  copyBtn.setAttribute("aria-label", t(language, "copyDocument"));
-  copyBtn.textContent = "⧉";
   copyBtn.onclick = () => {
     void options.onCopy().then((copied) => {
       if (!copied || !copyBtn.isConnected) return;
-      copyBtn.textContent = `✓ ${t(language, "copied")}`;
+      copyBtn.replaceChildren(createIcon("check", 16));
+      copyBtn.title = t(language, "copied");
+      copyBtn.setAttribute("aria-label", t(language, "copied"));
       copyBtn.classList.add("copied");
       window.setTimeout(() => {
         if (!copyBtn.isConnected) return;
-        copyBtn.textContent = "⧉";
+        copyBtn.replaceChildren(createIcon("copy", 16));
+        copyBtn.title = t(language, "copyDocument");
+        copyBtn.setAttribute("aria-label", t(language, "copyDocument"));
         copyBtn.classList.remove("copied");
       }, 1500);
     });

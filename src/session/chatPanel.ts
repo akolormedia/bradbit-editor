@@ -1,5 +1,7 @@
 import { t } from "../i18n";
 import { KitCatalog, Language, OpenCodeFormField, OpenCodeModel } from "../types";
+import { createIcon, IconName } from "../ui/icons";
+import { createIconButton } from "../ui/iconButton";
 import { QuickOpenFile } from "../workspace/quickOpen";
 import {
   ChatForm,
@@ -18,6 +20,11 @@ import {
   filterProjectFiles,
   replaceCompletion,
 } from "./composer";
+
+function setCheckIcon(element: HTMLElement, active: boolean): void {
+  element.replaceChildren();
+  if (active) element.appendChild(createIcon("check", 13));
+}
 
 export interface ChatPanelOptions {
   language: Language;
@@ -209,17 +216,14 @@ export class ChatPanel {
     const bar = document.createElement("div");
     bar.className = "chat-composer-bar";
 
-    this.plusBtn = document.createElement("button");
-    this.plusBtn.type = "button";
-    this.plusBtn.className = "icon-btn chat-plus-btn";
-    this.plusBtn.dataset.testid = "chat-plus";
-    this.plusBtn.title = t(options.language, "chatMoreActions");
-    this.plusBtn.setAttribute(
-      "aria-label",
-      t(options.language, "chatMoreActions"),
-    );
-    this.plusBtn.textContent = "＋";
-    this.plusBtn.onclick = () => this.togglePlusPopover();
+    this.plusBtn = createIconButton({
+      icon: "plus",
+      label: t(options.language, "chatMoreActions"),
+      className: "chat-plus-btn",
+      testId: "chat-plus",
+      plain: true,
+      onClick: () => this.togglePlusPopover(),
+    });
 
     this.modelBtn = document.createElement("button");
     this.modelBtn.type = "button";
@@ -239,7 +243,7 @@ export class ChatPanel {
     this.modelNameEl.className = "chat-model-name";
     const modelChevron = document.createElement("span");
     modelChevron.className = "chat-model-chevron";
-    modelChevron.textContent = "⌄";
+    modelChevron.appendChild(createIcon("chevron-down", 12));
     this.modelBtn.append(
       this.modelProviderEl,
       this.modelSlashEl,
@@ -261,30 +265,30 @@ export class ChatPanel {
     this.effortLabelEl.className = "chat-effort-label";
     const effortChevron = document.createElement("span");
     effortChevron.className = "chat-model-chevron";
-    effortChevron.textContent = "⌄";
+    effortChevron.appendChild(createIcon("chevron-down", 12));
     this.effortBtn.append(this.effortLabelEl, effortChevron);
     this.effortBtn.onclick = () => this.toggleEffortPopover();
 
     const spacer = document.createElement("span");
     spacer.className = "chat-composer-spacer";
 
-    this.sendBtn = document.createElement("button");
-    this.sendBtn.type = "button";
-    this.sendBtn.className = "chat-send-arrow";
-    this.sendBtn.dataset.testid = "chat-send";
-    this.sendBtn.title = t(options.language, "chatSend");
-    this.sendBtn.setAttribute("aria-label", t(options.language, "chatSend"));
-    this.sendBtn.textContent = "↑";
-    this.sendBtn.onclick = () => this.submit();
+    this.sendBtn = createIconButton({
+      icon: "arrow-up",
+      label: t(options.language, "chatSend"),
+      className: "chat-send-arrow",
+      testId: "chat-send",
+      plain: true,
+      onClick: () => this.submit(),
+    });
 
-    this.stopBtn = document.createElement("button");
-    this.stopBtn.type = "button";
-    this.stopBtn.className = "chat-stop-square";
-    this.stopBtn.dataset.testid = "chat-stop";
-    this.stopBtn.title = t(options.language, "chatStop");
-    this.stopBtn.setAttribute("aria-label", t(options.language, "chatStop"));
-    this.stopBtn.textContent = "■";
-    this.stopBtn.onclick = () => this.options.onStop();
+    this.stopBtn = createIconButton({
+      icon: "square",
+      label: t(options.language, "chatStop"),
+      className: "chat-stop-square",
+      testId: "chat-stop",
+      plain: true,
+      onClick: () => this.options.onStop(),
+    });
     this.stopBtn.hidden = true;
 
     bar.append(
@@ -308,27 +312,24 @@ export class ChatPanel {
     modelHeader.className = "chat-model-popover-header";
     const searchIcon = document.createElement("span");
     searchIcon.className = "chat-model-search-icon";
-    searchIcon.textContent = "⌕";
+    searchIcon.appendChild(createIcon("search", 14));
     this.modelSearch = document.createElement("input");
     this.modelSearch.type = "text";
     this.modelSearch.className = "chat-model-search";
     this.modelSearch.dataset.testid = "chat-model-search";
     this.modelSearch.placeholder = t(options.language, "chatSearchModels");
     this.modelSearch.oninput = () => this.renderModelList();
-    const manageBtn = document.createElement("button");
-    manageBtn.type = "button";
-    manageBtn.className = "icon-btn chat-model-manage";
-    manageBtn.dataset.testid = "chat-manage-models";
-    manageBtn.title = t(options.language, "chatManageModels");
-    manageBtn.setAttribute(
-      "aria-label",
-      t(options.language, "chatManageModels"),
-    );
-    manageBtn.textContent = "⚙";
-    manageBtn.onclick = () => {
-      this.hideMenus();
-      this.options.onManageModels();
-    };
+    const manageBtn = createIconButton({
+      icon: "sliders-horizontal",
+      label: t(options.language, "chatManageModels"),
+      className: "chat-model-manage",
+      testId: "chat-manage-models",
+      plain: true,
+      onClick: () => {
+        this.hideMenus();
+        this.options.onManageModels();
+      },
+    });
     modelHeader.append(searchIcon, this.modelSearch, manageBtn);
     this.modelListEl = document.createElement("div");
     this.modelListEl.className = "chat-model-list";
@@ -616,7 +617,7 @@ export class ChatPanel {
       button.dataset.testid = `chat-model-row-${model.providerId}-${model.id}`;
       const check = document.createElement("span");
       check.className = "chat-model-check";
-      check.textContent = key === currentKey ? "✓" : "";
+      setCheckIcon(check, key === currentKey);
       const name = document.createElement("span");
       name.className = "chat-model-row-name";
       name.textContent = model.name;
@@ -711,7 +712,7 @@ export class ChatPanel {
       button.dataset.testid = `chat-effort-row-${value || "default"}`;
       const check = document.createElement("span");
       check.className = "chat-model-check";
-      check.textContent = current.variant === value ? "✓" : "";
+      setCheckIcon(check, current.variant === value);
       const name = document.createElement("span");
       name.className = "chat-model-row-name";
       name.textContent = label;
@@ -737,7 +738,7 @@ export class ChatPanel {
     this.plusPopover.innerHTML = "";
 
     const addAction = (
-      icon: string,
+      icon: IconName,
       label: string,
       testid: string,
       action: () => void,
@@ -748,7 +749,7 @@ export class ChatPanel {
       button.dataset.testid = testid;
       const iconEl = document.createElement("span");
       iconEl.className = "chat-plus-item-icon";
-      iconEl.textContent = icon;
+      iconEl.appendChild(createIcon(icon, 15));
       const labelEl = document.createElement("span");
       labelEl.textContent = label;
       button.append(iconEl, labelEl);
@@ -756,11 +757,11 @@ export class ChatPanel {
       this.plusPopover.appendChild(button);
     };
 
-    addAction("＋", t(lang, "chatPlusFile"), "composer-plus-file", () => {
+    addAction("file-plus", t(lang, "chatPlusFile"), "composer-plus-file", () => {
       this.hideMenus();
       this.openMentionAtCursor();
     });
-    addAction("/", t(lang, "chatPlusCommand"), "composer-plus-command", () => {
+    addAction("slash", t(lang, "chatPlusCommand"), "composer-plus-command", () => {
       this.hideMenus();
       this.insertSlashCommand();
     });
@@ -789,7 +790,7 @@ export class ChatPanel {
         value === null
           ? currentAgent === "" || currentAgent === "build"
           : currentAgent === value;
-      check.textContent = active ? "✓" : "";
+      setCheckIcon(check, active);
       const labelEl = document.createElement("span");
       labelEl.textContent = label;
       if (description) labelEl.title = description;
@@ -816,7 +817,7 @@ export class ChatPanel {
     const divider2 = document.createElement("div");
     divider2.className = "chat-plus-divider";
     this.plusPopover.appendChild(divider2);
-    addAction("⚙", t(lang, "chatPlusModels"), "composer-plus-manage-models", () => {
+    addAction("sliders-horizontal", t(lang, "chatPlusModels"), "composer-plus-manage-models", () => {
       this.hideMenus();
       this.options.onManageModels();
     });
@@ -1049,30 +1050,31 @@ export class ChatPanel {
       }
 
       if (this.options.sessions.length > 1) {
-        const close = document.createElement("span");
-        close.className = "session-tab-close";
-        close.dataset.testid = `session-close-${session.id}`;
-        close.textContent = "×";
-        close.title = t(this.options.language, "chatCloseSession");
-        close.setAttribute("aria-label", t(this.options.language, "chatCloseSession"));
-        close.onclick = (event) => {
-          event.stopPropagation();
-          this.options.onCloseSession(session.id);
-        };
+        const close = createIconButton({
+          icon: "x",
+          label: t(this.options.language, "chatCloseSession"),
+          className: "session-tab-close",
+          testId: `session-close-${session.id}`,
+          plain: true,
+          onClick: (event) => {
+            event.stopPropagation();
+            this.options.onCloseSession(session.id);
+          },
+        });
         tab.appendChild(close);
       }
       this.tabsEl.appendChild(tab);
     }
 
-    const add = document.createElement("button");
-    add.type = "button";
-    add.className = "session-tab-add";
-    add.dataset.testid = "session-new";
-    add.textContent = "＋";
-    add.title = t(this.options.language, "chatNewSession");
-    add.setAttribute("aria-label", t(this.options.language, "chatNewSession"));
-    add.disabled = !this.options.canCreateSession;
-    add.onclick = () => this.options.onCreateSession();
+    const add = createIconButton({
+      icon: "plus",
+      label: t(this.options.language, "chatNewSession"),
+      className: "session-tab-add",
+      testId: "session-new",
+      plain: true,
+      disabled: !this.options.canCreateSession,
+      onClick: () => this.options.onCreateSession(),
+    });
     this.tabsEl.appendChild(add);
   }
 
@@ -1283,8 +1285,16 @@ export class ChatPanel {
     header.setAttribute("aria-expanded", "false");
     const icon = document.createElement("span");
     icon.className = `chat-tool-icon ${tool.status}`;
-    icon.textContent =
-      tool.status === "completed" ? "✓" : tool.status === "error" ? "✕" : "●";
+    icon.appendChild(
+      createIcon(
+        tool.status === "completed"
+          ? "check"
+          : tool.status === "error"
+            ? "x"
+            : "circle",
+        14,
+      ),
+    );
     icon.title =
       tool.status === "completed"
         ? t(lang, "chatToolCompleted")
@@ -1299,7 +1309,7 @@ export class ChatPanel {
       .join(" ");
     const chevron = document.createElement("span");
     chevron.className = "chat-tool-chevron";
-    chevron.textContent = "⌄";
+    chevron.appendChild(createIcon("chevron-down", 12));
     header.append(icon, label, chevron);
 
     const details = document.createElement("div");

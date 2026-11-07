@@ -107,10 +107,12 @@ describe("active document header (T-1.2.1)", () => {
     await vi.advanceTimersByTimeAsync(0);
 
     expect(onCopy).toHaveBeenCalledOnce();
-    expect(button?.textContent).toContain("Copiado");
+    expect(button?.getAttribute("aria-label")).toBe("Copiado");
+    expect(button?.querySelector(".icon-check")).not.toBeNull();
 
     await vi.advanceTimersByTimeAsync(1500);
-    expect(button?.textContent).toBe("⧉");
+    expect(button?.getAttribute("aria-label")).toBe("Copiar");
+    expect(button?.querySelector(".icon-copy")).not.toBeNull();
     header.remove();
   });
 
