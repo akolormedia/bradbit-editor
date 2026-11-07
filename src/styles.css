@@ -213,6 +213,112 @@ body,
   font-weight: 500;
 }
 
+/* Application menu */
+.app-menu {
+  position: relative;
+  display: inline-flex;
+}
+
+.app-menu-popover {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  z-index: 80;
+  width: 260px;
+  max-height: min(80vh, 640px);
+  overflow-y: auto;
+  padding: 6px;
+  border: 1px solid var(--border-color);
+  border-radius: 9px;
+  background: var(--bg-elevated);
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.28);
+}
+
+.app-menu-popover[hidden] {
+  display: none;
+}
+
+.app-menu-group {
+  display: flex;
+  flex-direction: column;
+}
+
+.app-menu-group + .app-menu-group {
+  margin-top: 2px;
+}
+
+.app-menu-group-label {
+  padding: 6px 8px 3px;
+  color: var(--text-muted);
+  font-size: 9.5px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.app-menu-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 6px 8px;
+  border: none;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--text-primary);
+  font-family: var(--font-ui);
+  font-size: 12px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.app-menu-item:hover:not(:disabled),
+.app-menu-item:focus-visible {
+  background: var(--bg-hover);
+  outline: none;
+}
+
+.app-menu-item:disabled {
+  opacity: 0.38;
+  cursor: default;
+}
+
+.app-menu-check {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 14px;
+  height: 14px;
+  color: var(--accent);
+}
+
+.app-menu-check .icon {
+  width: 13px;
+  height: 13px;
+}
+
+.app-menu-label {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.app-menu-shortcut {
+  flex-shrink: 0;
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+}
+
+.app-menu-separator {
+  height: 1px;
+  margin: 3px 6px;
+  background: var(--border-color);
+}
+
 /* Main Workspace Area */
 .workspace-body {
   flex: 1;

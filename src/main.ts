@@ -69,7 +69,8 @@ import { projectRelativePath } from "./session/chatPaths";
 import { parseSlashCommand } from "./session/composer";
 import { SessionView, toggleSessionView } from "./session/sessionView";
 import { TerminalPanel } from "./terminal/terminalPanel";
-import { createIcon, prependIcon } from "./ui/icons";
+import { AppMenu } from "./ui/appMenu";
+import { createIcon } from "./ui/icons";
 import { createIconButton } from "./ui/iconButton";
 import { MenuSyncQueue } from "./workspace/menuSync";
 import { extractOutline, OutlineItem } from "./workspace/outline";
@@ -82,6 +83,7 @@ import {
 import { flattenFileTree } from "./workspace/quickOpen";
 import { SIDEBAR_SECTIONS, SidebarTab } from "./workspace/sidebarSections";
 import { isTabAffected, reconcileTabsWithDisk } from "./workspace/reconcile";
+import { widthFromPointerDrag } from "./workspace/resizing";
 import { SearchPalette } from "./workspace/searchPalette";
 import {
   buildMenuUiState,
@@ -172,6 +174,7 @@ class BradbitApp {
   private chatModels: OpenCodeModel[] = [];
   private sessionView: SessionView = "chat";
   private terminalPanel: TerminalPanel | null = null;
+  private appMenu: AppMenu | null = null;
   private outlineRefreshTimer: number | null = null;
   private modal: ModalState = { kind: "none" };
   private statusNotice = "";
@@ -214,18 +217,7 @@ class BradbitApp {
   private sessionWidth = 430;
   private opencodeUnlisten: (() => void) | null = null;
   private menuQueue = new MenuSyncQueue<MenuUiState>(
-    () => {
-      const activeTab = this.getActiveTab();
-      return buildMenuUiState({
-        settings: this.settings,
-        hasFolder: this.folder !== null,
-        hasActiveTab: activeTab !== null,
-        isMarkdown: activeTab ? isMarkdownPath(activeTab.path) : false,
-        isFountain: activeTab ? isFountainPath(activeTab.path) : false,
-        previewMode: activeTab?.viewMode === "preview",
-        sidebarVisible: this.sidebarVisible,
-      });
-    },
+    () => this.currentMenuState(),
     (state) => backend.refreshMenu(state),
     (err) => console.error("No se pudo actualizar el menú nativo", err),
   );
@@ -282,6 +274,35 @@ class BradbitApp {
     const picked = await backend.pickFolderDialog();
     if (!picked) return;
     await this.openFolderByPath(picked);
+  }
+
+  private closeFolder(): void {
+    if (!this.folder) return;
+    void backend.stopWatching().catch((err) => {
+      console.error("No se pudo detener el watcher", err);
+    });
+    void this.stopChatSession();
+    this.stopTerminalSession();
+    this.chatPanel = null;
+    this.folder = null;
+    this.kitCatalog = { agents: [], commands: [], skills: [] };
+    this.chatModels = [];
+    this.tabState = { tabs: [], activeTabPath: null };
+    this.gitStatus = null;
+    this.gitHistory = [];
+    this.gitBranches = [];
+    this.gitCommitMessage = "";
+    this.gitExpandedCommitId = null;
+    this.gitCommitFiles = {};
+    this.gitPanelError = "";
+    this.gitRemotes = [];
+    this.githubPullRequests = [];
+    this.githubError = "";
+    this.githubPrLoading = false;
+    this.githubBusy = false;
+    this.editor?.destroy();
+    this.editor = null;
+    this.render();
   }
 
   public async openFolderByPath(path: string): Promise<void> {
@@ -1819,6 +1840,19 @@ class BradbitApp {
     this.render();
   }
 
+  private currentMenuState(): MenuUiState {
+    const activeTab = this.getActiveTab();
+    return buildMenuUiState({
+      settings: this.settings,
+      hasFolder: this.folder !== null,
+      hasActiveTab: activeTab !== null,
+      isMarkdown: activeTab ? isMarkdownPath(activeTab.path) : false,
+      isFountain: activeTab ? isFountainPath(activeTab.path) : false,
+      previewMode: activeTab?.viewMode === "preview",
+      sidebarVisible: this.sidebarVisible,
+    });
+  }
+
   private syncMenu(): void {
     this.menuQueue.request();
   }
@@ -2248,6 +2282,9 @@ class BradbitApp {
       case "file.openFolder":
         await this.handleOpenFolderDialog();
         break;
+      case "file.closeFolder":
+        this.closeFolder();
+        break;
       case "file.openRecent":
         if (command.path) {
           await this.openFolderByPath(command.path);
@@ -2306,6 +2343,9 @@ class BradbitApp {
         break;
       case "view.toggleSidebar":
         this.toggleSidebar();
+        break;
+      case "view.toggleTerminal":
+        this.toggleTerminalView();
         break;
       case "view.versions":
         this.openVersionsPanel();
@@ -2400,7 +2440,7 @@ class BradbitApp {
     shell.className = "app-shell";
 
     // Topbar
-    shell.appendChild(this.renderTopbar(lang, activeTab));
+    shell.appendChild(this.renderTopbar(lang));
 
     if (!this.folder) {
       shell.appendChild(this.renderWelcomeScreen(lang));
@@ -2507,7 +2547,17 @@ class BradbitApp {
     }
   }
 
-  private renderTopbar(lang: AppSettings["language"], activeTab: OpenTab | null): HTMLElement {
+  private ensureAppMenu(): AppMenu {
+    if (!this.appMenu) {
+      this.appMenu = new AppMenu({
+        onCommand: (command) => void this.executeMenuCommand(command),
+      });
+    }
+    this.appMenu.update(this.currentMenuState());
+    return this.appMenu;
+  }
+
+  private renderTopbar(lang: AppSettings["language"]): HTMLElement {
     const bar = document.createElement("header");
     bar.className = "topbar";
 
@@ -2515,24 +2565,6 @@ class BradbitApp {
     left.className = "topbar-left";
 
     if (this.folder) {
-      const chatBtn = createIconButton({
-        icon: "message-square",
-        label: t(lang, "chatToggleChat"),
-        testId: "toggle-chat-btn",
-        active: this.chatVisible,
-        onClick: () => this.toggleChatPanel(),
-      });
-      left.appendChild(chatBtn);
-
-      const editorBtn = createIconButton({
-        icon: "panel-right",
-        label: t(lang, "chatToggleEditor"),
-        testId: "toggle-editor-btn",
-        active: this.editorVisible,
-        onClick: () => this.toggleEditorPanel(),
-      });
-      left.appendChild(editorBtn);
-
       const badge = document.createElement("span");
       badge.className = "project-badge";
       badge.append(
@@ -2552,6 +2584,24 @@ class BradbitApp {
             })}`
           : this.folder.rootPath;
       left.appendChild(badge);
+
+      const chatBtn = createIconButton({
+        icon: "message-square",
+        label: t(lang, "chatToggleChat"),
+        testId: "toggle-chat-btn",
+        active: this.chatVisible,
+        onClick: () => this.toggleChatPanel(),
+      });
+      left.appendChild(chatBtn);
+
+      const editorBtn = createIconButton({
+        icon: "panel-right",
+        label: t(lang, "chatToggleEditor"),
+        testId: "toggle-editor-btn",
+        active: this.editorVisible,
+        onClick: () => this.toggleEditorPanel(),
+      });
+      left.appendChild(editorBtn);
     } else {
       const brand = document.createElement("span");
       brand.className = "project-badge";
@@ -2564,92 +2614,7 @@ class BradbitApp {
 
     const right = document.createElement("div");
     right.className = "topbar-right";
-
-    const openBtn = document.createElement("button");
-    openBtn.className = "toolbar-btn";
-    openBtn.textContent = t(lang, "openFolder");
-    openBtn.onclick = () => void this.handleOpenFolderDialog();
-    prependIcon(openBtn, "folder-open");
-    right.appendChild(openBtn);
-
-    if (isTauriEnvironment()) {
-      const newProjectBtn = document.createElement("button");
-      newProjectBtn.className = "toolbar-btn";
-      newProjectBtn.dataset.testid = "topbar-new-project-btn";
-      newProjectBtn.textContent = t(lang, "projectShort");
-      newProjectBtn.title = `${t(lang, "newProjectButton")} (⇧⌘N)`;
-      newProjectBtn.onclick = () => void this.openNewProjectModal();
-      prependIcon(newProjectBtn, "folder-plus");
-      right.appendChild(newProjectBtn);
-    }
-
-    if (this.folder) {
-      const newFileBtn = document.createElement("button");
-      newFileBtn.className = "toolbar-btn";
-      newFileBtn.textContent = t(lang, "newFile");
-      newFileBtn.onclick = () => this.openEntryModal("new-file");
-      prependIcon(newFileBtn, "file-plus");
-      right.appendChild(newFileBtn);
-
-      if (activeTab) {
-        const findBtn = document.createElement("button");
-        findBtn.className = "toolbar-btn";
-        findBtn.textContent = t(lang, "findReplace");
-        findBtn.onclick = () => this.editor?.openFindPanel();
-        prependIcon(findBtn, "search");
-        right.appendChild(findBtn);
-
-        const saveBtn = document.createElement("button");
-        saveBtn.className = "toolbar-btn primary";
-        saveBtn.textContent = `${t(lang, "save")} (⌘S)`;
-        saveBtn.onclick = () => void this.saveActiveTab();
-        prependIcon(saveBtn, "save");
-        right.appendChild(saveBtn);
-      }
-
-      const closeFolderBtn = document.createElement("button");
-      closeFolderBtn.className = "toolbar-btn";
-      closeFolderBtn.textContent = t(lang, "closeFolder");
-      prependIcon(closeFolderBtn, "folder-x");
-      closeFolderBtn.onclick = () => {
-        void backend.stopWatching().catch((err) => {
-          console.error("No se pudo detener el watcher", err);
-        });
-        void this.stopChatSession();
-        this.stopTerminalSession();
-        this.chatPanel = null;
-        this.folder = null;
-        this.kitCatalog = { agents: [], commands: [], skills: [] };
-        this.chatModels = [];
-        this.tabState = { tabs: [], activeTabPath: null };
-        this.gitStatus = null;
-        this.gitHistory = [];
-        this.gitBranches = [];
-        this.gitCommitMessage = "";
-        this.gitExpandedCommitId = null;
-        this.gitCommitFiles = {};
-        this.gitPanelError = "";
-        this.gitRemotes = [];
-        this.githubPullRequests = [];
-        this.githubError = "";
-        this.githubPrLoading = false;
-        this.githubBusy = false;
-        this.editor?.destroy();
-        this.editor = null;
-        this.render();
-      };
-      right.appendChild(closeFolderBtn);
-    }
-
-    const settingsBtn = document.createElement("button");
-    settingsBtn.className = "toolbar-btn";
-    settingsBtn.dataset.testid = "open-settings-btn";
-    settingsBtn.textContent = t(lang, "settings");
-    settingsBtn.onclick = () => {
-      this.openSettingsModal();
-    };
-    prependIcon(settingsBtn, "settings");
-    right.appendChild(settingsBtn);
+    right.appendChild(this.ensureAppMenu().element);
 
     bar.append(left, right);
     return bar;
@@ -3127,10 +3092,20 @@ class BradbitApp {
     resizer.onmousedown = (e) => {
       e.preventDefault();
       resizer.classList.add("dragging");
+      const sidebar = this.rootEl.querySelector(
+        ".sidebar",
+      ) as HTMLElement | null;
+      const startX = e.clientX;
+      const startWidth = sidebar?.getBoundingClientRect().width ?? this.sidebarWidth;
       const onMove = (moveEvent: MouseEvent) => {
-        const nextWidth = Math.min(480, Math.max(180, moveEvent.clientX));
+        const nextWidth = widthFromPointerDrag(
+          startWidth,
+          startX,
+          moveEvent.clientX,
+          180,
+          480,
+        );
         this.sidebarWidth = nextWidth;
-        const sidebar = this.rootEl.querySelector(".sidebar") as HTMLElement | null;
         if (sidebar) {
           sidebar.style.width = `${nextWidth}px`;
         }
@@ -3139,6 +3114,7 @@ class BradbitApp {
         resizer.classList.remove("dragging");
         window.removeEventListener("mousemove", onMove);
         window.removeEventListener("mouseup", onUp);
+        this.persistWorkspaceState();
       };
       window.addEventListener("mousemove", onMove);
       window.addEventListener("mouseup", onUp);
@@ -3152,10 +3128,20 @@ class BradbitApp {
     resizer.onmousedown = (e) => {
       e.preventDefault();
       resizer.classList.add("dragging");
+      const column = this.rootEl.querySelector(
+        ".session-column",
+      ) as HTMLElement | null;
+      const startX = e.clientX;
+      const startWidth = column?.getBoundingClientRect().width ?? this.sessionWidth;
       const onMove = (moveEvent: MouseEvent) => {
-        const nextWidth = Math.min(640, Math.max(320, moveEvent.clientX));
+        const nextWidth = widthFromPointerDrag(
+          startWidth,
+          startX,
+          moveEvent.clientX,
+          320,
+          640,
+        );
         this.sessionWidth = nextWidth;
-        const column = this.rootEl.querySelector(".session-column") as HTMLElement | null;
         if (column) {
           column.style.width = `${nextWidth}px`;
         }
