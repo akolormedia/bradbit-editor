@@ -12,6 +12,7 @@ export interface AppSettings {
   gitAuthorEmail: string;
   hiddenModels: string[];
   recentModels: string[];
+  terminalCommand: string;
 }
 
 export interface FileTreeNode {
@@ -240,6 +241,28 @@ export interface OpenCodeChatMessage {
   tokens?: OpenCodeTokens | null;
   model?: string | null;
   agent?: string | null;
+}
+
+export interface PtyStartResult {
+  id: string;
+  command: string;
+}
+
+export interface PtyStatus {
+  running: boolean;
+  id: string | null;
+  root: string | null;
+  command: string | null;
+}
+
+export interface PtyOutputEvent {
+  id: string;
+  data: string;
+}
+
+export interface PtyExitEvent {
+  id: string;
+  code: number | null;
 }
 
 export interface OpenCodeModel {

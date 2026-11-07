@@ -11,6 +11,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   gitAuthorEmail: "",
   hiddenModels: [],
   recentModels: [],
+  terminalCommand: "shell",
 };
 
 const CONFIG_NAMES = new Set([
