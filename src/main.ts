@@ -82,6 +82,7 @@ import {
 } from "./workspace/projectCreation";
 import { flattenFileTree } from "./workspace/quickOpen";
 import { SIDEBAR_SECTIONS, SidebarTab } from "./workspace/sidebarSections";
+import { computeWorkspaceLayout, WorkspaceLayout } from "./workspace/layout";
 import { isTabAffected, reconcileTabsWithDisk } from "./workspace/reconcile";
 import { widthFromPointerDrag } from "./workspace/resizing";
 import { SearchPalette } from "./workspace/searchPalette";
@@ -2448,18 +2449,21 @@ class BradbitApp {
       const body = document.createElement("div");
       body.className = "workspace-body";
 
-      if (!this.chatVisible && !this.editorVisible) {
-        this.chatVisible = true;
-      }
+      const layout = computeWorkspaceLayout({
+        chatVisible: this.chatVisible,
+        editorVisible: this.editorVisible,
+        sessionWidth: this.sessionWidth,
+      });
+      this.chatVisible = layout.chatVisible;
 
-      if (this.chatVisible) {
-        body.appendChild(this.renderSessionColumn(lang));
-        if (this.editorVisible) {
+      if (layout.chatVisible) {
+        body.appendChild(this.renderSessionColumn(lang, layout));
+        if (layout.showSessionResizer) {
           body.appendChild(this.renderSessionResizer());
         }
       }
 
-      if (this.editorVisible) {
+      if (layout.editorVisible) {
         const workspace = document.createElement("div");
         workspace.className = "workspace-panel";
         if (this.sidebarVisible) {
@@ -3158,11 +3162,14 @@ class BradbitApp {
     return resizer;
   }
 
-  private renderSessionColumn(lang: AppSettings["language"]): HTMLElement {
+  private renderSessionColumn(
+    lang: AppSettings["language"],
+    layout: WorkspaceLayout,
+  ): HTMLElement {
     const column = document.createElement("section");
     column.className = "session-column";
-    column.classList.toggle("full", !this.editorVisible);
-    column.style.width = this.editorVisible ? `${this.sessionWidth}px` : "100%";
+    column.classList.toggle("full", layout.sessionFull);
+    column.style.width = layout.sessionWidth;
     if (this.sessionView === "terminal" && this.folder) {
       const terminal = this.ensureTerminalPanel(lang);
       column.appendChild(terminal.element);
