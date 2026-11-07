@@ -48,7 +48,7 @@ fn clone_repo(remote: &str, dest: &Path) {
 #[test]
 fn status_reports_modified_untracked_and_deleted_files() {
     let (dir, repo) = initialized_repo();
-    fs::write(dir.path().join("a.md"), "uno").unwrap();
+    fs::write(dir.path().join("a.md"), "one").unwrap();
     fs::write(dir.path().join("b.md"), "dos").unwrap();
     repo.stage_all(options()).unwrap();
     repo.commit("inicial", "Test", "test@example.com", options())
@@ -169,7 +169,7 @@ fn head_file_and_discard_handle_tracked_and_new_files() {
 fn save_version_history_and_restore_work_on_a_real_repository() {
     let (dir, _repo) = initialized_repo();
     let root = dir.path().to_str().unwrap();
-    fs::write(dir.path().join("a.md"), "uno").unwrap();
+    fs::write(dir.path().join("a.md"), "one").unwrap();
     fs::write(dir.path().join("b.md"), "dos").unwrap();
     let first =
         super::api::save_version(root, "primera version", "Ana", "ana@example.com").unwrap();
@@ -198,7 +198,7 @@ fn save_version_history_and_restore_work_on_a_real_repository() {
 
     fs::write(dir.path().join("a.md"), "borrador actual").unwrap();
     let restored = super::api::restore_from_commit(root, &history[1].id, "a.md").unwrap();
-    assert_eq!(fs::read_to_string(dir.path().join("a.md")).unwrap(), "uno");
+    assert_eq!(fs::read_to_string(dir.path().join("a.md")).unwrap(), "one");
     assert!(restored.entries.iter().any(|entry| entry.path == "a.md"));
 }
 

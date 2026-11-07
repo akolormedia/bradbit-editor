@@ -673,14 +673,14 @@ mod tests {
     /// A generated long screenplay used to exercise pagination and PDF output.
     fn long_script() -> String {
         (1..=120)
-            .map(|n| format!("INT. ESCENA {n} - DÍA\n\nAcción de la escena {n}.\n\n"))
+            .map(|n| format!("INT. SCENE {n} - DAY\n\nAction in scene {n}.\n\n"))
             .collect()
     }
 
     /// `count` one-line action paragraphs (blank line between each).
     fn paragraphs(count: usize) -> String {
         (1..=count)
-            .map(|n| format!("Acción número {n}."))
+            .map(|n| format!("Action number {n}."))
             .collect::<Vec<_>>()
             .join("\n\n")
     }
@@ -705,31 +705,31 @@ mod tests {
 
     #[test]
     fn scene_heading_never_ends_a_page() {
-        let source = format!("{}\n\nINT. CASA - DÍA\n\nMarta entra.\n", paragraphs(27));
+        let source = format!("{}\n\nINT. HOUSE - DAY\n\nMarta enters.\n", paragraphs(27));
         let layout = layout(&source);
         // 27 paragraphs = 53 lines (one line each, 26 separators).
         assert_eq!(layout.pages[0].lines.len(), 53);
         assert!(layout.pages.len() >= 2);
         let second = page_text(&layout.pages[1]);
-        assert_eq!(second[0], "INT. CASA - DÍA");
+        assert_eq!(second[0], "INT. HOUSE - DAY");
         // The heading is followed by its scene on the same page.
         assert!(second.len() >= 2, "heading alone on a page: {second:?}");
     }
 
     #[test]
     fn character_cue_stays_with_its_first_dialogue_line() {
-        let source = format!("{}\n\nMARTA\nHola, ¿qué tal?\n", paragraphs(27));
+        let source = format!("{}\n\nMARTA\nHello, how are you?\n", paragraphs(27));
         let layout = layout(&source);
         assert_eq!(layout.pages[0].lines.len(), 53);
         let second = page_text(&layout.pages[1]);
         assert_eq!(second[0], "MARTA");
-        assert_eq!(second[1], "Hola, ¿qué tal?");
+        assert_eq!(second[1], "Hello, how are you?");
     }
 
     #[test]
     fn split_dialogue_adds_more_and_a_continued_cue() {
-        let speech = "Esta es una línea de diálogo larga que se envuelve. ".repeat(12);
-        let source = format!("{}\n\nMARTA\n{}\n", paragraphs(20), speech.trim_end());
+        let speech = "This is a long dialogue line that wraps. ".repeat(12);
+        let source = format!("{}\n\nMARTA\n{}\n", paragraphs(25), speech.trim_end());
         let layout = layout(&source);
         assert!(layout.pages.len() >= 2);
         let mut splits = 0;
@@ -760,15 +760,15 @@ mod tests {
     #[test]
     fn explicit_page_break_starts_a_new_page() {
         let layout =
-            layout("INT. A - DÍA\n\nAcción uno.\n\n===\n\nINT. B - NOCHE\n\nAcción dos.\n");
+            layout("INT. A - DAY\n\nAction one.\n\n===\n\nINT. B - NIGHT\n\nAction two.\n");
         assert_eq!(layout.pages.len(), 2);
-        assert_eq!(page_text(&layout.pages[1])[0], "INT. B - NOCHE");
+        assert_eq!(page_text(&layout.pages[1])[0], "INT. B - NIGHT");
     }
 
     #[test]
     fn writer_tools_never_reach_the_page() {
         let layout = layout(
-            "# Sección uno\n= Sinopsis de la escena\n[[una nota privada]]\n/* boneyard */\n\nINT. A - DÍA\n\nAcción.\n",
+            "# Section one\n= Scene synopsis\n[[a private note]]\n/* boneyard */\n\nINT. A - DAY\n\nAction.\n",
         );
         let text = layout
             .pages
@@ -776,24 +776,24 @@ mod tests {
             .flat_map(page_text)
             .collect::<Vec<_>>()
             .join("\n");
-        assert!(!text.contains("Sección"));
-        assert!(!text.contains("Sinopsis"));
-        assert!(!text.contains("nota privada"));
+        assert!(!text.contains("Section"));
+        assert!(!text.contains("Synopsis"));
+        assert!(!text.contains("private note"));
         assert!(!text.contains("boneyard"));
-        assert!(text.contains("INT. A - DÍA"));
+        assert!(text.contains("INT. A - DAY"));
     }
 
     #[test]
     fn element_columns_follow_the_screenplay_conventions() {
         let layout =
-            layout("INT. CASA - DÍA\n\nMarta entra.\n\nMARTA\n(seria)\nHola.\n\n>CORTE A:\n");
+            layout("INT. HOUSE - DAY\n\nMarta enters.\n\nMARTA\n(seria)\nHello.\n\n>CORTE A:\n");
         let lines = &layout.pages[0].lines;
         let find = |text: &str| lines.iter().find(|l| l.text == text).expect(text);
-        assert_eq!(find("INT. CASA - DÍA").indent, 0);
-        assert_eq!(find("Marta entra.").indent, 0);
+        assert_eq!(find("INT. HOUSE - DAY").indent, 0);
+        assert_eq!(find("Marta enters.").indent, 0);
         assert_eq!(find("MARTA").indent, CHARACTER_INDENT);
         assert_eq!(find("(seria)").indent, PARENTHETICAL_INDENT);
-        assert_eq!(find("Hola.").indent, DIALOGUE_INDENT);
+        assert_eq!(find("Hello.").indent, DIALOGUE_INDENT);
         assert_eq!(find("CORTE A:").align, Align::Right);
     }
 
@@ -836,16 +836,16 @@ mod tests {
 
     #[test]
     fn page_numbers_start_after_an_unnumbered_title_page() {
-        let no_title = layout("INT. A - DÍA\n\nAcción.\n");
+        let no_title = layout("INT. A - DAY\n\nAction.\n");
         assert_eq!(no_title.page_numbers(), vec![Some(1)]);
-        let with_title = layout("Title: Demo\n\nINT. A - DÍA\n\nAcción.\n");
+        let with_title = layout("Title: Demo\n\nINT. A - DAY\n\nAction.\n");
         assert_eq!(with_title.title.len(), 1);
         assert_eq!(with_title.page_numbers(), vec![None, Some(2)]);
     }
 
     #[test]
     fn export_uses_a_fallback_title_when_the_source_has_none() {
-        let body = "INT. A - DÍA\n\nAcción.\n";
+        let body = "INT. A - DAY\n\nAction.\n";
         let bytes = export(body, Some("Demo M6"));
         // The fallback title rides on the title page (uppercased).
         assert!(
@@ -859,7 +859,7 @@ mod tests {
 
     #[test]
     fn export_keeps_a_title_page_that_the_source_already_has() {
-        let source = "Title: Guion propio\nAuthor: Alguien\n\nINT. A - DÍA\n\nAcción.\n";
+        let source = "Title: Guion propio\nAuthor: Alguien\n\nINT. A - DAY\n\nAction.\n";
         let expected = write_pdf(&layout(source));
         assert_eq!(export(source, Some("Demo")), expected);
     }

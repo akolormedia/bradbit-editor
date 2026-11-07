@@ -13,7 +13,7 @@ pub fn read_events<R: BufRead>(reader: R, mut on_event: impl FnMut(Value)) -> Re
     let mut data = String::new();
     for line in reader.lines() {
         let line =
-            line.map_err(|error| format!("No se pudo leer el stream de OpenCode: {error}"))?;
+            line.map_err(|error| format!("Could not read the OpenCode stream: {error}"))?;
         if let Some(rest) = line.strip_prefix("data:") {
             if !data.is_empty() {
                 data.push('\n');

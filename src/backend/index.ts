@@ -289,7 +289,7 @@ export const backend = {
       });
     }
     if (!(relPath in activeVirtualFs.files)) {
-      throw new Error(`Archivo no encontrado: ${relPath}`);
+      throw new Error(`File not found: ${relPath}`);
     }
     return activeVirtualFs.files[relPath];
   },
@@ -317,13 +317,13 @@ export const backend = {
     }
     const clean = relPath.replace(/^\/+|\/+$/g, "");
     if (!clean || clean.includes("..")) {
-      throw new Error("Ruta inválida");
+      throw new Error("Invalid path");
     }
     if (isDir) {
       activeVirtualFs.dirs.add(clean);
     } else {
       if (clean in activeVirtualFs.files) {
-        throw new Error(`El archivo ya existe: ${clean}`);
+        throw new Error(`File already exists: ${clean}`);
       }
       const parts = clean.split("/");
       if (parts.length > 1) {
@@ -344,11 +344,11 @@ export const backend = {
     }
     const cleanNew = newRelPath.replace(/^\/+|\/+$/g, "");
     if (!cleanNew || cleanNew.includes("..")) {
-      throw new Error("Ruta inválida");
+      throw new Error("Invalid path");
     }
     if (oldRelPath in activeVirtualFs.files) {
       if (cleanNew in activeVirtualFs.files) {
-        throw new Error("Ya existe un archivo con ese nombre");
+        throw new Error("A file with that name already exists");
       }
       activeVirtualFs.files[cleanNew] = activeVirtualFs.files[oldRelPath];
       delete activeVirtualFs.files[oldRelPath];
@@ -418,7 +418,7 @@ export const backend = {
     content: string,
   ): Promise<string> {
     if (!isTauriEnvironment()) {
-      throw new Error("La exportación a PDF requiere la app de escritorio");
+      throw new Error("PDF export requires the desktop app");
     }
     return tauriInvoke<string>("export_fountain_pdf", {
       root: rootPath,
@@ -493,7 +493,7 @@ export const backend = {
     destination: string,
   ): Promise<CreatedProject> {
     if (!isTauriEnvironment()) {
-      throw new Error("La creación de proyectos requiere la app de escritorio");
+      throw new Error("Project creation requires the desktop app");
     }
     return tauriInvoke<CreatedProject>("create_project_from_template", {
       templateId,
@@ -504,7 +504,7 @@ export const backend = {
 
   async saveCurrentAsTemplate(folderPath: string, name: string): Promise<TemplateInfo> {
     if (!isTauriEnvironment()) {
-      throw new Error("Guardar plantillas requiere la app de escritorio");
+      throw new Error("Saving templates requires the desktop app");
     }
     return tauriInvoke<TemplateInfo>("save_current_as_template", {
       folderPath,
@@ -548,7 +548,7 @@ export const backend = {
 
   async gitInit(rootPath: string): Promise<GitStatus> {
     if (!isTauriEnvironment()) {
-      throw new Error("Git requiere la app de escritorio");
+      throw new Error("Git requires the desktop app");
     }
     return tauriInvoke<GitStatus>("git_init", { root: rootPath });
   },
@@ -560,7 +560,7 @@ export const backend = {
 
   async gitRestoreFile(rootPath: string, relPath: string): Promise<GitStatus> {
     if (!isTauriEnvironment()) {
-      throw new Error("Git requiere la app de escritorio");
+      throw new Error("Git requires the desktop app");
     }
     return tauriInvoke<GitStatus>("git_restore_file", { root: rootPath, relPath });
   },
@@ -578,7 +578,7 @@ export const backend = {
     relPath: string,
   ): Promise<GitDiscardResult> {
     if (!isTauriEnvironment()) {
-      throw new Error("Git requiere la app de escritorio");
+      throw new Error("Git requires the desktop app");
     }
     return tauriInvoke<GitDiscardResult>("git_discard_file", {
       root: rootPath,
@@ -593,7 +593,7 @@ export const backend = {
     authorEmail: string,
   ): Promise<GitStatus> {
     if (!isTauriEnvironment()) {
-      throw new Error("Git requiere la app de escritorio");
+      throw new Error("Git requires the desktop app");
     }
     return tauriInvoke<GitStatus>("git_save_version", {
       root: rootPath,
@@ -625,7 +625,7 @@ export const backend = {
     relPath: string,
   ): Promise<GitStatus> {
     if (!isTauriEnvironment()) {
-      throw new Error("Git requiere la app de escritorio");
+      throw new Error("Git requires the desktop app");
     }
     return tauriInvoke<GitStatus>("git_restore_from_commit", {
       root: rootPath,
@@ -641,14 +641,14 @@ export const backend = {
 
   async gitCreateBranch(rootPath: string, name: string): Promise<GitStatus> {
     if (!isTauriEnvironment()) {
-      throw new Error("Git requiere la app de escritorio");
+      throw new Error("Git requires the desktop app");
     }
     return tauriInvoke<GitStatus>("git_create_branch", { root: rootPath, name });
   },
 
   async gitCheckoutBranch(rootPath: string, name: string): Promise<GitStatus> {
     if (!isTauriEnvironment()) {
-      throw new Error("Git requiere la app de escritorio");
+      throw new Error("Git requires the desktop app");
     }
     return tauriInvoke<GitStatus>("git_checkout_branch", {
       root: rootPath,
@@ -667,7 +667,7 @@ export const backend = {
     url: string,
   ): Promise<GitRemote[]> {
     if (!isTauriEnvironment()) {
-      throw new Error("Git requiere la app de escritorio");
+      throw new Error("Git requires the desktop app");
     }
     return tauriInvoke<GitRemote[]>("git_add_remote", {
       root: rootPath,
@@ -682,7 +682,7 @@ export const backend = {
     branch: string,
   ): Promise<GitStatus> {
     if (!isTauriEnvironment()) {
-      throw new Error("Git requiere la app de escritorio");
+      throw new Error("Git requires the desktop app");
     }
     return tauriInvoke<GitStatus>("git_push", {
       root: rootPath,
@@ -697,7 +697,7 @@ export const backend = {
     branch: string,
   ): Promise<GitStatus> {
     if (!isTauriEnvironment()) {
-      throw new Error("Git requiere la app de escritorio");
+      throw new Error("Git requires the desktop app");
     }
     return tauriInvoke<GitStatus>("git_pull", {
       root: rootPath,
@@ -713,21 +713,21 @@ export const backend = {
 
   async githubSetToken(token: string): Promise<void> {
     if (!isTauriEnvironment()) {
-      throw new Error("GitHub requiere la app de escritorio");
+      throw new Error("GitHub requires the desktop app");
     }
     return tauriInvoke<void>("github_set_token", { token });
   },
 
   async githubClearToken(): Promise<void> {
     if (!isTauriEnvironment()) {
-      throw new Error("GitHub requiere la app de escritorio");
+      throw new Error("GitHub requires the desktop app");
     }
     return tauriInvoke<void>("github_clear_token");
   },
 
   async githubVerifyAccount(): Promise<GitHubUser> {
     if (!isTauriEnvironment()) {
-      throw new Error("GitHub requiere la app de escritorio");
+      throw new Error("GitHub requires the desktop app");
     }
     return tauriInvoke<GitHubUser>("github_verify_account");
   },
@@ -737,7 +737,7 @@ export const backend = {
     repo: string,
   ): Promise<GitHubRepository> {
     if (!isTauriEnvironment()) {
-      throw new Error("GitHub requiere la app de escritorio");
+      throw new Error("GitHub requires the desktop app");
     }
     return tauriInvoke<GitHubRepository>("github_get_repository", {
       owner,
@@ -751,7 +751,7 @@ export const backend = {
     description?: string,
   ): Promise<GitHubRepository> {
     if (!isTauriEnvironment()) {
-      throw new Error("GitHub requiere la app de escritorio");
+      throw new Error("GitHub requires the desktop app");
     }
     return tauriInvoke<GitHubRepository>("github_create_repository", {
       name,
@@ -797,7 +797,7 @@ export const backend = {
     body?: string,
   ): Promise<GitHubPullRequest> {
     if (!isTauriEnvironment()) {
-      throw new Error("GitHub requiere la app de escritorio");
+      throw new Error("GitHub requires the desktop app");
     }
     return tauriInvoke<GitHubPullRequest>("github_create_pull_request", {
       owner,
@@ -811,7 +811,7 @@ export const backend = {
 
   async opencodeStart(rootPath: string): Promise<void> {
     if (!isTauriEnvironment()) {
-      throw new Error("OpenCode requiere la app de escritorio");
+      throw new Error("OpenCode requires the desktop app");
     }
     return tauriInvoke<void>("opencode_start", { root: rootPath });
   },
@@ -823,14 +823,14 @@ export const backend = {
 
   async opencodeSend(sessionId: string, text: string): Promise<void> {
     if (!isTauriEnvironment()) {
-      throw new Error("OpenCode requiere la app de escritorio");
+      throw new Error("OpenCode requires the desktop app");
     }
     return tauriInvoke<void>("opencode_send", { sessionId, text });
   },
 
   async opencodeAbort(sessionId: string): Promise<boolean> {
     if (!isTauriEnvironment()) {
-      throw new Error("OpenCode requiere la app de escritorio");
+      throw new Error("OpenCode requires the desktop app");
     }
     return tauriInvoke<boolean>("opencode_abort", { sessionId });
   },
@@ -842,7 +842,7 @@ export const backend = {
 
   async opencodeCreateSession(title: string): Promise<OpenCodeSession> {
     if (!isTauriEnvironment()) {
-      throw new Error("OpenCode requiere la app de escritorio");
+      throw new Error("OpenCode requires the desktop app");
     }
     return tauriInvoke<OpenCodeSession>("opencode_create_session", { title });
   },
@@ -871,7 +871,7 @@ export const backend = {
     decision: "once" | "always" | "reject",
   ): Promise<void> {
     if (!isTauriEnvironment()) {
-      throw new Error("OpenCode requiere la app de escritorio");
+      throw new Error("OpenCode requires the desktop app");
     }
     return tauriInvoke<void>("opencode_reply_permission", {
       sessionId,
@@ -887,7 +887,7 @@ export const backend = {
 
   async opencodeSwitchAgent(sessionId: string, agent: string): Promise<void> {
     if (!isTauriEnvironment()) {
-      throw new Error("OpenCode requiere la app de escritorio");
+      throw new Error("OpenCode requires the desktop app");
     }
     return tauriInvoke<void>("opencode_switch_agent", { sessionId, agent });
   },
@@ -899,7 +899,7 @@ export const backend = {
     variant?: string,
   ): Promise<void> {
     if (!isTauriEnvironment()) {
-      throw new Error("OpenCode requiere la app de escritorio");
+      throw new Error("OpenCode requires the desktop app");
     }
     return tauriInvoke<void>("opencode_switch_model", {
       sessionId,
@@ -915,7 +915,7 @@ export const backend = {
     text: string,
   ): Promise<void> {
     if (!isTauriEnvironment()) {
-      throw new Error("OpenCode requiere la app de escritorio");
+      throw new Error("OpenCode requires the desktop app");
     }
     return tauriInvoke<void>("opencode_run_command", {
       sessionId,
@@ -937,7 +937,7 @@ export const backend = {
     answer: Record<string, unknown>,
   ): Promise<void> {
     if (!isTauriEnvironment()) {
-      throw new Error("OpenCode requiere la app de escritorio");
+      throw new Error("OpenCode requires the desktop app");
     }
     return tauriInvoke<void>("opencode_reply_form", {
       sessionId,
@@ -965,7 +965,7 @@ export const backend = {
     rows: number,
   ): Promise<PtyStartResult> {
     if (!isTauriEnvironment()) {
-      throw new Error("El terminal requiere la app de escritorio");
+      throw new Error("The terminal requires the desktop app");
     }
     return tauriInvoke<PtyStartResult>("pty_start", {
       root: rootPath,

@@ -57,7 +57,7 @@ fn export_fountain_pdf(
     let output = fountain::export_to_project(&root, &rel_path, &content)?;
     app.opener()
         .open_path(&output, None::<&str>)
-        .map_err(|e| format!("PDF guardado en {} pero no se pudo abrir: {}", output, e))?;
+        .map_err(|e| format!("PDF saved to {} but could not be opened: {}", output, e))?;
     Ok(output)
 }
 

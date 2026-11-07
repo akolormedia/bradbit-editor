@@ -13,7 +13,7 @@ pub use pdf::{export, layout, write_pdf, Layout, Page};
 pub fn export_to_project(root: &str, rel_path: &str, content: &str) -> Result<String, String> {
     let lower = rel_path.to_lowercase();
     if !lower.ends_with(".fountain") && !lower.ends_with(".spmd") {
-        return Err("La exportación a PDF solo está disponible para archivos Fountain".to_string());
+        return Err("PDF export is only available for Fountain files".to_string());
     }
 
     let root_path = fs::canonicalize(root)
@@ -30,7 +30,7 @@ pub fn export_to_project(root: &str, rel_path: &str, content: &str) -> Result<St
     let stem = rel
         .file_stem()
         .and_then(|value| value.to_str())
-        .ok_or_else(|| "Nombre de archivo inválido".to_string())?;
+        .ok_or_else(|| "Invalid file name".to_string())?;
     let parent = rel.parent().filter(|path| !path.as_os_str().is_empty());
     let output_rel = match parent {
         Some(parent) => Path::new("exports")
@@ -41,7 +41,7 @@ pub fn export_to_project(root: &str, rel_path: &str, content: &str) -> Result<St
     let output = fs_ops::resolve_safe_relative(&root_path, &output_rel.to_string_lossy())?;
     if let Some(parent) = output.parent() {
         fs::create_dir_all(parent)
-            .map_err(|e| format!("No se pudo crear la carpeta de exportación: {}", e))?;
+            .map_err(|e| format!("Could not create the export folder: {}", e))?;
     }
 
     let bytes = pdf::export(content, Some(stem));
@@ -63,7 +63,7 @@ mod tests {
     fn exports_pdf_into_exports_and_is_deterministic() {
         let dir = tempdir().unwrap();
         let root = dir.path().to_str().unwrap();
-        let source = "Title: Demo\n\nINT. CASA - DÍA\n\nANA\nHola, mundo.\n";
+        let source = "Title: Demo\n\nINT. HOUSE - DAY\n\nANA\nHola, mundo.\n";
         fs::create_dir_all(dir.path().join("guion")).unwrap();
         fs::write(dir.path().join("guion/acto-1.fountain"), source).unwrap();
 

@@ -42,7 +42,7 @@ fn spawn_mock() -> (String, Arc<Mutex<Vec<Recorded>>>) {
                     "application/json",
                     concat!(
                         r#"{"data":["#,
-                        r#"{"id":"ses_test","title":"Sesión 1","time":{"created":1,"updated":42},"location":{"directory":"/proyecto"}},"#,
+                        r#"{"id":"ses_test","title":"Session 1","time":{"created":1,"updated":42},"location":{"directory":"/proyecto"}},"#,
                         r#"{"id":"ses_other","title":"Otra","time":{"created":1,"updated":2},"location":{"directory":"/otro"}}"#,
                         r#"]}"#,
                     )
@@ -51,7 +51,7 @@ fn spawn_mock() -> (String, Arc<Mutex<Vec<Recorded>>>) {
             } else if request.target == "/api/session" {
                 (
                     "application/json",
-                    r#"{"data":{"id":"ses_test","title":"Sesión 1"}}"#.to_string(),
+                    r#"{"data":{"id":"ses_test","title":"Session 1"}}"#.to_string(),
                 )
             } else if request.target == "/api/session/ses_test/prompt" {
                 (
@@ -190,11 +190,11 @@ fn client_covers_info_models_sessions_prompts_interrupts_and_events() {
 
     let sessions = client.list_sessions().unwrap();
     assert_eq!(sessions.len(), 2);
-    assert_eq!(sessions[0].title, "Sesión 1");
+    assert_eq!(sessions[0].title, "Session 1");
     assert_eq!(sessions[0].updated, Some(42));
     assert_eq!(sessions[0].directory.as_deref(), Some("/proyecto"));
 
-    let session = client.create_session("Sesión 1").unwrap();
+    let session = client.create_session("Session 1").unwrap();
     assert_eq!(session.id, "ses_test");
     client.prompt("ses_test", "hola").unwrap();
     assert!(client.interrupt("ses_test").unwrap());

@@ -64,7 +64,7 @@ pub fn status(root: &str) -> Result<GitStatus, String> {
 pub fn init(root: &str) -> Result<GitStatus, String> {
     let path = Path::new(root);
     if !path.is_dir() {
-        return Err(format!("La ruta '{}' no es una carpeta", root));
+        return Err(format!("The path '{}' is not a folder", root));
     }
     Repository::init(path, OpOptions::default()).map_err(|e| e.to_string())?;
     status(root)
@@ -180,10 +180,10 @@ pub fn save_version(
         return Err("Configura tu nombre de autor en Ajustes para guardar versiones".to_string());
     }
     if !email.contains('@') || email.starts_with('@') || email.ends_with('@') {
-        return Err("Configura un correo de autor válido en Ajustes".to_string());
+        return Err("Configure a valid author email in Settings".to_string());
     }
     if message.trim().is_empty() {
-        return Err("Escribe un resumen para la versión".to_string());
+        return Err("Write a summary for the version".to_string());
     }
     let repo =
         Repository::open(Path::new(root), OpOptions::default()).map_err(|e| e.to_string())?;

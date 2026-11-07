@@ -164,7 +164,7 @@ fn pr_json(number: u64) -> serde_json::Value {
         "number": number,
         "state": "open",
         "merged": false,
-        "title": "Versión del acto 1",
+        "title": "Version of act 1",
         "html_url": format!("https://github.com/o/r/pull/{number}"),
         "head": { "ref": "final-alternativo" },
         "base": { "ref": "main" }
@@ -319,7 +319,7 @@ fn list_pull_requests_sends_state_filter() {
 fn create_pull_request_success() {
     let (base, recorded) = spawn_server(vec![Reply::json(201, pr_json(1))]);
     let input = NewPullRequest {
-        title: "Versión del acto 1".to_string(),
+        title: "Version of act 1".to_string(),
         head: "final-alternativo".to_string(),
         base: "main".to_string(),
         body: Some("Listo para revisar.".to_string()),

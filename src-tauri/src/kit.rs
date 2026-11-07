@@ -145,7 +145,7 @@ fn collect_skills(
         return Ok(());
     }
     let mut entries = fs::read_dir(&directory)
-        .map_err(|error| format!("No se pudo leer {}: {error}", directory.display()))?
+        .map_err(|error| format!("Could not read {}: {error}", directory.display()))?
         .filter_map(Result::ok)
         .collect::<Vec<_>>();
     entries.sort_by_key(|entry| entry.file_name());
@@ -188,7 +188,7 @@ fn markdown_files(directory: &Path) -> Result<Vec<std::path::PathBuf>, String> {
         return Ok(Vec::new());
     }
     let mut files = fs::read_dir(directory)
-        .map_err(|error| format!("No se pudo leer {}: {error}", directory.display()))?
+        .map_err(|error| format!("Could not read {}: {error}", directory.display()))?
         .filter_map(Result::ok)
         .map(|entry| entry.path())
         .filter(|path| {
@@ -309,13 +309,13 @@ mod tests {
         fs::create_dir_all(bradbit.join("agents")).unwrap();
         fs::write(
             bradbit.join("agents/guionista.md"),
-            "---\nname: guionista\ndescription: Versión .bradbit\n---\n",
+            "---\nname: guionista\ndescription: Version .bradbit\n---\n",
         )
         .unwrap();
 
         let catalog = discover(root.to_str().unwrap()).unwrap();
         assert_eq!(catalog.agents.len(), 1);
-        assert_eq!(catalog.agents[0].description, "Versión .bradbit");
+        assert_eq!(catalog.agents[0].description, "Version .bradbit");
         assert_eq!(catalog.commands.len(), 1);
         assert_eq!(catalog.commands[0].agent.as_deref(), Some("guionista"));
         assert_eq!(catalog.skills.len(), 1);

@@ -370,7 +370,7 @@ mod tests {
 
     #[test]
     fn leaves_plain_text_untouched() {
-        let text = "commit 4a9f2c1: fix(intro): ajustar escena\n1 file changed";
+        let text = "commit 4a9f2c1: fix(intro): adjust scene\n1 file changed";
         assert_eq!(redact_secrets(text), text);
     }
 

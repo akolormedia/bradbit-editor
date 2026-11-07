@@ -1,4 +1,6 @@
+import { t } from "../i18n";
 import {
+  Language,
   OpenCodeChatMessage,
   OpenCodeEvent,
   OpenCodeForm,
@@ -604,7 +606,7 @@ function tokensFrom(data: Record<string, unknown>): ChatTokens | null {
   };
 }
 
-function eventError(data: Record<string, unknown>): string {
+function eventError(data: Record<string, unknown>, language: Language): string {
   const error = data.error;
   if (typeof error === "string") return error;
   if (error && typeof error === "object") {
@@ -614,7 +616,7 @@ function eventError(data: Record<string, unknown>): string {
     const type = textOf(record.type);
     if (type) return type;
   }
-  return "OpenCode no pudo completar la respuesta.";
+  return t(language, "chatErrorNoResponse");
 }
 
 /**
@@ -625,6 +627,7 @@ function eventError(data: Record<string, unknown>): string {
 export function applyOpenCodeEvent(
   state: ChatState,
   event: OpenCodeEvent,
+  language: Language = "es",
 ): ChatState {
   const data = dataOf(event);
   const eventSession = textOf(data.sessionID);
@@ -735,7 +738,7 @@ export function applyOpenCodeEvent(
       if (!state.streaming) {
         return { ...state, messages: markAllMessagesIdle(state) };
       }
-      const message = eventError(data);
+      const message = eventError(data, language);
       return {
         ...state,
         streaming: false,
@@ -749,7 +752,7 @@ export function applyOpenCodeEvent(
         ...state,
         status: "error",
         streaming: false,
-        error: textOf(data.message) || "Se perdió la conexión con OpenCode.",
+        error: textOf(data.message) || t(language, "chatErrorConnectionLost"),
         messages: markAllMessagesIdle(state),
       };
 

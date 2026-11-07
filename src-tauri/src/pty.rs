@@ -102,7 +102,7 @@ impl PtyState {
             rows,
         } = options;
         if !Path::new(&root).is_dir() {
-            return Err("La carpeta del proyecto no existe".to_string());
+            return Err("The project folder does not exist".to_string());
         }
         let mut guard = self
             .session
@@ -121,21 +121,21 @@ impl PtyState {
                 pixel_width: 0,
                 pixel_height: 0,
             })
-            .map_err(|error| format!("No se pudo abrir el PTY: {error}"))?;
+            .map_err(|error| format!("Could not open the PTY: {error}"))?;
         let mut child = pair
             .slave
             .spawn_command(builder)
-            .map_err(|error| format!("No se pudo iniciar el terminal: {error}"))?;
+            .map_err(|error| format!("Could not start the terminal: {error}"))?;
         drop(pair.slave);
         let killer = child.clone_killer();
         let mut reader = pair
             .master
             .try_clone_reader()
-            .map_err(|error| format!("No se pudo leer el terminal: {error}"))?;
+            .map_err(|error| format!("Could not read the terminal: {error}"))?;
         let writer = pair
             .master
             .take_writer()
-            .map_err(|error| format!("No se pudo escribir en el terminal: {error}"))?;
+            .map_err(|error| format!("Could not write to the terminal: {error}"))?;
 
         let alive = Arc::new(AtomicBool::new(true));
         let output_alive = Arc::clone(&alive);
@@ -179,15 +179,15 @@ impl PtyState {
             .map_err(|_| "No se pudo bloquear el terminal".to_string())?;
         let session = guard
             .as_mut()
-            .ok_or_else(|| "El terminal no está iniciado".to_string())?;
+            .ok_or_else(|| "The terminal is not started".to_string())?;
         if session.id != id || !session.alive.load(Ordering::Relaxed) {
-            return Err("La sesión del terminal no está activa".to_string());
+            return Err("The terminal session is not active".to_string());
         }
         session
             .writer
             .write_all(data.as_bytes())
             .and_then(|_| session.writer.flush())
-            .map_err(|error| format!("No se pudo escribir en el terminal: {error}"))
+            .map_err(|error| format!("Could not write to the terminal: {error}"))
     }
 
     pub fn resize(&self, id: &str, cols: u16, rows: u16) -> Result<(), String> {
@@ -197,9 +197,9 @@ impl PtyState {
             .map_err(|_| "No se pudo bloquear el terminal".to_string())?;
         let session = guard
             .as_ref()
-            .ok_or_else(|| "El terminal no está iniciado".to_string())?;
+            .ok_or_else(|| "The terminal is not started".to_string())?;
         if session.id != id {
-            return Err("La sesión del terminal no está activa".to_string());
+            return Err("The terminal session is not active".to_string());
         }
         session
             .master
@@ -209,7 +209,7 @@ impl PtyState {
                 pixel_width: 0,
                 pixel_height: 0,
             })
-            .map_err(|error| format!("No se pudo redimensionar el terminal: {error}"))
+            .map_err(|error| format!("Could not resize the terminal: {error}"))
     }
 
     pub fn stop(&self) {
@@ -250,7 +250,7 @@ fn build_command(command: &str, root: &str) -> Result<(String, CommandBuilder), 
         "" | "shell" => ("shell".to_string(), shell.clone(), Vec::new()),
         "opencode" => {
             let binary = crate::opencode::find_binary()
-                .map_err(|error| format!("No se encontró el binario de OpenCode: {error}"))?;
+                .map_err(|error| format!("OpenCode binary not found: {error}"))?;
             (
                 "opencode".to_string(),
                 binary.to_string_lossy().to_string(),

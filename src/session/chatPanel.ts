@@ -1729,7 +1729,7 @@ export class ChatPanel {
       link.href = field.placeholder ?? "#";
       link.target = "_blank";
       link.rel = "noreferrer";
-      link.textContent = field.title || field.placeholder || "Abrir";
+      link.textContent = field.title || field.placeholder || t(lang, "chatFormOpenLink");
       wrapper.appendChild(link);
       return wrapper;
     }

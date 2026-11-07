@@ -326,7 +326,7 @@ mod tests {
 
     #[test]
     fn one_element_per_line_with_line_numbers() {
-        let text = "INT. CASA - DÍA\n\nAcción.\n\nFIN\n";
+        let text = "INT. HOUSE - DAY\n\nAction.\n\nTHE END\n";
         let elements = parse(text);
         assert_eq!(elements.len(), 5);
         assert_eq!(elements[0].line_number, 1);

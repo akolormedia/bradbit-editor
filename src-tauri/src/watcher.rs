@@ -30,7 +30,7 @@ impl WatcherService {
         F: Fn(FsChangeEvent) + Send + 'static,
     {
         let root_path = std::fs::canonicalize(root)
-            .map_err(|e| format!("No se pudo vigilar la carpeta '{}': {}", root, e))?;
+            .map_err(|e| format!("Could not watch folder '{}': {}", root, e))?;
         if !root_path.is_dir() {
             return Err(format!("La ruta '{}' no es una carpeta", root));
         }

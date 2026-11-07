@@ -241,7 +241,7 @@ mod tests {
             "# branch.ab +1 -2\n",
             "1 M. N... 100644 100644 100644 abc def workspace/main.fountain\n",
             "1 .M N... 100644 100644 100644 abc def notes/decisions.md\n",
-            "? notes/nueva.md\n",
+            "? notes/new.md\n",
         );
         let (branch, entries) = parse_status(raw);
         let branch = branch.expect("branch info");

@@ -49,16 +49,16 @@ impl RunningServer {
             .stdout(Stdio::piped())
             .stderr(Stdio::piped())
             .spawn()
-            .map_err(|error| format!("No se pudo iniciar OpenCode: {error}"))?;
+            .map_err(|error| format!("Could not start OpenCode: {error}"))?;
 
         let stdout = child
             .stdout
             .take()
-            .ok_or_else(|| "OpenCode no abrió stdout".to_string())?;
+            .ok_or_else(|| "OpenCode did not open stdout".to_string())?;
         let stderr = child
             .stderr
             .take()
-            .ok_or_else(|| "OpenCode no abrió stderr".to_string())?;
+            .ok_or_else(|| "OpenCode did not open stderr".to_string())?;
         let logs = Arc::new(Mutex::new(VecDeque::new()));
         let (tx, rx) = mpsc::channel();
         spawn_log_reader(stdout, tx.clone(), Arc::clone(&logs));
@@ -70,7 +70,7 @@ impl RunningServer {
                 let _ = child.kill();
                 let _ = child.wait();
                 return Err(start_error(
-                    "OpenCode no anunció su contraseña de sesión",
+                    "OpenCode did not announce its session password",
                     &logs,
                 ));
             }
@@ -184,7 +184,7 @@ fn wait_until_ready(
             Ok(_) => return Ok(()),
             Err(error) if Instant::now() >= deadline => {
                 return Err(start_error(
-                    &format!("OpenCode no respondió: {error}"),
+                    &format!("OpenCode did not respond: {error}"),
                     logs,
                 ));
             }
@@ -199,7 +199,7 @@ fn start_error(message: &str, logs: &Arc<Mutex<VecDeque<String>>>) -> String {
         .ok()
         .map(|logs| logs.iter().cloned().collect::<Vec<_>>().join(" · "))
         .filter(|details| !details.is_empty())
-        .unwrap_or_else(|| "sin salida de diagnóstico".to_string());
+        .unwrap_or_else(|| "no diagnostic output".to_string());
     format!("{message}. {details}")
 }
 
@@ -244,7 +244,7 @@ pub fn find_binary() -> Result<PathBuf, String> {
         }
     }
     Err(
-        "OpenCode no está instalado o no se encontró su ejecutable. Instálalo desde https://opencode.ai y vuelve a intentar."
+        "OpenCode is not installed or its executable was not found. Install it from https://opencode.ai and try again."
             .to_string(),
     )
 }

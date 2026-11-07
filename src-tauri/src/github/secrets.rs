@@ -32,11 +32,11 @@ impl fmt::Display for SecretError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             SecretError::AccessDenied { detail } => {
-                write!(f, "no se pudo acceder al almacén de secretos: {detail}")
+                write!(f, "could not access the secret store: {detail}")
             }
-            SecretError::InvalidInput { detail } => write!(f, "entrada inválida: {detail}"),
+            SecretError::InvalidInput { detail } => write!(f, "invalid input: {detail}"),
             SecretError::Other { detail } => {
-                write!(f, "error del almacén de secretos: {detail}")
+                write!(f, "secret store error: {detail}")
             }
         }
     }
@@ -321,7 +321,7 @@ pub fn validate_github_token(token: &str) -> Result<(), SecretError> {
     let token = token.trim();
     if token.is_empty() {
         return Err(SecretError::InvalidInput {
-            detail: "el token de GitHub no puede estar vacío".to_string(),
+            detail: "the GitHub token cannot be empty".to_string(),
         });
     }
     if token
@@ -329,7 +329,7 @@ pub fn validate_github_token(token: &str) -> Result<(), SecretError> {
         .any(|character| character.is_whitespace() || character.is_control())
     {
         return Err(SecretError::InvalidInput {
-            detail: "el token de GitHub contiene caracteres inválidos".to_string(),
+            detail: "the GitHub token contains invalid characters".to_string(),
         });
     }
     Ok(())

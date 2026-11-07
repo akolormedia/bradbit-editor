@@ -59,7 +59,7 @@ impl OpenCodeState {
         let _start_guard = self
             .start_lock
             .lock()
-            .map_err(|_| "No se pudo bloquear el inicio de OpenCode".to_string())?;
+            .map_err(|_| "Could not lock OpenCode startup".to_string())?;
         let mut server = self
             .server
             .lock()
@@ -91,7 +91,7 @@ impl OpenCodeState {
             .map_err(|_| "No se pudo bloquear el estado de OpenCode".to_string())?;
         let server = server
             .as_ref()
-            .ok_or_else(|| "OpenCode no está iniciado".to_string())?;
+            .ok_or_else(|| "OpenCode is not running".to_string())?;
         server.client().prompt(session_id, text)
     }
 
@@ -102,7 +102,7 @@ impl OpenCodeState {
             .map_err(|_| "No se pudo bloquear el estado de OpenCode".to_string())?;
         let server = server
             .as_ref()
-            .ok_or_else(|| "OpenCode no está iniciado".to_string())?;
+            .ok_or_else(|| "OpenCode is not running".to_string())?;
         server.client().interrupt(session_id)
     }
 
@@ -113,7 +113,7 @@ impl OpenCodeState {
             .map_err(|_| "No se pudo bloquear el estado de OpenCode".to_string())?;
         let server = server
             .as_ref()
-            .ok_or_else(|| "OpenCode no está iniciado".to_string())?;
+            .ok_or_else(|| "OpenCode is not running".to_string())?;
         let root = server.root.clone();
         let sessions = server.client().list_sessions()?;
         Ok(sessions
@@ -135,7 +135,7 @@ impl OpenCodeState {
             .map_err(|_| "No se pudo bloquear el estado de OpenCode".to_string())?;
         let server = server
             .as_ref()
-            .ok_or_else(|| "OpenCode no está iniciado".to_string())?;
+            .ok_or_else(|| "OpenCode is not running".to_string())?;
         server.client().create_session(title)
     }
 
@@ -146,7 +146,7 @@ impl OpenCodeState {
             .map_err(|_| "No se pudo bloquear el estado de OpenCode".to_string())?;
         let server = server
             .as_ref()
-            .ok_or_else(|| "OpenCode no está iniciado".to_string())?;
+            .ok_or_else(|| "OpenCode is not running".to_string())?;
         server.client().session_messages(session_id)
     }
 
@@ -157,7 +157,7 @@ impl OpenCodeState {
             .map_err(|_| "No se pudo bloquear el estado de OpenCode".to_string())?;
         let server = server
             .as_ref()
-            .ok_or_else(|| "OpenCode no está iniciado".to_string())?;
+            .ok_or_else(|| "OpenCode is not running".to_string())?;
         server.client().pending_permissions(session_id)
     }
 
@@ -173,7 +173,7 @@ impl OpenCodeState {
             .map_err(|_| "No se pudo bloquear el estado de OpenCode".to_string())?;
         let server = server
             .as_ref()
-            .ok_or_else(|| "OpenCode no está iniciado".to_string())?;
+            .ok_or_else(|| "OpenCode is not running".to_string())?;
         server
             .client()
             .reply_permission(session_id, request_id, decision)
@@ -186,7 +186,7 @@ impl OpenCodeState {
             .map_err(|_| "No se pudo bloquear el estado de OpenCode".to_string())?;
         let server = server
             .as_ref()
-            .ok_or_else(|| "OpenCode no está iniciado".to_string())?;
+            .ok_or_else(|| "OpenCode is not running".to_string())?;
         server.client().pending_forms(session_id)
     }
 
@@ -202,7 +202,7 @@ impl OpenCodeState {
             .map_err(|_| "No se pudo bloquear el estado de OpenCode".to_string())?;
         let server = server
             .as_ref()
-            .ok_or_else(|| "OpenCode no está iniciado".to_string())?;
+            .ok_or_else(|| "OpenCode is not running".to_string())?;
         server.client().reply_form(session_id, form_id, answer)
     }
 
@@ -213,7 +213,7 @@ impl OpenCodeState {
             .map_err(|_| "No se pudo bloquear el estado de OpenCode".to_string())?;
         let server = server
             .as_ref()
-            .ok_or_else(|| "OpenCode no está iniciado".to_string())?;
+            .ok_or_else(|| "OpenCode is not running".to_string())?;
         server.client().model_catalog()
     }
 
@@ -224,7 +224,7 @@ impl OpenCodeState {
             .map_err(|_| "No se pudo bloquear el estado de OpenCode".to_string())?;
         let server = server
             .as_ref()
-            .ok_or_else(|| "OpenCode no está iniciado".to_string())?;
+            .ok_or_else(|| "OpenCode is not running".to_string())?;
         server.client().switch_agent(session_id, agent)
     }
 
@@ -241,7 +241,7 @@ impl OpenCodeState {
             .map_err(|_| "No se pudo bloquear el estado de OpenCode".to_string())?;
         let server = server
             .as_ref()
-            .ok_or_else(|| "OpenCode no está iniciado".to_string())?;
+            .ok_or_else(|| "OpenCode is not running".to_string())?;
         server
             .client()
             .switch_model(session_id, provider_id, model_id, variant)
@@ -254,7 +254,7 @@ impl OpenCodeState {
             .map_err(|_| "No se pudo bloquear el estado de OpenCode".to_string())?;
         let server = server
             .as_ref()
-            .ok_or_else(|| "OpenCode no está iniciado".to_string())?;
+            .ok_or_else(|| "OpenCode is not running".to_string())?;
         server.client().run_command(session_id, name, text)
     }
 

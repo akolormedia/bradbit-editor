@@ -42,9 +42,9 @@ pub fn search_in_folder(
         return Ok(Vec::new());
     }
     let root = fs::canonicalize(root)
-        .map_err(|e| format!("No se pudo abrir la carpeta '{}': {}", root, e))?;
+        .map_err(|e| format!("Could not open folder '{}': {}", root, e))?;
     if !root.is_dir() {
-        return Err(format!("La ruta '{}' no es una carpeta", root.display()));
+        return Err(format!("The path '{}' is not a folder", root.display()));
     }
 
     let needle = needle.to_lowercase();
@@ -189,7 +189,7 @@ mod tests {
         .unwrap();
         fs::write(
             dir.path().join("guion/acto-1.fountain"),
-            "INT. CASA - DÍA\n\nANA\nHola, Ana.\n",
+            "INT. HOUSE - DAY\n\nANA\nHola, Ana.\n",
         )
         .unwrap();
 
@@ -273,6 +273,6 @@ mod tests {
     #[test]
     fn reports_a_clear_error_for_an_invalid_root() {
         let error = search_in_folder("/ruta/que/no/existe", "texto", 10, false).unwrap_err();
-        assert!(error.contains("No se pudo abrir la carpeta"));
+        assert!(error.contains("Could not open folder"));
     }
 }

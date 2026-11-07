@@ -39,7 +39,7 @@ pub fn is_config_entry(name: &str) -> bool {
 fn canonical_root(root: &str) -> Result<PathBuf, String> {
     let path = Path::new(root);
     let canon = fs::canonicalize(path)
-        .map_err(|e| format!("No se pudo abrir la carpeta '{}': {}", root, e))?;
+        .map_err(|e| format!("Could not open folder '{}': {}", root, e))?;
     if !canon.is_dir() {
         return Err(format!("La ruta '{}' no es una carpeta", root));
     }
@@ -54,7 +54,7 @@ pub fn resolve_safe_relative(root: &Path, rel_path: &str) -> Result<PathBuf, Str
     }
     let trimmed = trimmed.trim_matches('/');
     if trimmed.is_empty() {
-        return Err("La ruta relativa no puede estar vacía".to_string());
+        return Err("The relative path cannot be empty".to_string());
     }
     let rel = Path::new(trimmed);
     for comp in rel.components() {
@@ -65,7 +65,7 @@ pub fn resolve_safe_relative(root: &Path, rel_path: &str) -> Result<PathBuf, Str
                     return Err(format!("Ruta reservada no permitida: {}", s));
                 }
             }
-            _ => return Err("Ruta relativa inválida (contiene '..' o prefijos)".to_string()),
+            _ => return Err("Invalid relative path (contains '..' or prefixes)".to_string()),
         }
     }
     Ok(root.join(rel))
@@ -170,19 +170,19 @@ pub fn read_text_file(root: &str, rel_path: &str) -> Result<String, String> {
     let meta = fs::symlink_metadata(&target)
         .map_err(|e| format!("No se pudo leer '{}': {}", rel_path, e))?;
     if meta.file_type().is_symlink() {
-        return Err("No se permiten enlaces simbólicos".to_string());
+        return Err("Symbolic links are not allowed".to_string());
     }
     if !meta.is_file() {
         return Err(format!("'{}' no es un archivo regular", rel_path));
     }
     if meta.len() > MAX_FILE_BYTES {
         return Err(format!(
-            "El archivo '{}' excede el límite de 10 MB",
+            "The file '{}' exceeds the 10 MB limit",
             rel_path
         ));
     }
     fs::read_to_string(&target)
-        .map_err(|e| format!("El archivo '{}' no es texto UTF-8 válido: {}", rel_path, e))
+        .map_err(|e| format!("The file '{}' is not valid UTF-8 text: {}", rel_path, e))
 }
 
 /// Writes a text file atomically via a temporary sibling file.
@@ -191,7 +191,7 @@ pub fn write_text_file(root: &str, rel_path: &str, content: &str) -> Result<(), 
     let target = resolve_safe_relative(&canon_root, rel_path)?;
     if let Ok(meta) = fs::symlink_metadata(&target) {
         if meta.file_type().is_symlink() {
-            return Err("No se puede escribir sobre un enlace simbólico".to_string());
+            return Err("Cannot write over a symbolic link".to_string());
         }
     }
     let parent = target
@@ -202,7 +202,7 @@ pub fn write_text_file(root: &str, rel_path: &str, content: &str) -> Result<(), 
 
     let file_name = target
         .file_name()
-        .ok_or_else(|| "Nombre de archivo inválido".to_string())?
+        .ok_or_else(|| "Invalid file name".to_string())?
         .to_string_lossy();
     let tmp_path = parent.join(format!(".{}.bradbit-tmp", file_name));
 
@@ -323,14 +323,14 @@ mod tests {
         create_entry(root, "guion/escena-1.fountain", false).unwrap();
         assert!(create_entry(root, "guion/escena-1.fountain", false).is_err());
 
-        write_text_file(root, "guion/escena-1.fountain", "INT. OFICINA - DÍA\n").unwrap();
+        write_text_file(root, "guion/escena-1.fountain", "INT. OFFICE - DAY\n").unwrap();
         let text = read_text_file(root, "guion/escena-1.fountain").unwrap();
-        assert_eq!(text, "INT. OFICINA - DÍA\n");
+        assert_eq!(text, "INT. OFFICE - DAY\n");
 
         rename_entry(root, "guion/escena-1.fountain", "guion/acto-1.fountain").unwrap();
         assert_eq!(
             read_text_file(root, "guion/acto-1.fountain").unwrap(),
-            "INT. OFICINA - DÍA\n"
+            "INT. OFFICE - DAY\n"
         );
 
         delete_entry(root, "guion/acto-1.fountain").unwrap();

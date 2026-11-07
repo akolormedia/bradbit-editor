@@ -576,7 +576,7 @@ mod tests {
                 "cache": { "read": 7, "write": 1 }
             },
             "content": [
-                { "type": "reasoning", "text": "pensando" },
+                { "type": "reasoning", "text": "thinking" },
                 { "type": "text", "text": "Voy a leerlo." },
                 {
                     "type": "tool",

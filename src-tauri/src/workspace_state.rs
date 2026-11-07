@@ -105,7 +105,7 @@ fn load_from(path: &Path, root: &str) -> Result<ProjectWorkspaceState, String> {
             return Ok(ProjectWorkspaceState::default());
         }
         Err(error) => {
-            return Err(format!("No se pudo leer el estado del workspace: {error}"));
+            return Err(format!("Could not read the workspace state: {error}"));
         }
     };
     let file: WorkspaceStateFile = serde_json::from_str(&raw).unwrap_or_default();

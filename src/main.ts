@@ -234,7 +234,7 @@ class BradbitApp {
   private menuQueue = new MenuSyncQueue<MenuUiState>(
     () => this.currentMenuState(),
     (state) => backend.refreshMenu(state),
-    (err) => console.error("No se pudo actualizar el menú nativo", err),
+    (err) => console.error("Could not update the native menu", err),
   );
 
   private rootEl: HTMLElement;
@@ -259,14 +259,14 @@ class BradbitApp {
         void this.executeMenuCommand(command);
       });
     } catch (err) {
-      console.error("No se pudo conectar el menú nativo", err);
+      console.error("Could not connect the native menu", err);
     }
     try {
       await backend.listenFsChanges((event) => {
         void this.handleFsChange(event);
       });
     } catch (err) {
-      console.error("No se pudo escuchar los cambios de archivos", err);
+      console.error("Could not listen for file changes", err);
     }
     this.applyThemeAttribute();
     this.render();
@@ -294,7 +294,7 @@ class BradbitApp {
   private closeFolder(): void {
     if (!this.folder) return;
     void backend.stopWatching().catch((err) => {
-      console.error("No se pudo detener el watcher", err);
+      console.error("Could not stop the file watcher", err);
     });
     void this.stopChatSession();
     this.stopTerminalSession();
@@ -334,7 +334,7 @@ class BradbitApp {
         this.workspaceState = await backend.loadWorkspaceState(opened.rootPath);
         this.applyWorkspaceLayout(this.workspaceState.layout);
       } catch (err) {
-        console.error("No se pudo cargar el estado del workspace", err);
+        console.error("Could not load the workspace state", err);
         this.workspaceState = {
           openSessionIds: [],
           activeSessionId: null,
@@ -367,7 +367,7 @@ class BradbitApp {
       try {
         await backend.startWatching(opened.rootPath);
       } catch (err) {
-        console.error("No se pudo iniciar el watcher", err);
+        console.error("Could not start the file watcher", err);
         this.statusNotice = err instanceof Error ? err.message : String(err);
       }
       await this.refreshKitCatalog();
@@ -402,7 +402,7 @@ class BradbitApp {
     try {
       this.gitStatus = await backend.gitStatus(this.folder.rootPath);
     } catch (err) {
-      console.error("No se pudo leer el estado de Git", err);
+      console.error("Could not read the Git status", err);
       this.gitStatus = null;
     }
   }
@@ -1160,7 +1160,7 @@ class BradbitApp {
     this.workspaceState = state;
     void backend
       .saveWorkspaceState(this.folder.rootPath, state)
-      .catch((err) => console.error("No se pudo guardar el estado del workspace", err));
+      .catch((err) => console.error("Could not save the workspace state", err));
   }
 
   private applyWorkspaceLayout(layout: ProjectWorkspaceState["layout"]): void {
@@ -1212,7 +1212,7 @@ class BradbitApp {
       try {
         this.chatModels = await backend.opencodeListModels();
       } catch (err) {
-        console.error("No se pudieron listar los modelos de OpenCode", err);
+        console.error("Could not list the OpenCode models", err);
         this.chatModels = [];
       }
 
@@ -1296,7 +1296,7 @@ class BradbitApp {
       try {
         await backend.opencodeStop();
       } catch (err) {
-        console.error("No se pudo detener OpenCode", err);
+        console.error("Could not stop OpenCode", err);
       }
     }
     this.chatSessions.clear();
@@ -1488,7 +1488,7 @@ class BradbitApp {
             recentModels,
           });
         } catch (err) {
-          console.error("No se pudieron guardar los modelos recientes", err);
+          console.error("Could not save the recent models", err);
         }
       }
       this.updateChatPanel();
@@ -1664,7 +1664,7 @@ class BradbitApp {
     this.sessionView = "chat";
     if (isTauriEnvironment()) {
       void backend.ptyStop().catch((error) => {
-        console.error("No se pudo detener el terminal", error);
+        console.error("Could not stop the terminal", error);
       });
     }
   }
@@ -1817,7 +1817,7 @@ class BradbitApp {
     const currentModal = this.modal;
     const rawValue = currentModal.value.trim().replace(/^\/+|\/+$/g, "");
     if (!rawValue || rawValue.includes("..")) {
-      this.modal = { ...currentModal, error: "Nombre o ruta inválida" };
+      this.modal = { ...currentModal, error: t(this.settings.language, "entryNameInvalid") };
       this.render();
       return;
     }
@@ -2023,7 +2023,7 @@ class BradbitApp {
       };
       this.render();
     } catch (err) {
-      console.error("No se pudo cargar la versión guardada", err);
+      console.error("Could not load the saved version", err);
       this.tabState = setTabViewMode(this.tabState, tab.path, "edit");
       this.render();
     } finally {
@@ -2108,7 +2108,7 @@ class BradbitApp {
     try {
       this.kitCatalog = await backend.discoverKit(this.folder.rootPath);
     } catch (err) {
-      console.error("No se pudo descubrir el kit del proyecto", err);
+      console.error("Could not discover the project kit", err);
       this.kitCatalog = { agents: [], commands: [], skills: [] };
     }
   }
@@ -2132,7 +2132,7 @@ class BradbitApp {
     try {
       await this.refreshTree();
     } catch (err) {
-      console.error("No se pudo actualizar el árbol de archivos", err);
+      console.error("Could not update the file tree", err);
     }
 
     if (
@@ -3549,7 +3549,7 @@ class BradbitApp {
     event.preventDefault();
     if (/^(https?:|mailto:)/i.test(href)) {
       void backend.openExternalUrl(href).catch((err) => {
-        console.error("No se pudo abrir el enlace", err);
+        console.error("Could not open the link", err);
         this.showStatusNotice(t(this.settings.language, "linkOpenError"));
       });
       return;

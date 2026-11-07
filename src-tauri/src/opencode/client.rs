@@ -61,7 +61,7 @@ impl OpenCodeClient {
         Ok(payload
             .get("version")
             .and_then(Value::as_str)
-            .unwrap_or("desconocida")
+            .unwrap_or("unknown")
             .to_string())
     }
 
@@ -71,7 +71,7 @@ impl OpenCodeClient {
             .get("data")
             .and_then(Value::as_array)
             .cloned()
-            .ok_or_else(|| "OpenCode no devolvió una lista de modelos".to_string())
+            .ok_or_else(|| "OpenCode did not return a model list".to_string())
     }
 
     pub fn list_sessions(&self) -> Result<Vec<OpenCodeSession>, String> {
@@ -79,7 +79,7 @@ impl OpenCodeClient {
         let data = payload
             .get("data")
             .and_then(Value::as_array)
-            .ok_or_else(|| "OpenCode no devolvió una lista de sesiones".to_string())?;
+            .ok_or_else(|| "OpenCode did not return a session list".to_string())?;
         Ok(data.iter().filter_map(parse_session).collect())
     }
 
@@ -87,8 +87,8 @@ impl OpenCodeClient {
         let payload = self.post("/api/session", &json!({ "title": title }))?;
         let data = payload
             .get("data")
-            .ok_or_else(|| "OpenCode no devolvió la sesión creada".to_string())?;
-        parse_session(data).ok_or_else(|| "OpenCode devolvió una sesión inválida".to_string())
+            .ok_or_else(|| "OpenCode did not return the created session".to_string())?;
+        parse_session(data).ok_or_else(|| "OpenCode returned an invalid session".to_string())
     }
 
     pub fn session_messages(&self, session_id: &str) -> Result<Vec<OpenCodeChatMessage>, String> {
@@ -99,7 +99,7 @@ impl OpenCodeClient {
         let data = payload
             .get("data")
             .and_then(Value::as_array)
-            .ok_or_else(|| "OpenCode no devolvió los mensajes de la sesión".to_string())?;
+            .ok_or_else(|| "OpenCode did not return the session messages".to_string())?;
         Ok(data.iter().filter_map(parse_chat_message).collect())
     }
 
@@ -109,7 +109,7 @@ impl OpenCodeClient {
         let data = payload
             .get("data")
             .and_then(Value::as_array)
-            .ok_or_else(|| "OpenCode no devolvió los permisos pendientes".to_string())?;
+            .ok_or_else(|| "OpenCode did not return pending permissions".to_string())?;
         Ok(data.iter().filter_map(parse_permission).collect())
     }
 
@@ -121,14 +121,14 @@ impl OpenCodeClient {
     ) -> Result<(), String> {
         validate_session_id(session_id)?;
         if !matches!(decision, "once" | "always" | "reject") {
-            return Err("Decisión de permiso inválida".to_string());
+            return Err("Invalid permission decision".to_string());
         }
         if !request_id.starts_with("per_")
             || !request_id
                 .chars()
                 .all(|character| character.is_ascii_alphanumeric() || character == '_')
         {
-            return Err("ID de permiso inválido".to_string());
+            return Err("Invalid permission ID".to_string());
         }
         self.post(
             &format!("/api/session/{session_id}/permission/{request_id}/reply"),
@@ -143,7 +143,7 @@ impl OpenCodeClient {
         let data = payload
             .get("data")
             .and_then(Value::as_array)
-            .ok_or_else(|| "OpenCode no devolvió los formularios pendientes".to_string())?;
+            .ok_or_else(|| "OpenCode did not return pending forms".to_string())?;
         Ok(data.iter().filter_map(parse_form).collect())
     }
 
@@ -152,7 +152,7 @@ impl OpenCodeClient {
         let data = payload
             .get("data")
             .and_then(Value::as_array)
-            .ok_or_else(|| "OpenCode no devolvió una lista de modelos".to_string())?;
+            .ok_or_else(|| "OpenCode did not return a model list".to_string())?;
         let mut models = std::collections::BTreeMap::new();
         for item in data {
             let kind = item.get("type").and_then(Value::as_str).unwrap_or("chat");
@@ -257,7 +257,7 @@ impl OpenCodeClient {
                 .chars()
                 .all(|character| character.is_ascii_alphanumeric() || character == '_')
         {
-            return Err("ID de formulario inválido".to_string());
+            return Err("Invalid form ID".to_string());
         }
         if !answer.is_object() {
             return Err("La respuesta del formulario debe ser un objeto".to_string());
@@ -272,7 +272,7 @@ impl OpenCodeClient {
     pub fn prompt(&self, session_id: &str, text: &str) -> Result<(), String> {
         validate_session_id(session_id)?;
         if text.trim().is_empty() {
-            return Err("El mensaje no puede estar vacío".to_string());
+            return Err("The message cannot be empty".to_string());
         }
         self.post(
             &format!("/api/session/{session_id}/prompt"),
@@ -311,7 +311,7 @@ impl OpenCodeClient {
             })?;
         let status = response.status().as_u16();
         if !(200..300).contains(&status) {
-            return Err(format!("OpenCode rechazó el stream (HTTP {status})"));
+            return Err(format!("OpenCode rejected the stream (HTTP {status})"));
         }
         let (_, body) = response.into_parts();
         read_events(BufReader::new(body.into_reader()), &mut on_event)
@@ -356,7 +356,7 @@ impl OpenCodeClient {
             return Ok(Value::Null);
         }
         serde_json::from_str(&body)
-            .map_err(|error| format!("OpenCode devolvió JSON inválido: {error}"))
+            .map_err(|error| format!("OpenCode returned invalid JSON: {error}"))
     }
 
     fn transport_error(&self, error: ureq::Error) -> String {
@@ -391,7 +391,7 @@ fn api_error(status: u16, body: &str) -> String {
         })
         .unwrap_or_else(|| "sin detalles".to_string());
     format!(
-        "OpenCode respondió HTTP {status}: {}",
+        "OpenCode responded HTTP {status}: {}",
         redact_secrets(&message)
     )
 }
@@ -419,7 +419,7 @@ fn parse_session(value: &Value) -> Option<OpenCodeSession> {
         title: value
             .get("title")
             .and_then(Value::as_str)
-            .unwrap_or("Sesión")
+            .unwrap_or("Session")
             .to_string(),
         updated: value.pointer("/time/updated").and_then(Value::as_i64),
         directory: value
@@ -442,7 +442,7 @@ fn validate_agent_id(agent: &str) -> Result<(), String> {
     {
         Ok(())
     } else {
-        Err("ID de agente de OpenCode inválido".to_string())
+        Err("Invalid OpenCode agent ID".to_string())
     }
 }
 
@@ -454,7 +454,7 @@ fn validate_model_part(value: &str) -> Result<(), String> {
     {
         Ok(())
     } else {
-        Err("Identificador de modelo inválido".to_string())
+        Err("Invalid model ID".to_string())
     }
 }
 
@@ -466,7 +466,7 @@ fn validate_command_name(name: &str) -> Result<(), String> {
     {
         Ok(())
     } else {
-        Err("Nombre de comando inválido".to_string())
+        Err("Invalid command name".to_string())
     }
 }
 
@@ -478,7 +478,7 @@ fn validate_session_id(session_id: &str) -> Result<(), String> {
     {
         Ok(())
     } else {
-        Err("ID de sesión de OpenCode inválido".to_string())
+        Err("Invalid OpenCode session ID".to_string())
     }
 }
 

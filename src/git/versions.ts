@@ -133,7 +133,7 @@ export function defaultVersionMessage(
   date: Date = new Date(),
 ): string {
   const formatted = formatVersionDate(date.toISOString(), language);
-  return language === "es" ? `Versión del ${formatted}` : `Version of ${formatted}`;
+  return t(language, "versionsDefaultMessage", { date: formatted });
 }
 
 export function isValidGitAuthor(name: string, email: string): boolean {

@@ -35,14 +35,14 @@ impl fmt::Display for GitHubError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             GitHubError::Unauthorized { detail } => {
-                write!(f, "GitHub rechazó el token: {detail}")
+                write!(f, "GitHub rejected the token: {detail}")
             }
-            GitHubError::Forbidden { detail } => write!(f, "GitHub denegó el permiso: {detail}"),
+            GitHubError::Forbidden { detail } => write!(f, "GitHub denied permission: {detail}"),
             GitHubError::NotFound { detail } => {
-                write!(f, "GitHub no encontró el recurso: {detail}")
+                write!(f, "GitHub resource not found: {detail}")
             }
             GitHubError::Validation { detail } => {
-                write!(f, "GitHub rechazó la solicitud: {detail}")
+                write!(f, "GitHub rejected the request: {detail}")
             }
             GitHubError::RateLimited {
                 detail,
@@ -50,9 +50,9 @@ impl fmt::Display for GitHubError {
             } => match retry_after {
                 Some(after) => write!(
                     f,
-                    "límite de GitHub alcanzado: {detail} (reintenta en {after:?})"
+                    "GitHub rate limit reached: {detail} (retry in {after:?})"
                 ),
-                None => write!(f, "límite de GitHub alcanzado: {detail}"),
+                None => write!(f, "GitHub rate limit reached: {detail}"),
             },
             GitHubError::Conflict { detail } => write!(f, "conflicto en GitHub: {detail}"),
             GitHubError::Server { status, detail } => {

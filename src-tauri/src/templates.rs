@@ -7,9 +7,9 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 static BUILTIN_TEMPLATES: Dir<'_> = include_dir!("$CARGO_MANIFEST_DIR/resources/templates");
 
-const GUIONISTA_ID: &str = "guionista-kit";
+const SCREENWRITER_KIT_ID: &str = "guionista-kit";
 const BLANK_ID: &str = "blank";
-const RESERVED_TEMPLATE_NAMES: &[&str] = &[GUIONISTA_ID, BLANK_ID];
+const RESERVED_TEMPLATE_NAMES: &[&str] = &[SCREENWRITER_KIT_ID, BLANK_ID];
 const SKIPPED_NAMES: &[&str] = &[".git", ".DS_Store", "node_modules", "target", "exports"];
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -48,9 +48,9 @@ pub fn list_templates() -> Result<Vec<TemplateInfo>, String> {
 pub fn list_templates_in(user_dir: &Path) -> Result<Vec<TemplateInfo>, String> {
     let mut templates = vec![
         TemplateInfo {
-            id: GUIONISTA_ID.to_string(),
+            id: SCREENWRITER_KIT_ID.to_string(),
             name: "Guion Audiovisual (guionista-kit)".to_string(),
-            description: "Biblia, estructura, guion, investigación y agentes de guionista-kit."
+            description: "Bible, structure, script, research and guionista-kit agents."
                 .to_string(),
             source: "bundled".to_string(),
             path: None,
@@ -129,9 +129,9 @@ pub fn create_project_from_template_in(
                 fs::create_dir_all(&temp)
                     .map_err(|e| format!("No se pudo crear el proyecto: {}", e))?;
             }
-            GUIONISTA_ID => {
-                let template = BUILTIN_TEMPLATES.get_dir(GUIONISTA_ID).ok_or_else(|| {
-                    "La plantilla guionista-kit no está disponible en esta compilación".to_string()
+            SCREENWRITER_KIT_ID => {
+                let template = BUILTIN_TEMPLATES.get_dir(SCREENWRITER_KIT_ID).ok_or_else(|| {
+                    "The guionista-kit template is not available in this build".to_string()
                 })?;
                 copy_embedded_dir(template, &temp)?;
             }
@@ -139,9 +139,9 @@ pub fn create_project_from_template_in(
                 let template = list_templates_in(user_dir)?
                     .into_iter()
                     .find(|template| template.id == other && template.source == "user")
-                    .ok_or_else(|| format!("No se encontró la plantilla '{}'", other))?;
+                    .ok_or_else(|| format!("Template '{}' not found", other))?;
                 let source = template.path.ok_or_else(|| {
-                    "La plantilla de usuario no tiene una ruta válida".to_string()
+                    "The user template has no valid path".to_string()
                 })?;
                 copy_directory(Path::new(&source), &temp)?;
             }
@@ -254,7 +254,7 @@ fn copy_embedded_dir(source: &Dir<'_>, destination: &Path) -> Result<(), String>
         let relative = entry
             .path()
             .strip_prefix(source.path())
-            .map_err(|e| format!("Ruta de plantilla inválida: {}", e))?;
+            .map_err(|e| format!("Invalid template path: {}", e))?;
         let name = relative
             .file_name()
             .and_then(|value| value.to_str())
@@ -343,7 +343,7 @@ fn validate_template_name(name: &str) -> Result<String, String> {
 fn validate_name(name: &str, label: &str) -> Result<String, String> {
     let value = name.trim();
     if value.is_empty() {
-        return Err(format!("{} no puede estar vacío", label));
+        return Err(format!("{} cannot be empty", label));
     }
     if value == "." || value == ".." || value.starts_with('.') {
         return Err(format!("{} no puede empezar con punto", label));
@@ -385,11 +385,11 @@ mod tests {
         write(&user_dir.join("mi-plantilla/README.md"), "# Mi plantilla\n");
         write(
             &user_dir.join("con-meta/template.json"),
-            r#"{"name":"Con metadatos","description":"Una descripción"}"#,
+            r#"{"name":"With metadata","description":"A description"}"#,
         );
 
         let templates = list_templates_in(&user_dir).unwrap();
-        assert_eq!(templates[0].id, GUIONISTA_ID);
+        assert_eq!(templates[0].id, SCREENWRITER_KIT_ID);
         assert_eq!(templates[0].source, "bundled");
         assert_eq!(templates[1].id, BLANK_ID);
         assert_eq!(templates[1].source, "blank");
@@ -397,8 +397,8 @@ mod tests {
             && item.name == "mi-plantilla"
             && item.description == "Mi plantilla"));
         assert!(templates.iter().any(|item| item.id == "con-meta"
-            && item.name == "Con metadatos"
-            && item.description == "Una descripción"));
+            && item.name == "With metadata"
+            && item.description == "A description"));
     }
 
     #[test]
@@ -414,7 +414,7 @@ mod tests {
                 .sum()
         }
 
-        let template = BUILTIN_TEMPLATES.get_dir(GUIONISTA_ID).unwrap();
+        let template = BUILTIN_TEMPLATES.get_dir(SCREENWRITER_KIT_ID).unwrap();
         let files = count_files(template);
         assert!(files >= 30, "only {files} bundled files");
         assert!(template.get_file("guionista-kit/AGENTS.md").is_some());
@@ -455,7 +455,7 @@ mod tests {
         let destination = dir.path().join("projects");
         fs::create_dir_all(&destination).unwrap();
         let created = create_project_from_template_in(
-            GUIONISTA_ID,
+            SCREENWRITER_KIT_ID,
             "Guion Nuevo",
             destination.to_str().unwrap(),
             &dir.path().join("templates"),
@@ -566,7 +566,7 @@ mod tests {
         let source = dir.path().join("proyecto");
         fs::create_dir_all(&source).unwrap();
         let user_dir = dir.path().join("templates");
-        for invalid in [GUIONISTA_ID, BLANK_ID, "", "../fuera", ".oculto"] {
+        for invalid in [SCREENWRITER_KIT_ID, BLANK_ID, "", "../fuera", ".oculto"] {
             assert!(
                 save_folder_as_template_in(source.to_str().unwrap(), invalid, &user_dir).is_err(),
                 "accepted invalid template name {invalid:?}"

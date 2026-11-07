@@ -117,7 +117,7 @@ impl PullRequestState {
         match raw {
             "open" => Ok(PullRequestState::Open),
             "closed" => Ok(PullRequestState::Closed),
-            other => Err(decode(format!("estado de PR desconocido: {other}"))),
+            other => Err(decode(format!("unknown PR state: {other}"))),
         }
     }
 }
@@ -250,7 +250,7 @@ impl GitHubClient {
     pub fn create_repository(&self, input: &NewRepository) -> Result<Repository, GitHubError> {
         if input.name.trim().is_empty() {
             return Err(GitHubError::Validation {
-                detail: "el nombre del repositorio no puede estar vacío".to_string(),
+                detail: "the repository name cannot be empty".to_string(),
             });
         }
         let body = match &input.description {
@@ -308,7 +308,7 @@ impl GitHubClient {
             "open" | "closed" | "all" => {}
             other => {
                 return Err(GitHubError::Validation {
-                    detail: format!("estado de PR inválido: {other} (use open, closed o all)"),
+                    detail: format!("invalid PR state: {other} (use open, closed or all)"),
                 });
             }
         }
@@ -331,12 +331,12 @@ impl GitHubClient {
         validate_slug(repo, "repositorio")?;
         if input.title.trim().is_empty() {
             return Err(GitHubError::Validation {
-                detail: "el título del Pull Request no puede estar vacío".to_string(),
+                detail: "the Pull Request title cannot be empty".to_string(),
             });
         }
         if input.head.trim().is_empty() || input.base.trim().is_empty() {
             return Err(GitHubError::Validation {
-                detail: "las ramas del Pull Request no pueden estar vacías".to_string(),
+                detail: "the Pull Request branches cannot be empty".to_string(),
             });
         }
         let mut body = json!({
@@ -457,7 +457,7 @@ impl GitHubClient {
             if let Some(next_url) = &next {
                 if !self.is_same_api(next_url) {
                     return Err(decode(
-                        "Link de paginación fuera del host de la API de GitHub".to_string(),
+                        "Pagination link outside the GitHub API host".to_string(),
                     ));
                 }
             }
@@ -512,7 +512,7 @@ fn expect_success(reply: HttpReply) -> Result<Value, GitHubError> {
             return Ok(Value::Null);
         }
         return serde_json::from_str(&reply.body)
-            .map_err(|error| decode(format!("JSON inválido: {error}")));
+            .map_err(|error| decode(format!("Invalid JSON: {error}")));
     }
 
     let server_message = serde_json::from_str::<Value>(&reply.body)
@@ -523,7 +523,7 @@ fn expect_success(reply: HttpReply) -> Result<Value, GitHubError> {
                 .and_then(Value::as_str)
                 .map(str::to_string)
         })
-        .unwrap_or_else(|| "el servidor no devolvió mensaje".to_string());
+        .unwrap_or_else(|| "the server returned no message".to_string());
     let detail = redact_secrets(&server_message);
 
     match reply.status {
@@ -571,7 +571,7 @@ fn validate_slug(value: &str, label: &str) -> Result<(), GitHubError> {
         Ok(())
     } else {
         Err(GitHubError::Validation {
-            detail: format!("{label} de GitHub inválido: {value}"),
+            detail: format!("Invalid GitHub {label}: {value}"),
         })
     }
 }
@@ -712,7 +712,7 @@ mod tests {
             Err(GitHubError::Validation { .. })
         ));
         let empty_branch = NewPullRequest {
-            title: "Título".to_string(),
+            title: "Title".to_string(),
             head: "".to_string(),
             base: "main".to_string(),
             body: None,

@@ -195,7 +195,7 @@ export function matchingCategoryIds(
 
 /**
  * Returns the entries to show for a category. When the query matches the
- * category name (e.g. "apariencia"), all of its settings are shown; when it
+ * category name (e.g. "appearance"), all of its settings are shown; when it
  * matches individual rows, only those rows are returned.
  */
 export function visibleEntriesForCategory(
