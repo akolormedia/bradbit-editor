@@ -146,6 +146,37 @@ describe("chat panel (T-2.1.1)", () => {
     expect(onRetry).toHaveBeenCalledOnce();
   });
 
+  it("renders assistant text as Markdown (T-2.5.1)", () => {
+    const panel = new ChatPanel(options());
+    let state = appendUserMessage(readyState(), "Hola");
+    state = {
+      ...state,
+      messages: [
+        ...state.messages,
+        {
+          id: "assistant:msg_a",
+          role: "assistant",
+          parts: [
+            {
+              type: "text",
+              ordinal: 0,
+              text: "**Negrita** y `código`",
+            },
+          ],
+        },
+      ],
+      streaming: false,
+    };
+    panel.update(state);
+
+    const bubble = panel.element.querySelector(
+      ".chat-message-markdown",
+    ) as HTMLElement | null;
+    expect(bubble).not.toBeNull();
+    expect(bubble?.querySelector("strong")?.textContent).toBe("Negrita");
+    expect(bubble?.querySelector("code")?.textContent).toBe("código");
+  });
+
   it("renders session tabs, creates and switches sessions (T-2.1.2)", () => {
     const onSelectSession = vi.fn();
     const onCreateSession = vi.fn();

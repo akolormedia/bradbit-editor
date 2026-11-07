@@ -1479,6 +1479,107 @@ textarea.text-input {
   animation: chat-blink 1s step-end infinite;
 }
 
+.chat-message-markdown {
+  white-space: normal;
+}
+
+.chat-message-markdown p {
+  margin: 0 0 0.5em;
+}
+
+.chat-message-markdown p:last-child {
+  margin-bottom: 0;
+}
+
+.chat-message-markdown h1,
+.chat-message-markdown h2,
+.chat-message-markdown h3,
+.chat-message-markdown h4 {
+  margin: 0.6em 0 0.3em;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.chat-message-markdown h1 {
+  font-size: 15px;
+}
+
+.chat-message-markdown ul,
+.chat-message-markdown ol {
+  margin: 0.3em 0 0.5em;
+  padding-left: 1.4em;
+}
+
+.chat-message-markdown li {
+  margin: 0.15em 0;
+}
+
+.chat-message-markdown code {
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  padding: 0.1em 0.35em;
+  border-radius: 3px;
+  background: var(--bg-surface);
+  color: var(--cm-keyword);
+}
+
+.chat-message-markdown pre {
+  margin: 0.5em 0;
+  padding: 8px 10px;
+  border-radius: 6px;
+  background: var(--bg-surface);
+  border: 1px solid var(--border-color);
+  overflow-x: auto;
+}
+
+.chat-message-markdown pre code {
+  padding: 0;
+  background: transparent;
+  color: var(--text-primary);
+}
+
+.chat-message-markdown a {
+  color: var(--accent);
+  text-decoration: underline;
+}
+
+.chat-message-markdown blockquote {
+  margin: 0.4em 0;
+  padding-left: 10px;
+  border-left: 2px solid var(--border-color);
+  color: var(--text-secondary);
+}
+
+.chat-message-markdown table {
+  border-collapse: collapse;
+  margin: 0.5em 0;
+  width: 100%;
+  font-size: 11.5px;
+}
+
+.chat-message-markdown th,
+.chat-message-markdown td {
+  border: 1px solid var(--border-color);
+  padding: 4px 8px;
+  text-align: left;
+}
+
+.chat-message-markdown th {
+  font-weight: 600;
+  background: var(--bg-surface);
+}
+
+.chat-message-markdown strong {
+  font-weight: 700;
+}
+
+.chat-message-markdown hr {
+  margin: 0.5em 0;
+  border: none;
+  border-top: 1px solid var(--border-color);
+}
+
 @keyframes chat-blink {
   50% {
     opacity: 0;
