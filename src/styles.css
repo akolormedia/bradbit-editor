@@ -179,8 +179,8 @@ body,
 .sidebar-header {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  padding: 8px 10px;
+  gap: 7px;
+  padding: 6px 8px;
   border-bottom: 1px solid var(--border-color);
   font-size: 11.5px;
   font-weight: 600;
@@ -189,41 +189,52 @@ body,
   color: var(--text-muted);
 }
 
-.sidebar-actions {
+.sidebar-switcher {
   display: flex;
   gap: 2px;
-}
-
-.sidebar-tabs {
-  display: flex;
-  gap: 4px;
-  padding: 6px 8px;
-  border-bottom: 1px solid var(--border-color);
   flex-shrink: 0;
 }
 
-.sidebar-tab {
-  flex: 1;
-  padding: 5px 8px;
+.sidebar-switch {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 25px;
+  height: 25px;
+  padding: 0;
   border: none;
   border-radius: 5px;
   background: transparent;
   color: var(--text-muted);
   font-family: var(--font-ui);
-  font-size: 11.5px;
-  font-weight: 600;
+  font-size: 14px;
+  line-height: 1;
   cursor: pointer;
   transition: background 0.12s, color 0.12s;
 }
 
-.sidebar-tab:hover {
+.sidebar-switch:hover {
   background: var(--bg-hover);
   color: var(--text-primary);
 }
 
-.sidebar-tab.active {
+.sidebar-switch.active {
   background: var(--bg-active);
   color: var(--text-primary);
+}
+
+.sidebar-title {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sidebar-actions {
+  display: flex;
+  gap: 2px;
+  flex-shrink: 0;
 }
 
 .tree-container {
@@ -1049,9 +1060,6 @@ textarea.text-input {
   white-space: nowrap;
 }
 
-.session-editor-toggle {
-  font-size: 13px;
-}
 
 @keyframes session-pulse {
   0%,
@@ -2015,6 +2023,25 @@ textarea.text-input {
   display: flex;
   align-items: center;
   gap: 14px;
+}
+
+.statusbar-sections {
+  display: flex;
+  align-items: center;
+  gap: 1px;
+  padding-right: 6px;
+  border-right: 1px solid var(--border-color);
+}
+
+.statusbar .sidebar-switch {
+  width: 21px;
+  height: 21px;
+  font-size: 13px;
+}
+
+.statusbar .sidebar-switch.active {
+  background: var(--bg-active);
+  color: var(--text-primary);
 }
 
 .status-pill.dirty {

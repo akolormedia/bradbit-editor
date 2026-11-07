@@ -16,7 +16,6 @@ function options(overrides: Partial<ChatPanelOptions> = {}): ChatPanelOptions {
     onSend: vi.fn(),
     onStop: vi.fn(),
     onRetry: vi.fn(),
-    onToggleEditor: vi.fn(),
     onSelectSession: vi.fn(),
     onCreateSession: vi.fn(),
     onCloseSession: vi.fn(),
@@ -133,15 +132,6 @@ describe("chat panel (T-2.1.1)", () => {
       .querySelector<HTMLButtonElement>('[data-testid="chat-retry"]')
       ?.click();
     expect(onRetry).toHaveBeenCalledOnce();
-  });
-
-  it("toggles the editor from the session header", () => {
-    const onToggleEditor = vi.fn();
-    const panel = new ChatPanel(options({ onToggleEditor }));
-    panel.element
-      .querySelector<HTMLButtonElement>('[data-testid="session-toggle-editor"]')
-      ?.click();
-    expect(onToggleEditor).toHaveBeenCalledOnce();
   });
 
   it("renders session tabs, creates and switches sessions (T-2.1.2)", () => {

@@ -73,6 +73,7 @@ import {
   ProjectDraftError,
 } from "./workspace/projectCreation";
 import { flattenFileTree } from "./workspace/quickOpen";
+import { SIDEBAR_SECTIONS, SidebarTab } from "./workspace/sidebarSections";
 import { isTabAffected, reconcileTabsWithDisk } from "./workspace/reconcile";
 import { SearchPalette } from "./workspace/searchPalette";
 import {
@@ -157,7 +158,7 @@ class BradbitApp {
   private tabState: TabListState = { tabs: [], activeTabPath: null };
   private collapsedDirs = new Set<string>();
   private sidebarVisible = true;
-  private sidebarTab: "files" | "outline" | "versions" = "files";
+  private sidebarTab: SidebarTab = "files";
   private sidebarWidth = 260;
   private outlineRefreshTimer: number | null = null;
   private modal: ModalState = { kind: "none" };
@@ -1041,7 +1042,6 @@ class BradbitApp {
         onSend: (text) => void this.sendChatMessage(text),
         onStop: () => void this.stopChatGeneration(),
         onRetry: () => void this.retryChat(),
-        onToggleEditor: () => this.toggleEditorPanel(),
         onSelectSession: (id) => this.selectChatSession(id),
         onCreateSession: () => void this.createChatSession(),
         onCloseSession: (id) => void this.closeChatSession(id),
@@ -2301,6 +2301,17 @@ class BradbitApp {
       chatBtn.onclick = () => this.toggleChatPanel();
       left.appendChild(chatBtn);
 
+      const editorBtn = document.createElement("button");
+      editorBtn.className = "icon-btn";
+      editorBtn.dataset.testid = "toggle-editor-btn";
+      editorBtn.title = t(lang, "chatToggleEditor");
+      editorBtn.setAttribute("aria-label", t(lang, "chatToggleEditor"));
+      editorBtn.setAttribute("aria-pressed", String(this.editorVisible));
+      editorBtn.classList.toggle("active", this.editorVisible);
+      editorBtn.textContent = "◫";
+      editorBtn.onclick = () => this.toggleEditorPanel();
+      left.appendChild(editorBtn);
+
       const badge = document.createElement("span");
       badge.className = "project-badge";
       badge.textContent = this.folder.name;
@@ -2492,17 +2503,14 @@ class BradbitApp {
     aside.className = "sidebar";
     aside.style.width = `${this.sidebarWidth}px`;
 
-    const tabs = this.renderSidebarTabs(lang);
-
     const header = document.createElement("div");
     header.className = "sidebar-header";
     const title = document.createElement("span");
-    const titles = {
-      files: "explorerTitle",
-      outline: "outlineTitle",
-      versions: "versionsTitle",
-    } as const;
-    title.textContent = t(lang, titles[this.sidebarTab]);
+    title.className = "sidebar-title";
+    const activeSection =
+      SIDEBAR_SECTIONS.find((section) => section.id === this.sidebarTab) ??
+      SIDEBAR_SECTIONS[0];
+    title.textContent = t(lang, activeSection.titleKey);
 
     const actions = document.createElement("div");
     actions.className = "sidebar-actions";
@@ -2526,7 +2534,7 @@ class BradbitApp {
     }
 
     header.append(title, actions);
-    aside.append(tabs, header);
+    aside.append(header);
 
     if (this.sidebarTab === "files") {
       aside.appendChild(this.renderFileTree(lang));
@@ -2538,37 +2546,38 @@ class BradbitApp {
     return aside;
   }
 
-  private renderSidebarTabs(lang: AppSettings["language"]): HTMLElement {
-    const tabs = document.createElement("div");
-    tabs.className = "sidebar-tabs";
+  private renderSidebarSwitcher(lang: AppSettings["language"]): HTMLElement {
+    const switcher = document.createElement("div");
+    switcher.className = "sidebar-switcher";
+    switcher.setAttribute("role", "group");
+    switcher.setAttribute("aria-label", t(lang, "sidebarSections"));
 
-    const makeTab = (
-      label: string,
-      tab: "files" | "outline" | "versions",
-    ): HTMLButtonElement => {
+    for (const section of SIDEBAR_SECTIONS) {
       const button = document.createElement("button");
       button.type = "button";
-      button.className = "sidebar-tab";
-      button.dataset.sidebarTab = tab;
-      button.textContent = label;
-      button.classList.toggle("active", this.sidebarTab === tab);
+      button.className = "sidebar-switch";
+      button.dataset.sidebarTab = section.id;
+      button.dataset.testid = `sidebar-tab-${section.id}`;
+      button.textContent = section.icon;
+      const label = t(lang, section.labelKey);
+      button.title = label;
+      button.setAttribute("aria-label", label);
+      const active = this.sidebarVisible && this.sidebarTab === section.id;
+      button.classList.toggle("active", active);
+      button.setAttribute("aria-pressed", String(active));
       button.onclick = () => {
-        if (this.sidebarTab === tab) return;
-        this.sidebarTab = tab;
+        const changed = this.sidebarTab !== section.id;
+        if (!changed && this.sidebarVisible) return;
+        this.sidebarVisible = true;
+        this.sidebarTab = section.id;
         this.render();
-        if (tab === "versions") {
+        if (changed && section.id === "versions") {
           void this.refreshGitPanelData();
         }
       };
-      return button;
-    };
-
-    tabs.append(
-      makeTab(t(lang, "filesTab"), "files"),
-      makeTab(t(lang, "outlineTab"), "outline"),
-      makeTab(t(lang, "versionsTab"), "versions"),
-    );
-    return tabs;
+      switcher.appendChild(button);
+    }
+    return switcher;
   }
 
   private renderFileTree(lang: AppSettings["language"]): HTMLElement {
@@ -3107,6 +3116,12 @@ class BradbitApp {
 
     const left = document.createElement("div");
     left.className = "statusbar-left";
+
+    if (this.folder) {
+      const sections = this.renderSidebarSwitcher(lang);
+      sections.classList.add("statusbar-sections");
+      left.appendChild(sections);
+    }
 
     if (this.gitStatus?.isRepository) {
       const branchSpan = document.createElement("span");
