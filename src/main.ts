@@ -83,6 +83,7 @@ import {
 import { flattenFileTree } from "./workspace/quickOpen";
 import { SIDEBAR_SECTIONS, SidebarTab } from "./workspace/sidebarSections";
 import { isTabAffected, reconcileTabsWithDisk } from "./workspace/reconcile";
+import { widthFromPointerDrag } from "./workspace/resizing";
 import { SearchPalette } from "./workspace/searchPalette";
 import {
   buildMenuUiState,
@@ -3091,10 +3092,20 @@ class BradbitApp {
     resizer.onmousedown = (e) => {
       e.preventDefault();
       resizer.classList.add("dragging");
+      const sidebar = this.rootEl.querySelector(
+        ".sidebar",
+      ) as HTMLElement | null;
+      const startX = e.clientX;
+      const startWidth = sidebar?.getBoundingClientRect().width ?? this.sidebarWidth;
       const onMove = (moveEvent: MouseEvent) => {
-        const nextWidth = Math.min(480, Math.max(180, moveEvent.clientX));
+        const nextWidth = widthFromPointerDrag(
+          startWidth,
+          startX,
+          moveEvent.clientX,
+          180,
+          480,
+        );
         this.sidebarWidth = nextWidth;
-        const sidebar = this.rootEl.querySelector(".sidebar") as HTMLElement | null;
         if (sidebar) {
           sidebar.style.width = `${nextWidth}px`;
         }
@@ -3103,6 +3114,7 @@ class BradbitApp {
         resizer.classList.remove("dragging");
         window.removeEventListener("mousemove", onMove);
         window.removeEventListener("mouseup", onUp);
+        this.persistWorkspaceState();
       };
       window.addEventListener("mousemove", onMove);
       window.addEventListener("mouseup", onUp);
@@ -3116,10 +3128,20 @@ class BradbitApp {
     resizer.onmousedown = (e) => {
       e.preventDefault();
       resizer.classList.add("dragging");
+      const column = this.rootEl.querySelector(
+        ".session-column",
+      ) as HTMLElement | null;
+      const startX = e.clientX;
+      const startWidth = column?.getBoundingClientRect().width ?? this.sessionWidth;
       const onMove = (moveEvent: MouseEvent) => {
-        const nextWidth = Math.min(640, Math.max(320, moveEvent.clientX));
+        const nextWidth = widthFromPointerDrag(
+          startWidth,
+          startX,
+          moveEvent.clientX,
+          320,
+          640,
+        );
         this.sessionWidth = nextWidth;
-        const column = this.rootEl.querySelector(".session-column") as HTMLElement | null;
         if (column) {
           column.style.width = `${nextWidth}px`;
         }
