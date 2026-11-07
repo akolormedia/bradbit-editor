@@ -34,11 +34,13 @@ export function createDocumentHeader(options: DocumentHeaderOptions): HTMLElemen
   const name = document.createElement("span");
   name.className = "document-name";
   name.textContent = tab.name;
-  name.title = tab.path;
+  name.title = tab.untitled ? tab.name : tab.path;
 
   const path = document.createElement("span");
   path.className = "document-path";
-  path.textContent = tab.path;
+  path.textContent = tab.untitled
+    ? t(language, "untitledFileHint")
+    : tab.path;
 
   info.append(name, path);
 

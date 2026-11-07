@@ -36,6 +36,30 @@ describe("active document header (T-1.2.1)", () => {
     expect(header.querySelector('[data-action="copy"]')).not.toBeNull();
   });
 
+  it("shows an untitled document as not saved", () => {
+    const header = createDocumentHeader({
+      tab: tab({
+        path: "untitled://1.md",
+        name: "Sin título 1",
+        content: "",
+        savedContent: "",
+        untitled: true,
+      }),
+      language: "es",
+      onTogglePreview: () => {},
+      onCopy: async () => true,
+    });
+
+    expect(header.querySelector(".document-name")?.textContent).toBe(
+      "Sin título 1",
+    );
+    expect(header.querySelector(".document-path")?.textContent).toBe(
+      "Sin guardar",
+    );
+    expect(header.querySelector('[data-action="preview"]')).not.toBeNull();
+    expect(header.querySelector('[data-action="copy"]')).not.toBeNull();
+  });
+
   it("hides the preview action for non-Markdown files", () => {
     const header = createDocumentHeader({
       tab: tab({ path: "guion/acto-1.fountain", name: "acto-1.fountain" }),
