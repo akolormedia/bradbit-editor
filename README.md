@@ -38,6 +38,7 @@ Editor de texto de escritorio agnóstico para escritura creativa (`.md`, `.mdx`,
 - **Explorador de archivos lateral redimensionable y colapsable (`⌘⇧E`):**
   - Selector compacto de iconos **Archivos / Esquema / Versiones** en el extremo izquierdo de la barra inferior; solo se muestra la sección activa y el árbol gana altura al no ocupar una fila de pestañas.
   - Oculta por defecto `.git`, `.DS_Store` y `.opencode` con opción *Mostrar archivos de configuración*.
+  - **Filtrar archivos (`T-2.4.5`):** campo sobre el árbol que filtra por nombre o ruta, conserva las carpetas ancestro, auto-expande las coincidencias y se limpia con `Escape`.
   - Acciones integradas: Nuevo archivo (`⌘N`), Nueva carpeta, Renombrar y Eliminar (con confirmación).
 - **Esquema del documento (`T-1.2.2`):**
   - En Markdown/MDX: encabezados (`#`, `##`, `###`…) clicables que saltan a la línea exacta.

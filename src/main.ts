@@ -87,6 +87,7 @@ import { SIDEBAR_SECTIONS, SidebarTab } from "./workspace/sidebarSections";
 import { computeWorkspaceLayout, WorkspaceLayout } from "./workspace/layout";
 import { isTabAffected, reconcileTabsWithDisk } from "./workspace/reconcile";
 import { widthFromPointerDrag } from "./workspace/resizing";
+import { filterTreeByQuery } from "./workspace/treeFilter";
 import { SearchPalette } from "./workspace/searchPalette";
 import {
   buildMenuUiState,
@@ -173,6 +174,7 @@ class BradbitApp {
   private sidebarVisible = true;
   private sidebarTab: SidebarTab = "files";
   private sidebarWidth = 260;
+  private fileFilter = "";
   private kitCatalog: KitCatalog = { agents: [], commands: [], skills: [] };
   private chatModels: OpenCodeModel[] = [];
   private sessionView: SessionView = "chat";
@@ -293,6 +295,7 @@ class BradbitApp {
     this.kitCatalog = { agents: [], commands: [], skills: [] };
     this.chatModels = [];
     this.tabState = { tabs: [], activeTabPath: null };
+    this.fileFilter = "";
     this.gitStatus = null;
     this.gitHistory = [];
     this.gitBranches = [];
@@ -336,6 +339,7 @@ class BradbitApp {
       }
       this.tabState = { tabs: [], activeTabPath: null };
       this.collapsedDirs.clear();
+      this.fileFilter = "";
       this.gitHistory = [];
       this.gitBranches = [];
       this.gitCommitMessage = "";
@@ -2763,7 +2767,11 @@ class BradbitApp {
     aside.append(header);
 
     if (this.sidebarTab === "files") {
-      aside.appendChild(this.renderFileTree(lang));
+      aside.appendChild(this.renderTreeSearch(lang));
+      const treeBody = document.createElement("div");
+      treeBody.className = "tree-body";
+      treeBody.appendChild(this.renderFileTree(lang));
+      aside.appendChild(treeBody);
     } else if (this.sidebarTab === "outline") {
       aside.appendChild(this.renderOutline(lang));
     } else {
@@ -2804,6 +2812,67 @@ class BradbitApp {
     return switcher;
   }
 
+  private renderTreeSearch(lang: AppSettings["language"]): HTMLElement {
+    const wrap = document.createElement("div");
+    wrap.className = "tree-search";
+    const icon = document.createElement("span");
+    icon.className = "tree-search-icon";
+    icon.appendChild(createIcon("search", 14));
+
+    const input = document.createElement("input");
+    input.type = "text";
+    input.className = "tree-search-input";
+    input.dataset.testid = "tree-search";
+    input.autocomplete = "off";
+    input.spellcheck = false;
+    input.setAttribute("autocorrect", "off");
+    input.setAttribute("autocapitalize", "off");
+    input.placeholder = t(lang, "treeSearchPlaceholder");
+    input.setAttribute("aria-label", t(lang, "treeSearchPlaceholder"));
+    input.value = this.fileFilter;
+    input.oninput = () => {
+      this.fileFilter = input.value;
+      this.refreshTreeResults(lang);
+    };
+    input.onkeydown = (event) => {
+      if (event.key !== "Escape") return;
+      event.preventDefault();
+      this.fileFilter = "";
+      input.value = "";
+      this.refreshTreeResults(lang);
+      input.focus();
+    };
+
+    const clear = createIconButton({
+      icon: "x",
+      label: t(lang, "clearSearch"),
+      className: "tree-search-clear",
+      testId: "tree-search-clear",
+      plain: true,
+      onClick: () => {
+        this.fileFilter = "";
+        input.value = "";
+        this.refreshTreeResults(lang);
+        input.focus();
+      },
+    });
+    clear.hidden = this.fileFilter.length === 0;
+
+    wrap.append(icon, input, clear);
+    return wrap;
+  }
+
+  private refreshTreeResults(lang: AppSettings["language"]): void {
+    const treeBody = this.rootEl.querySelector(".tree-body");
+    if (treeBody) {
+      treeBody.replaceChildren(this.renderFileTree(lang));
+    }
+    const clear = this.rootEl.querySelector<HTMLButtonElement>(
+      ".tree-search-clear",
+    );
+    if (clear) clear.hidden = this.fileFilter.length === 0;
+  }
+
   private renderFileTree(lang: AppSettings["language"]): HTMLElement {
     const treeContainer = document.createElement("div");
     treeContainer.className = "tree-container";
@@ -2811,7 +2880,16 @@ class BradbitApp {
       this.folder?.tree ?? [],
       this.settings.showConfigFiles,
     );
+    const filteredTree = filterTreeByQuery(visibleTree, this.fileFilter);
     const gitBadges = buildGitBadgeMap(this.gitStatus?.entries ?? []);
+
+    if (this.fileFilter.trim() && filteredTree.length === 0) {
+      const empty = document.createElement("div");
+      empty.className = "tree-empty";
+      empty.textContent = t(lang, "treeSearchEmpty");
+      treeContainer.appendChild(empty);
+      return treeContainer;
+    }
 
     const renderNodes = (nodes: FileTreeNode[], depth: number) => {
       for (const node of nodes) {
@@ -2830,7 +2908,9 @@ class BradbitApp {
 
         const icon = document.createElement("span");
         icon.className = "tree-icon";
-        const isCollapsed = this.collapsedDirs.has(node.path);
+        const isCollapsed = this.fileFilter.trim()
+          ? false
+          : this.collapsedDirs.has(node.path);
         if (node.isDir) {
           icon.appendChild(
             createIcon(isCollapsed ? "folder" : "folder-open", 15),
@@ -2922,7 +3002,7 @@ class BradbitApp {
       }
     };
 
-    renderNodes(visibleTree, 0);
+    renderNodes(filteredTree, 0);
     return treeContainer;
   }
 
