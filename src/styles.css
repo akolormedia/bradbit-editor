@@ -325,6 +325,8 @@ body,
   display: flex;
   min-height: 0;
   overflow: hidden;
+  padding: 8px;
+  background: var(--bg-app);
 }
 
 /* Sidebar Explorer */
@@ -1010,15 +1012,31 @@ textarea.text-input {
 }
 
 .sidebar-resizer {
-  width: 5px;
+  position: relative;
+  width: 6px;
   cursor: col-resize;
   background: transparent;
   flex-shrink: 0;
+}
+
+.sidebar-resizer::after,
+.session-resizer::after {
+  content: "";
+  position: absolute;
+  top: 12px;
+  bottom: 12px;
+  left: 50%;
+  width: 2px;
+  border-radius: 2px;
+  background: transparent;
+  transform: translateX(-50%);
   transition: background 0.12s;
 }
 
-.sidebar-resizer:hover,
-.sidebar-resizer.dragging {
+.sidebar-resizer:hover::after,
+.sidebar-resizer.dragging::after,
+.session-resizer:hover::after,
+.session-resizer.dragging::after {
   background: var(--accent);
 }
 
@@ -1028,6 +1046,10 @@ textarea.text-input {
   display: flex;
   min-width: 0;
   overflow: hidden;
+  background: var(--bg-sidebar);
+  border: 1px solid var(--border-color);
+  border-radius: 10px;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.08);
 }
 
 .session-column {
@@ -1037,7 +1059,9 @@ textarea.text-input {
   display: flex;
   flex-direction: column;
   background: var(--bg-sidebar);
-  border-right: 1px solid var(--border-color);
+  border: 1px solid var(--border-color);
+  border-radius: 10px;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.08);
   overflow: hidden;
 }
 
@@ -1045,20 +1069,14 @@ textarea.text-input {
   flex: 1;
   width: 100% !important;
   max-width: none;
-  border-right: none;
 }
 
 .session-resizer {
-  width: 5px;
+  position: relative;
+  width: 8px;
   cursor: col-resize;
   background: transparent;
   flex-shrink: 0;
-  transition: background 0.12s;
-}
-
-.session-resizer:hover,
-.session-resizer.dragging {
-  background: var(--accent);
 }
 
 .chat-panel {
