@@ -1042,7 +1042,6 @@ class BradbitApp {
         onSend: (text) => void this.sendChatMessage(text),
         onStop: () => void this.stopChatGeneration(),
         onRetry: () => void this.retryChat(),
-        onToggleEditor: () => this.toggleEditorPanel(),
         onSelectSession: (id) => this.selectChatSession(id),
         onCreateSession: () => void this.createChatSession(),
         onCloseSession: (id) => void this.closeChatSession(id),
@@ -2302,6 +2301,17 @@ class BradbitApp {
       chatBtn.onclick = () => this.toggleChatPanel();
       left.appendChild(chatBtn);
 
+      const editorBtn = document.createElement("button");
+      editorBtn.className = "icon-btn";
+      editorBtn.dataset.testid = "toggle-editor-btn";
+      editorBtn.title = t(lang, "chatToggleEditor");
+      editorBtn.setAttribute("aria-label", t(lang, "chatToggleEditor"));
+      editorBtn.setAttribute("aria-pressed", String(this.editorVisible));
+      editorBtn.classList.toggle("active", this.editorVisible);
+      editorBtn.textContent = "◫";
+      editorBtn.onclick = () => this.toggleEditorPanel();
+      left.appendChild(editorBtn);
+
       const badge = document.createElement("span");
       badge.className = "project-badge";
       badge.textContent = this.folder.name;
@@ -2495,7 +2505,6 @@ class BradbitApp {
 
     const header = document.createElement("div");
     header.className = "sidebar-header";
-    const switcher = this.renderSidebarSwitcher(lang);
     const title = document.createElement("span");
     title.className = "sidebar-title";
     const activeSection =
@@ -2524,7 +2533,7 @@ class BradbitApp {
       actions.append(newFileBtn, newFolderBtn);
     }
 
-    header.append(switcher, title, actions);
+    header.append(title, actions);
     aside.append(header);
 
     if (this.sidebarTab === "files") {
@@ -2553,14 +2562,16 @@ class BradbitApp {
       const label = t(lang, section.labelKey);
       button.title = label;
       button.setAttribute("aria-label", label);
-      const active = this.sidebarTab === section.id;
+      const active = this.sidebarVisible && this.sidebarTab === section.id;
       button.classList.toggle("active", active);
       button.setAttribute("aria-pressed", String(active));
       button.onclick = () => {
-        if (this.sidebarTab === section.id) return;
+        const changed = this.sidebarTab !== section.id;
+        if (!changed && this.sidebarVisible) return;
+        this.sidebarVisible = true;
         this.sidebarTab = section.id;
         this.render();
-        if (section.id === "versions") {
+        if (changed && section.id === "versions") {
           void this.refreshGitPanelData();
         }
       };
@@ -3105,6 +3116,12 @@ class BradbitApp {
 
     const left = document.createElement("div");
     left.className = "statusbar-left";
+
+    if (this.folder) {
+      const sections = this.renderSidebarSwitcher(lang);
+      sections.classList.add("statusbar-sections");
+      left.appendChild(sections);
+    }
 
     if (this.gitStatus?.isRepository) {
       const branchSpan = document.createElement("span");

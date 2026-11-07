@@ -1060,9 +1060,6 @@ textarea.text-input {
   white-space: nowrap;
 }
 
-.session-editor-toggle {
-  font-size: 13px;
-}
 
 @keyframes session-pulse {
   0%,
@@ -2026,6 +2023,25 @@ textarea.text-input {
   display: flex;
   align-items: center;
   gap: 14px;
+}
+
+.statusbar-sections {
+  display: flex;
+  align-items: center;
+  gap: 1px;
+  padding-right: 6px;
+  border-right: 1px solid var(--border-color);
+}
+
+.statusbar .sidebar-switch {
+  width: 21px;
+  height: 21px;
+  font-size: 13px;
+}
+
+.statusbar .sidebar-switch.active {
+  background: var(--bg-active);
+  color: var(--text-primary);
 }
 
 .status-pill.dirty {

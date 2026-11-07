@@ -6,7 +6,7 @@ Editor de texto de escritorio agnóstico para escritura creativa (`.md`, `.mdx`,
 
 - **Chat integrado con OpenCode (`T-2.1.1`):**
   - Layout dividido estilo `opencode-desktop`: **sesión de escritura a la izquierda** y `EditorWorkspace` a la derecha, con divisor redimensionable.
-  - El botón **💬** muestra/oculta el chat y el botón **◫** de la sesión muestra/oculta el editor sin perder el estado de CodeMirror. Al ocultar uno, el otro ocupa todo el ancho de la ventana, con los mensajes y el composer centrados.
+  - Los botones **💬** y **◫** de la barra superior muestran/ocultan el chat y el editor sin perder el estado de CodeMirror. Al ocultar uno, el otro ocupa todo el ancho de la ventana, con los mensajes y el composer centrados.
   - **Pestañas de sesión múltiples** con `+`, cambio y cierre; cada pestaña conserva su historial, su estado de generación y su borrador del composer.
   - **Persistencia por proyecto:** al reabrir la app se restauran las pestañas abiertas, la sesión activa, el ancho del chat y el estado de los paneles.
   - Inicia o reutiliza **`opencode serve`** automáticamente para la carpeta abierta, crea una sesión si no hay ninguna y transmite la respuesta en vivo.
@@ -31,7 +31,7 @@ Editor de texto de escritorio agnóstico para escritura creativa (`.md`, `.mdx`,
   - Al crear el proyecto se ejecuta **`git init`** si Git está disponible y la app abre la carpeta resultante.
   - **Guardar proyecto actual como plantilla…** y **Abrir carpeta de plantillas** desde el modal y el menú *Archivo*.
 - **Explorador de archivos lateral redimensionable y colapsable (`⌘⇧E`):**
-  - Selector compacto de iconos **Archivos / Esquema / Versiones** en la cabecera del panel; solo se muestra la sección activa y el árbol gana altura al no ocupar una fila de pestañas.
+  - Selector compacto de iconos **Archivos / Esquema / Versiones** en el extremo izquierdo de la barra inferior; solo se muestra la sección activa y el árbol gana altura al no ocupar una fila de pestañas.
   - Oculta por defecto `.git`, `.DS_Store` y `.opencode` con opción *Mostrar archivos de configuración*.
   - Acciones integradas: Nuevo archivo (`⌘N`), Nueva carpeta, Renombrar y Eliminar (con confirmación).
 - **Esquema del documento (`T-1.2.2`):**

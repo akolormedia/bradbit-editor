@@ -21,7 +21,6 @@ export interface ChatPanelOptions {
   onSend: (text: string) => void;
   onStop: () => void;
   onRetry: () => void;
-  onToggleEditor: () => void;
   onSelectSession: (id: string) => void;
   onCreateSession: () => void;
   onCloseSession: (id: string) => void;
@@ -61,7 +60,6 @@ export class ChatPanel {
   private tabsEl: HTMLElement;
   private titleEl: HTMLElement;
   private subtitleEl: HTMLElement;
-  private editorBtn: HTMLButtonElement;
   private stickToBottom = true;
   private drafts = new Map<string, string>();
   private draftSessionId: string | null = null;
@@ -97,12 +95,7 @@ export class ChatPanel {
     actions.className = "session-header-actions";
     this.contextEl = document.createElement("span");
     this.contextEl.className = "session-context";
-    this.editorBtn = document.createElement("button");
-    this.editorBtn.className = "icon-btn session-editor-toggle";
-    this.editorBtn.dataset.testid = "session-toggle-editor";
-    this.editorBtn.textContent = "◫";
-    this.editorBtn.onclick = () => this.options.onToggleEditor();
-    actions.append(this.contextEl, this.editorBtn);
+    actions.append(this.contextEl);
     header.append(heading, actions);
 
     this.errorEl = document.createElement("div");
@@ -204,8 +197,6 @@ export class ChatPanel {
     }
 
     this.titleEl.textContent = t(lang, "chatHeaderTitle");
-    this.editorBtn.title = t(lang, "chatToggleEditor");
-    this.editorBtn.setAttribute("aria-label", t(lang, "chatToggleEditor"));
     this.composer.placeholder = t(lang, "chatPlaceholder");
     this.sendBtn.textContent = t(lang, "chatSend");
     this.stopBtn.textContent = t(lang, "chatStop");
