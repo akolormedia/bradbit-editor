@@ -295,6 +295,12 @@ export class BradbitCodeMirror {
     this.view.focus();
   }
 
+  public getSelection(): string {
+    if (!this.view) return "";
+    const { from, to } = this.view.state.selection.main;
+    return this.view.state.sliceDoc(from, to);
+  }
+
   public focus(): void {
     this.view?.focus();
   }

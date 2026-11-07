@@ -203,6 +203,8 @@ export interface OpenCodeSession {
   title: string;
   updated?: number | null;
   directory?: string | null;
+  agent?: string | null;
+  model?: string | null;
 }
 
 export interface OpenCodeTokens {
@@ -235,6 +237,14 @@ export interface OpenCodeChatMessage {
   parts: OpenCodeMessagePart[];
   tokens?: OpenCodeTokens | null;
   model?: string | null;
+  agent?: string | null;
+}
+
+export interface OpenCodeModel {
+  id: string;
+  name: string;
+  providerId: string;
+  variants: string[];
 }
 
 export interface OpenCodePermission {

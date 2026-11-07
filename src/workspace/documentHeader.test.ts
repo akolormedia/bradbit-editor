@@ -154,4 +154,24 @@ describe("active document header (T-1.2.1)", () => {
     expect(header.querySelector('[data-action="diff"]')).toBeNull();
     expect(header.querySelector('[data-action="discard"]')).toBeNull();
   });
+
+  it("sends the editor selection to chat when the action is provided (T-2.2.2)", () => {
+    const onSendSelection = vi.fn();
+    const header = createDocumentHeader({
+      tab: tab(),
+      language: "es",
+      onTogglePreview: () => {},
+      onCopy: async () => true,
+      onSendSelection,
+    });
+
+    const button = header.querySelector<HTMLButtonElement>(
+      '[data-action="send-selection"]',
+    );
+    expect(button).not.toBeNull();
+    expect(button?.title).toContain("Enviar selección al chat");
+    button?.click();
+    expect(onSendSelection).toHaveBeenCalledOnce();
+  });
+
 });

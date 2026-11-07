@@ -68,6 +68,7 @@ export interface ChatState {
   sessionId: string | null;
   title: string;
   model: string | null;
+  agent: string | null;
   messages: ChatMessage[];
   streaming: boolean;
   error: string;
@@ -81,6 +82,7 @@ export const initialChatState: ChatState = {
   sessionId: null,
   title: "",
   model: null,
+  agent: null,
   messages: [],
   streaming: false,
   error: "",
@@ -109,6 +111,8 @@ export function chatStarted(
     status: "ready",
     sessionId: session.id,
     title: session.title,
+    agent: session.agent ?? state.agent,
+    model: session.model ?? state.model,
     error: "",
   };
 }
@@ -152,9 +156,11 @@ export function chatFromHistory(
 ): ChatState {
   const state = chatStarted(chatStarting(initialChatState), session);
   const model = [...messages].reverse().find((message) => message.model)?.model;
+  const agent = [...messages].reverse().find((message) => message.agent)?.agent;
   return {
     ...state,
     model: model ?? null,
+    agent: agent ?? null,
     messages: messages.map((message) => ({
       id: message.id,
       role: message.role,
@@ -632,19 +638,47 @@ export function applyOpenCodeEvent(
 
     case "session.step.started": {
       const model = data.model;
+      const agent = textOf(data.agent) || state.agent;
       if (model && typeof model === "object") {
         const record = model as Record<string, unknown>;
         const provider = textOf(record.providerID);
         const id = textOf(record.id);
         if (provider && id) {
+          const base = `${provider}/${id}`;
+          const variant = state.model?.startsWith(`${base}#`)
+            ? state.model.slice(base.length)
+            : "";
           return {
             ...state,
             streaming: true,
-            model: `${provider}/${id}`,
+            model: `${base}${variant}`,
+            agent,
           };
         }
       }
-      return { ...state, streaming: true };
+      return { ...state, streaming: true, agent };
+    }
+
+    case "session.agent.selected": {
+      const agent = textOf(data.agent) || textOf(data.agentID);
+      return agent ? { ...state, agent } : state;
+    }
+
+    case "session.model.selected": {
+      const model = data.model;
+      if (model && typeof model === "object") {
+        const record = model as Record<string, unknown>;
+        const provider = textOf(record.providerID);
+        const id = textOf(record.id);
+        if (provider && id) {
+          const variant = textOf(record.variant);
+          return {
+            ...state,
+            model: `${provider}/${id}${variant ? `#${variant}` : ""}`,
+          };
+        }
+      }
+      return state;
     }
 
     case "session.text.started":

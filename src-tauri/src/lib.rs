@@ -467,6 +467,43 @@ fn opencode_pending_forms(
 }
 
 #[tauri::command]
+fn opencode_list_models(
+    state: tauri::State<opencode::OpenCodeState>,
+) -> Result<Vec<opencode::OpenCodeModel>, String> {
+    state.models()
+}
+
+#[tauri::command]
+fn opencode_switch_agent(
+    state: tauri::State<opencode::OpenCodeState>,
+    session_id: String,
+    agent: String,
+) -> Result<(), String> {
+    state.switch_agent(&session_id, &agent)
+}
+
+#[tauri::command]
+fn opencode_switch_model(
+    state: tauri::State<opencode::OpenCodeState>,
+    session_id: String,
+    provider_id: String,
+    model_id: String,
+    variant: Option<String>,
+) -> Result<(), String> {
+    state.switch_model(&session_id, &provider_id, &model_id, variant.as_deref())
+}
+
+#[tauri::command]
+fn opencode_run_command(
+    state: tauri::State<opencode::OpenCodeState>,
+    session_id: String,
+    name: String,
+    text: String,
+) -> Result<(), String> {
+    state.run_command(&session_id, &name, &text)
+}
+
+#[tauri::command]
 fn opencode_reply_form(
     state: tauri::State<opencode::OpenCodeState>,
     session_id: String,
@@ -615,6 +652,10 @@ pub fn run() {
             opencode_reply_permission,
             opencode_pending_forms,
             opencode_reply_form,
+            opencode_list_models,
+            opencode_switch_agent,
+            opencode_switch_model,
+            opencode_run_command,
             load_workspace_state,
             save_workspace_state,
             open_folder,

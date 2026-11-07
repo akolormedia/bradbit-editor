@@ -22,7 +22,7 @@ fn spawn_mock() -> (String, Arc<Mutex<Vec<Recorded>>>) {
     let recorded = Arc::new(Mutex::new(Vec::new()));
     let sink = Arc::clone(&recorded);
     thread::spawn(move || {
-        for _ in 0..12 {
+        for _ in 0..18 {
             let Ok((mut stream, _)) = listener.accept() else {
                 return;
             };
@@ -35,7 +35,7 @@ fn spawn_mock() -> (String, Arc<Mutex<Vec<Recorded>>>) {
             } else if request.target == "/api/model" {
                 (
                     "application/json",
-                    r#"{"data":[{"id":"fake","modelID":"fake","name":"Fake"}]}"#.to_string(),
+                    r#"{"data":[{"id":"fake","modelID":"fake","providerID":"fake-provider","name":"Fake","type":"chat","enabled":true,"variants":[{"id":"high"}]}]}"#.to_string(),
                 )
             } else if request.target == "/api/session" && request.method == "GET" {
                 (
@@ -84,7 +84,13 @@ fn spawn_mock() -> (String, Arc<Mutex<Vec<Recorded>>>) {
                     )
                     .to_string(),
                 )
-            } else if request.target == "/api/session/ses_test/form/frm_1/reply" {
+            } else if matches!(
+                request.target.as_str(),
+                "/api/session/ses_test/form/frm_1/reply"
+                    | "/api/session/ses_test/agent"
+                    | "/api/session/ses_test/model"
+                    | "/api/session/ses_test/command"
+            ) {
                 ("application/json", String::new())
             } else if request.target.starts_with("/api/session/ses_test/message") {
                 (
@@ -177,6 +183,10 @@ fn client_covers_info_models_sessions_prompts_interrupts_and_events() {
 
     assert_eq!(client.info().unwrap(), "2.2.5");
     assert_eq!(client.list_models().unwrap().len(), 1);
+    let models = client.model_catalog().unwrap();
+    assert_eq!(models.len(), 1);
+    assert_eq!(models[0].provider_id, "fake-provider");
+    assert_eq!(models[0].variants, vec!["high"]);
 
     let sessions = client.list_sessions().unwrap();
     assert_eq!(sessions.len(), 2);
@@ -220,6 +230,11 @@ fn client_covers_info_models_sessions_prompts_interrupts_and_events() {
     client
         .reply_form("ses_test", "frm_1", &serde_json::json!({ "q0": "Rojo" }))
         .unwrap();
+    client.switch_agent("ses_test", "guionista").unwrap();
+    client
+        .switch_model("ses_test", "opencode-go", "hy4", Some("high"))
+        .unwrap();
+    client.run_command("ses_test", "idea", "una idea").unwrap();
 
     let mut events = Vec::new();
     client.subscribe_events(|event| events.push(event)).unwrap();
@@ -259,6 +274,29 @@ fn client_covers_info_models_sessions_prompts_interrupts_and_events() {
         .expect("form reply request");
     let body: serde_json::Value = serde_json::from_str(&form_reply.body).unwrap();
     assert_eq!(body["answer"]["q0"], "Rojo");
+
+    let agent = log
+        .iter()
+        .find(|request| request.target == "/api/session/ses_test/agent")
+        .expect("agent request");
+    let body: serde_json::Value = serde_json::from_str(&agent.body).unwrap();
+    assert_eq!(body["agent"], "guionista");
+
+    let model = log
+        .iter()
+        .find(|request| request.target == "/api/session/ses_test/model")
+        .expect("model request");
+    let body: serde_json::Value = serde_json::from_str(&model.body).unwrap();
+    assert_eq!(body["model"]["providerID"], "opencode-go");
+    assert_eq!(body["model"]["variant"], "high");
+
+    let command = log
+        .iter()
+        .find(|request| request.target == "/api/session/ses_test/command")
+        .expect("command request");
+    let body: serde_json::Value = serde_json::from_str(&command.body).unwrap();
+    assert_eq!(body["name"], "idea");
+    assert_eq!(body["text"], "una idea");
 }
 
 #[test]

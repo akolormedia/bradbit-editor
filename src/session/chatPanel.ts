@@ -1,5 +1,6 @@
 import { t } from "../i18n";
-import { Language, OpenCodeFormField } from "../types";
+import { KitCatalog, Language, OpenCodeFormField, OpenCodeModel } from "../types";
+import { QuickOpenFile } from "../workspace/quickOpen";
 import {
   ChatForm,
   ChatPermission,
@@ -10,6 +11,13 @@ import {
 } from "./chatState";
 import { SessionTabInfo } from "./sessionTabs";
 import { projectRelativePath } from "./chatPaths";
+import {
+  activeCompletion,
+  CompletionToken,
+  filterCommands,
+  filterProjectFiles,
+  replaceCompletion,
+} from "./composer";
 
 export interface ChatPanelOptions {
   language: Language;
@@ -30,6 +38,15 @@ export interface ChatPanelOptions {
     decision: "once" | "always" | "reject",
   ) => void;
   onFormReply: (formId: string, answer: Record<string, unknown>) => void;
+  kit: KitCatalog;
+  models: OpenCodeModel[];
+  projectFiles: QuickOpenFile[];
+  onAgentChange: (agent: string | null) => void;
+  onModelChange: (
+    providerId: string,
+    modelId: string,
+    variant?: string,
+  ) => void;
 }
 
 function formatTokens(value: number): string {
@@ -50,6 +67,20 @@ export class ChatPanel {
   private messagesEl: HTMLElement;
   private requestsEl: HTMLElement;
   private composer: HTMLTextAreaElement;
+  private agentSelect: HTMLSelectElement;
+  private modelSelect: HTMLSelectElement;
+  private attachBtn: HTMLButtonElement;
+  private popoverEl: HTMLElement;
+  private popoverToken: CompletionToken | null = null;
+  private popoverItems: Array<{
+    value: string;
+    label: string;
+    description: string;
+  }> = [];
+  private popoverIndex = 0;
+  private popoverMode: "command" | "mention" | null = null;
+  private lastKit: KitCatalog | null = null;
+  private lastModels: OpenCodeModel[] | null = null;
   private sendBtn: HTMLButtonElement;
   private stopBtn: HTMLButtonElement;
   private errorEl: HTMLElement;
@@ -125,17 +156,84 @@ export class ChatPanel {
 
     const composer = document.createElement("div");
     composer.className = "chat-composer";
+    const toolbar = document.createElement("div");
+    toolbar.className = "chat-composer-toolbar";
+    this.agentSelect = document.createElement("select");
+    this.agentSelect.className = "chat-composer-select";
+    this.agentSelect.dataset.testid = "chat-agent-select";
+    this.agentSelect.title = t(options.language, "chatAgentLabel");
+    this.agentSelect.setAttribute(
+      "aria-label",
+      t(options.language, "chatAgentLabel"),
+    );
+    this.agentSelect.onchange = () =>
+      this.options.onAgentChange(this.agentSelect.value || null);
+    this.modelSelect = document.createElement("select");
+    this.modelSelect.className = "chat-composer-select";
+    this.modelSelect.dataset.testid = "chat-model-select";
+    this.modelSelect.title = t(options.language, "chatModelLabel");
+    this.modelSelect.setAttribute(
+      "aria-label",
+      t(options.language, "chatModelLabel"),
+    );
+    this.modelSelect.onchange = () => {
+      const value = this.modelSelect.value;
+      if (!value) return;
+      const slash = value.indexOf("/");
+      if (slash <= 0) return;
+      const providerId = value.slice(0, slash);
+      const rest = value.slice(slash + 1);
+      const hash = rest.indexOf("#");
+      const modelId = hash >= 0 ? rest.slice(0, hash) : rest;
+      const variant = hash >= 0 ? rest.slice(hash + 1) : undefined;
+      this.options.onModelChange(providerId, modelId, variant);
+    };
+    this.attachBtn = document.createElement("button");
+    this.attachBtn.type = "button";
+    this.attachBtn.className = "icon-btn chat-attach-btn";
+    this.attachBtn.dataset.testid = "chat-attach";
+    this.attachBtn.title = t(options.language, "chatAttachFile");
+    this.attachBtn.setAttribute(
+      "aria-label",
+      t(options.language, "chatAttachFile"),
+    );
+    this.attachBtn.textContent = "＋";
+    this.attachBtn.onclick = () => this.openMentionAtCursor();
+    toolbar.append(this.agentSelect, this.modelSelect, this.attachBtn);
+
     this.composer = document.createElement("textarea");
     this.composer.className = "chat-input";
     this.composer.dataset.testid = "chat-input";
     this.composer.rows = 3;
     this.composer.oninput = () => {
-      if (this.draftSessionId) {
-        this.drafts.set(this.draftSessionId, this.composer.value);
-      }
+      this.saveDraft();
+      this.refreshPopover();
       this.updateSendState();
     };
+    this.composer.onclick = () => this.refreshPopover();
     this.composer.onkeydown = (event) => {
+      if (this.popoverMode && this.popoverItems.length > 0) {
+        if (event.key === "ArrowDown") {
+          event.preventDefault();
+          this.movePopover(1);
+          return;
+        }
+        if (event.key === "ArrowUp") {
+          event.preventDefault();
+          this.movePopover(-1);
+          return;
+        }
+        if (event.key === "Enter" || event.key === "Tab") {
+          event.preventDefault();
+          this.selectPopoverItem();
+          return;
+        }
+        if (event.key === "Escape") {
+          event.preventDefault();
+          this.hidePopover();
+          return;
+        }
+      }
       if (event.key === "Enter" && !event.shiftKey) {
         event.preventDefault();
         this.submit();
@@ -161,7 +259,13 @@ export class ChatPanel {
     this.stopBtn.hidden = true;
     buttons.append(this.sendBtn, this.stopBtn);
     footer.append(hint, buttons);
-    composer.append(this.composer, footer);
+
+    this.popoverEl = document.createElement("div");
+    this.popoverEl.className = "chat-composer-popover";
+    this.popoverEl.hidden = true;
+    this.popoverEl.setAttribute("role", "listbox");
+
+    composer.append(toolbar, this.composer, footer, this.popoverEl);
 
     this.element.append(
       this.tabsEl,
@@ -190,11 +294,24 @@ export class ChatPanel {
       this.composer.value = nextActive
         ? this.drafts.get(nextActive) ?? ""
         : "";
+      this.hidePopover();
     }
     const sessionIds = new Set(this.options.sessions.map((session) => session.id));
     for (const id of [...this.drafts.keys()]) {
       if (!sessionIds.has(id)) this.drafts.delete(id);
     }
+
+    if (
+      this.lastKit !== this.options.kit ||
+      this.lastModels !== this.options.models
+    ) {
+      this.lastKit = this.options.kit;
+      this.lastModels = this.options.models;
+      this.renderAgentOptions(state.agent);
+      this.renderModelOptions(state.model);
+    }
+    this.syncSelectValue(this.agentSelect, state.agent, state.agent ?? "");
+    this.syncSelectValue(this.modelSelect, state.model, state.model ?? "");
 
     this.titleEl.textContent = t(lang, "chatHeaderTitle");
     this.composer.placeholder = t(lang, "chatPlaceholder");
@@ -238,6 +355,7 @@ export class ChatPanel {
   }
 
   public clearDraft(): void {
+    this.hidePopover();
     this.composer.value = "";
     if (this.draftSessionId) {
       this.drafts.delete(this.draftSessionId);
@@ -248,6 +366,241 @@ export class ChatPanel {
 
   public focus(): void {
     this.composer.focus();
+  }
+
+  public appendDraft(text: string): void {
+    const addition = text.trim();
+    if (!addition) return;
+    const current = this.composer.value.trimEnd();
+    this.composer.value = current ? `${current}\n\n${addition}` : addition;
+    this.saveDraft();
+    this.updateSendState();
+    this.hidePopover();
+    this.composer.focus();
+    this.composer.setSelectionRange(
+      this.composer.value.length,
+      this.composer.value.length,
+    );
+  }
+
+  private saveDraft(): void {
+    if (this.draftSessionId) {
+      this.drafts.set(this.draftSessionId, this.composer.value);
+    }
+  }
+
+  private syncSelectValue(
+    select: HTMLSelectElement,
+    value: string | null,
+    label: string,
+  ): void {
+    if (!value) {
+      select.value = "";
+      return;
+    }
+    if (![...select.options].some((option) => option.value === value)) {
+      const option = document.createElement("option");
+      option.value = value;
+      option.textContent = label || value;
+      select.appendChild(option);
+    }
+    select.value = value;
+  }
+
+  private renderAgentOptions(selected: string | null): void {
+    const lang = this.options.language;
+    this.agentSelect.innerHTML = "";
+    const fallback = document.createElement("option");
+    fallback.value = "";
+    fallback.textContent = t(lang, "chatAgentDefault");
+    this.agentSelect.appendChild(fallback);
+    for (const agent of this.options.kit.agents) {
+      const option = document.createElement("option");
+      option.value = agent.name;
+      option.textContent = agent.name;
+      option.title = agent.description;
+      this.agentSelect.appendChild(option);
+    }
+    this.syncSelectValue(this.agentSelect, selected, selected ?? "");
+  }
+
+  private renderModelOptions(selected: string | null): void {
+    const lang = this.options.language;
+    this.modelSelect.innerHTML = "";
+    const fallback = document.createElement("option");
+    fallback.value = "";
+    fallback.textContent = t(lang, "chatModelDefault");
+    this.modelSelect.appendChild(fallback);
+
+    const byProvider = new Map<string, OpenCodeModel[]>();
+    for (const model of this.options.models) {
+      const models = byProvider.get(model.providerId) ?? [];
+      models.push(model);
+      byProvider.set(model.providerId, models);
+    }
+    const currentProvider = selected?.split("/")[0] ?? "opencode-go";
+    const providers = [...byProvider.keys()].sort((a, b) => {
+      if (a === currentProvider) return -1;
+      if (b === currentProvider) return 1;
+      if (a === "opencode-go") return -1;
+      if (b === "opencode-go") return 1;
+      return a.localeCompare(b);
+    });
+    for (const provider of providers) {
+      const group = document.createElement("optgroup");
+      group.label = provider;
+      for (const model of byProvider.get(provider)!.sort((a, b) =>
+        a.name.localeCompare(b.name),
+      )) {
+        const option = document.createElement("option");
+        option.value = `${provider}/${model.id}`;
+        option.textContent = model.name;
+        group.appendChild(option);
+        for (const variant of model.variants) {
+          const variantOption = document.createElement("option");
+          variantOption.value = `${provider}/${model.id}#${variant}`;
+          variantOption.textContent = `${model.name} · ${variant}`;
+          group.appendChild(variantOption);
+        }
+      }
+      this.modelSelect.appendChild(group);
+    }
+    this.syncSelectValue(this.modelSelect, selected, selected ?? "");
+  }
+
+  private refreshPopover(): void {
+    if (this.composer.disabled) {
+      this.hidePopover();
+      return;
+    }
+    const token = activeCompletion(
+      this.composer.value,
+      this.composer.selectionStart ?? this.composer.value.length,
+    );
+    if (!token) {
+      this.hidePopover();
+      return;
+    }
+    const items =
+      token.kind === "command"
+        ? filterCommands(this.options.kit.commands, token.query).map(
+            (command) => ({
+              value: command.name,
+              label: `/${command.name}`,
+              description: command.description,
+            }),
+          )
+        : filterProjectFiles(this.options.projectFiles, token.query).map(
+            (file) => ({
+              value: file.path,
+              label: file.path,
+              description: file.name ?? "",
+            }),
+          );
+    if (items.length === 0) {
+      this.hidePopover();
+      return;
+    }
+    this.popoverToken = token;
+    this.popoverMode = token.kind;
+    this.popoverItems = items;
+    this.popoverIndex = 0;
+    this.renderPopover();
+    this.popoverEl.hidden = false;
+  }
+
+  private renderPopover(): void {
+    const lang = this.options.language;
+    this.popoverEl.innerHTML = "";
+    const title = document.createElement("div");
+    title.className = "chat-composer-popover-title";
+    title.textContent =
+      this.popoverMode === "command"
+        ? t(lang, "chatCommandsTitle")
+        : t(lang, "chatFilesTitle");
+    this.popoverEl.appendChild(title);
+    this.popoverItems.forEach((item, index) => {
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className = "chat-composer-option";
+      button.dataset.testid = `composer-option-${index}`;
+      button.dataset.active = String(index === this.popoverIndex);
+      button.setAttribute("role", "option");
+      button.setAttribute("aria-selected", String(index === this.popoverIndex));
+      const label = document.createElement("span");
+      label.className = "chat-composer-option-label";
+      label.textContent = item.label;
+      button.appendChild(label);
+      if (item.description) {
+        const description = document.createElement("span");
+        description.className = "chat-composer-option-description";
+        description.textContent = item.description;
+        button.appendChild(description);
+      }
+      button.onmousedown = (event) => event.preventDefault();
+      button.onclick = () => this.selectPopoverItem(index);
+      this.popoverEl.appendChild(button);
+    });
+    this.popoverEl
+      .querySelector<HTMLElement>('[data-active="true"]')
+      ?.scrollIntoView?.({ block: "nearest" });
+  }
+
+  private movePopover(delta: number): void {
+    if (this.popoverItems.length === 0) return;
+    this.popoverIndex =
+      (this.popoverIndex + delta + this.popoverItems.length) %
+      this.popoverItems.length;
+    this.renderPopover();
+  }
+
+  private selectPopoverItem(index = this.popoverIndex): void {
+    const token = this.popoverToken;
+    const item = this.popoverItems[index];
+    if (!token || !item) return;
+    const replacement =
+      this.popoverMode === "command"
+        ? `/${item.value} `
+        : `@${item.value} `;
+    const completed = replaceCompletion(
+      this.composer.value,
+      token,
+      replacement,
+    );
+    this.composer.value = completed.text;
+    this.saveDraft();
+    this.hidePopover();
+    this.updateSendState();
+    this.composer.focus();
+    this.composer.setSelectionRange(completed.cursor, completed.cursor);
+  }
+
+  private hidePopover(): void {
+    this.popoverMode = null;
+    this.popoverToken = null;
+    this.popoverItems = [];
+    this.popoverIndex = 0;
+    if (this.popoverEl) {
+      this.popoverEl.hidden = true;
+      this.popoverEl.innerHTML = "";
+    }
+  }
+
+  private openMentionAtCursor(): void {
+    if (this.composer.disabled) return;
+    const value = this.composer.value;
+    const start = this.composer.selectionStart ?? value.length;
+    const end = this.composer.selectionEnd ?? start;
+    const before = value.slice(0, start);
+    const needsSpace = before.length > 0 && !/\s$/.test(before);
+    const insert = `${needsSpace ? " " : ""}@`;
+    this.composer.value = `${before}${insert}${value.slice(end)}`;
+    const cursor = start + insert.length;
+    this.composer.focus();
+    this.composer.setSelectionRange(cursor, cursor);
+    this.saveDraft();
+    this.updateSendState();
+    this.refreshPopover();
   }
 
   private submit(): void {
@@ -273,6 +626,13 @@ export class ChatPanel {
       !this.options.activeSessionId ||
       this.state.status === "starting" ||
       this.state.status === "idle";
+    const ready = this.state.status === "ready" && Boolean(this.options.activeSessionId);
+    this.agentSelect.disabled = !ready;
+    this.modelSelect.disabled = !ready;
+    this.attachBtn.disabled = !ready;
+    if (this.composer.disabled) {
+      this.hidePopover();
+    }
   }
 
   private statusText(state: ChatState): { text: string; className: string } {

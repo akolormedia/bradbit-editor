@@ -22,6 +22,11 @@ function options(overrides: Partial<ChatPanelOptions> = {}): ChatPanelOptions {
     onOpenToolFile: vi.fn(),
     onPermissionReply: vi.fn(),
     onFormReply: vi.fn(),
+    kit: { agents: [], commands: [], skills: [] },
+    models: [],
+    projectFiles: [],
+    onAgentChange: vi.fn(),
+    onModelChange: vi.fn(),
     ...overrides,
   };
 }
@@ -436,4 +441,140 @@ describe("chat panel (T-2.1.1)", () => {
     expect(panel.element.textContent).toContain("Respondida");
     expect(panel.element.textContent).toContain("Color favorito: Rojo");
   });
+
+  it("shows kit agents and model variants and reports changes (T-2.2.2)", () => {
+    const onAgentChange = vi.fn();
+    const onModelChange = vi.fn();
+    const panel = new ChatPanel(
+      options({
+        kit: {
+          agents: [
+            {
+              id: "guionista",
+              name: "guionista",
+              description: "Escribe",
+              path: ".opencode/agents/guionista.md",
+            },
+          ],
+          commands: [],
+          skills: [],
+        },
+        models: [
+          {
+            id: "hy4",
+            name: "Hy4",
+            providerId: "opencode-go",
+            variants: ["high"],
+          },
+        ],
+        onAgentChange,
+        onModelChange,
+      }),
+    );
+    panel.update(readyState());
+
+    const agentSelect = panel.element.querySelector<HTMLSelectElement>(
+      '[data-testid="chat-agent-select"]',
+    )!;
+    expect([...agentSelect.options].map((option) => option.value)).toEqual([
+      "",
+      "guionista",
+    ]);
+    agentSelect.value = "guionista";
+    agentSelect.dispatchEvent(new Event("change"));
+    expect(onAgentChange).toHaveBeenCalledWith("guionista");
+
+    const modelSelect = panel.element.querySelector<HTMLSelectElement>(
+      '[data-testid="chat-model-select"]',
+    )!;
+    expect([...modelSelect.options].map((option) => option.value)).toContain(
+      "opencode-go/hy4#high",
+    );
+    modelSelect.value = "opencode-go/hy4#high";
+    modelSelect.dispatchEvent(new Event("change"));
+    expect(onModelChange).toHaveBeenCalledWith(
+      "opencode-go",
+      "hy4",
+      "high",
+    );
+  });
+
+  it("completes slash commands without sending the message (T-2.2.2)", () => {
+    const onSend = vi.fn();
+    const panel = new ChatPanel(
+      options({
+        onSend,
+        kit: {
+          agents: [],
+          commands: [
+            {
+              id: "escena",
+              name: "escena",
+              description: "Escribe una escena",
+              agent: "guionista",
+              path: ".opencode/commands/escena.md",
+            },
+          ],
+          skills: [],
+        },
+      }),
+    );
+    panel.update(readyState());
+    const input = panel.element.querySelector<HTMLTextAreaElement>(
+      '[data-testid="chat-input"]',
+    )!;
+    input.value = "/esc";
+    input.setSelectionRange(4, 4);
+    input.dispatchEvent(new Event("input"));
+
+    expect(panel.element.textContent).toContain("/escena");
+    input.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter" }));
+    expect(input.value).toBe("/escena ");
+    expect(onSend).not.toHaveBeenCalled();
+  });
+
+  it("completes @ file mentions from the composer and the attach button", () => {
+    const panel = new ChatPanel(
+      options({
+        projectFiles: [{ path: "notas.md", name: "notas.md" }],
+      }),
+    );
+    panel.update(readyState());
+    const input = panel.element.querySelector<HTMLTextAreaElement>(
+      '[data-testid="chat-input"]',
+    )!;
+    input.value = "@not";
+    input.setSelectionRange(4, 4);
+    input.dispatchEvent(new Event("input"));
+    expect(panel.element.textContent).toContain("notas.md");
+    input.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter" }));
+    expect(input.value).toBe("@notas.md ");
+
+    input.value = "hola";
+    input.setSelectionRange(4, 4);
+    input.dispatchEvent(new Event("input"));
+    panel.element
+      .querySelector<HTMLButtonElement>('[data-testid="chat-attach"]')
+      ?.click();
+    expect(input.value).toBe("hola @");
+    panel.element
+      .querySelector<HTMLButtonElement>('[data-testid="composer-option-0"]')
+      ?.click();
+    expect(input.value).toBe("hola @notas.md ");
+  });
+
+  it("appends an editor selection to the current draft", () => {
+    const panel = new ChatPanel(options());
+    panel.update(readyState());
+    const input = panel.element.querySelector<HTMLTextAreaElement>(
+      '[data-testid="chat-input"]',
+    )!;
+    input.value = "Revisa esto";
+    input.dispatchEvent(new Event("input"));
+    panel.appendDraft("Contexto de `notas.md`:\n> Texto seleccionado");
+    expect(input.value).toContain("Revisa esto");
+    expect(input.value).toContain("Contexto de `notas.md`");
+    expect(input.value).toContain("> Texto seleccionado");
+  });
+
 });
