@@ -31,7 +31,7 @@ Editor de texto de escritorio agnóstico para escritura creativa (`.md`, `.mdx`,
   - Al crear el proyecto se ejecuta **`git init`** si Git está disponible y la app abre la carpeta resultante.
   - **Guardar proyecto actual como plantilla…** y **Abrir carpeta de plantillas** desde el modal y el menú *Archivo*.
 - **Explorador de archivos lateral redimensionable y colapsable (`⌘⇧E`):**
-  - Pestañas **Archivos | Esquema** en el panel lateral.
+  - Selector compacto de iconos **Archivos / Esquema / Versiones** en la cabecera del panel; solo se muestra la sección activa y el árbol gana altura al no ocupar una fila de pestañas.
   - Oculta por defecto `.git`, `.DS_Store` y `.opencode` con opción *Mostrar archivos de configuración*.
   - Acciones integradas: Nuevo archivo (`⌘N`), Nueva carpeta, Renombrar y Eliminar (con confirmación).
 - **Esquema del documento (`T-1.2.2`):**
@@ -61,7 +61,7 @@ Editor de texto de escritorio agnóstico para escritura creativa (`.md`, `.mdx`,
   - El botón **↺ Descartar cambios** pide confirmación y restaura el archivo a `HEAD`; si es un archivo nuevo, lo elimina del disco y del índice. La pestaña, el árbol y las insignias se refrescan al instante.
   - Funciona también con cambios sin guardar: el Diff muestra el texto vivo de la pestaña y el descarte elimina tanto el borrador como los cambios en disco.
 - **Panel de Versiones (`T-1.4.4`):**
-  - Nueva pestaña **Versiones** en el panel lateral, también accesible con **`⌘⌥G`**.
+  - Sección **Versiones** del selector lateral, también accesible con **`⌘⌥G`**.
   - **Guardar versión:** resume los cambios pendientes, permite escribir el resumen y firma el commit con el nombre y correo configurados en *Ajustes → Autor de las versiones*.
   - **Cambios actuales:** lista humana de archivos *Editado*, *Nuevo*, *Eliminado*, *Renombrado* o *Conflicto*; cada fila abre su Diff y ofrece descartar/restaurar.
   - **Historial de versiones:** línea de tiempo de commits con fecha y autor; al expandir una versión se inspeccionan sus archivos y se puede restaurar cualquiera de ellos sin salir del editor.
