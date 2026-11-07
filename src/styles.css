@@ -1844,13 +1844,6 @@ textarea.text-input {
   color: var(--text-muted);
 }
 
-.terminal-toggle-btn {
-  font-family: var(--font-mono);
-  font-size: 10px;
-  font-weight: 700;
-  letter-spacing: -0.04em;
-}
-
 .terminal-panel {
   height: 100%;
   min-height: 0;
@@ -2670,15 +2663,29 @@ textarea.text-input {
 .statusbar-right {
   display: flex;
   align-items: center;
+}
+
+.statusbar-left {
+  gap: 8px;
+  min-width: 0;
+}
+
+.statusbar-right {
   gap: 14px;
+}
+
+.statusbar-divider {
+  flex-shrink: 0;
+  width: 1px;
+  height: 14px;
+  margin: 0 2px;
+  background: var(--border-color);
 }
 
 .statusbar-sections {
   display: flex;
   align-items: center;
   gap: 1px;
-  padding-right: 6px;
-  border-right: 1px solid var(--border-color);
 }
 
 .statusbar .sidebar-switch {

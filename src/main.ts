@@ -2515,15 +2515,6 @@ class BradbitApp {
     left.className = "topbar-left";
 
     if (this.folder) {
-      const toggleBtn = createIconButton({
-        icon: "panel-left",
-        label: t(lang, "toggleSidebar"),
-        title: `${t(lang, "toggleSidebar")} (⌘⇧E)`,
-        testId: "toggle-sidebar-btn",
-        onClick: () => this.toggleSidebar(),
-      });
-      left.appendChild(toggleBtn);
-
       const chatBtn = createIconButton({
         icon: "message-square",
         label: t(lang, "chatToggleChat"),
@@ -2541,16 +2532,6 @@ class BradbitApp {
         onClick: () => this.toggleEditorPanel(),
       });
       left.appendChild(editorBtn);
-
-      const terminalBtn = createIconButton({
-        icon: "terminal",
-        label: t(lang, "chatToggleTerminal"),
-        testId: "toggle-terminal-btn",
-        className: "terminal-toggle-btn",
-        active: this.sessionView === "terminal",
-        onClick: () => this.toggleTerminalView(),
-      });
-      left.appendChild(terminalBtn);
 
       const badge = document.createElement("span");
       badge.className = "project-badge";
@@ -3422,6 +3403,13 @@ class BradbitApp {
     }
   }
 
+  private renderStatusbarDivider(): HTMLElement {
+    const divider = document.createElement("span");
+    divider.className = "statusbar-divider";
+    divider.setAttribute("aria-hidden", "true");
+    return divider;
+  }
+
   private renderStatusbar(lang: AppSettings["language"], activeTab: OpenTab | null): HTMLElement {
     const bar = document.createElement("footer");
     bar.className = "statusbar";
@@ -3430,23 +3418,45 @@ class BradbitApp {
     left.className = "statusbar-left";
 
     if (this.folder) {
+      const sidebarToggle = createIconButton({
+        icon: "panel-left",
+        label: t(lang, "toggleSidebar"),
+        title: `${t(lang, "toggleSidebar")} (⌘⇧E)`,
+        testId: "statusbar-toggle-sidebar",
+        active: this.sidebarVisible,
+        onClick: () => this.toggleSidebar(),
+      });
+      left.appendChild(sidebarToggle);
+      left.appendChild(this.renderStatusbarDivider());
+
       const sections = this.renderSidebarSwitcher(lang);
       sections.classList.add("statusbar-sections");
       left.appendChild(sections);
-    }
+      left.appendChild(this.renderStatusbarDivider());
 
-    if (this.gitStatus?.isRepository) {
-      const branchSpan = document.createElement("span");
-      branchSpan.className = "git-branch";
-      const ahead = this.gitStatus.ahead > 0 ? ` ↑${this.gitStatus.ahead}` : "";
-      const behind = this.gitStatus.behind > 0 ? ` ↓${this.gitStatus.behind}` : "";
-      branchSpan.append(
-        createIcon("git-branch", 12),
-        document.createTextNode(
-          `${this.gitStatus.branch ?? t(lang, "gitNoBranch")}${ahead}${behind}`,
-        ),
-      );
-      left.appendChild(branchSpan);
+      const terminalToggle = createIconButton({
+        icon: "terminal",
+        label: t(lang, "chatToggleTerminal"),
+        testId: "toggle-terminal-btn",
+        active: this.sessionView === "terminal",
+        onClick: () => this.toggleTerminalView(),
+      });
+      left.appendChild(terminalToggle);
+
+      if (this.gitStatus?.isRepository) {
+        left.appendChild(this.renderStatusbarDivider());
+        const branchSpan = document.createElement("span");
+        branchSpan.className = "git-branch";
+        const ahead = this.gitStatus.ahead > 0 ? ` ↑${this.gitStatus.ahead}` : "";
+        const behind = this.gitStatus.behind > 0 ? ` ↓${this.gitStatus.behind}` : "";
+        branchSpan.append(
+          createIcon("git-branch", 12),
+          document.createTextNode(
+            `${this.gitStatus.branch ?? t(lang, "gitNoBranch")}${ahead}${behind}`,
+          ),
+        );
+        left.appendChild(branchSpan);
+      }
     }
 
     if (activeTab) {
