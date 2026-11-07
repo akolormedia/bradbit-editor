@@ -464,3 +464,47 @@ describe("chat forms and questions (T-2.1.4)", () => {
     expect(state.error).toBe("sin conexión");
   });
 });
+
+describe("chat agent and model selection (T-2.2.2)", () => {
+  it("loads the agent from history and preserves the selected model variant", () => {
+    let state = chatFromHistory(session, [
+      {
+        id: "msg_assistant",
+        role: "assistant",
+        text: "ok",
+        model: "opencode-go/hy4",
+        agent: "guionista",
+        parts: [{ type: "text", text: "ok" }],
+      },
+    ]);
+    expect(state.agent).toBe("guionista");
+    state = { ...state, model: "opencode-go/hy4#high" };
+    state = applyOpenCodeEvent(state, {
+      type: "session.step.started",
+      data: {
+        sessionID: "ses_test",
+        agent: "guionista",
+        model: { id: "hy4", providerID: "opencode-go" },
+      },
+    });
+    expect(state.model).toBe("opencode-go/hy4#high");
+    expect(state.agent).toBe("guionista");
+  });
+
+  it("reacts to agent and model selection events", () => {
+    let state = ready();
+    state = applyOpenCodeEvent(state, {
+      type: "session.agent.selected",
+      data: { sessionID: "ses_test", agent: "editor" },
+    });
+    expect(state.agent).toBe("editor");
+    state = applyOpenCodeEvent(state, {
+      type: "session.model.selected",
+      data: {
+        sessionID: "ses_test",
+        model: { id: "hy4", providerID: "opencode-go", variant: "none" },
+      },
+    });
+    expect(state.model).toBe("opencode-go/hy4#none");
+  });
+});

@@ -19,6 +19,7 @@ import {
   OpenCodeChatMessage,
   OpenCodeEvent,
   OpenCodeForm,
+  OpenCodeModel,
   OpenCodePermission,
   OpenedFolder,
   OpenTab,
@@ -65,6 +66,7 @@ import {
 } from "./session/chatState";
 import { addSessionTab, removeSessionTab, SessionTabInfo } from "./session/sessionTabs";
 import { projectRelativePath } from "./session/chatPaths";
+import { parseSlashCommand } from "./session/composer";
 import { MenuSyncQueue } from "./workspace/menuSync";
 import { extractOutline, OutlineItem } from "./workspace/outline";
 import {
@@ -162,6 +164,7 @@ class BradbitApp {
   private sidebarTab: SidebarTab = "files";
   private sidebarWidth = 260;
   private kitCatalog: KitCatalog = { agents: [], commands: [], skills: [] };
+  private chatModels: OpenCodeModel[] = [];
   private outlineRefreshTimer: number | null = null;
   private modal: ModalState = { kind: "none" };
   private statusNotice = "";
@@ -1055,6 +1058,12 @@ class BradbitApp {
           void this.replyChatPermission(requestId, decision),
         onFormReply: (formId, answer) =>
           void this.replyChatForm(formId, answer),
+        kit: this.kitCatalog,
+        models: this.chatModels,
+        projectFiles: this.projectFiles(),
+        onAgentChange: (agent) => void this.changeChatAgent(agent),
+        onModelChange: (providerId, modelId, variant) =>
+          void this.changeChatModel(providerId, modelId, variant),
       });
     }
     this.updateChatPanel();
@@ -1069,7 +1078,16 @@ class BradbitApp {
       sessions: this.chatSessionTabs(),
       activeSessionId: this.activeChatSessionId,
       canCreateSession: this.chatState.status === "ready",
+      kit: this.kitCatalog,
+      models: this.chatModels,
+      projectFiles: this.projectFiles(),
     });
+  }
+
+  private projectFiles() {
+    return flattenFileTree(
+      filterTreeNodes(this.folder?.tree ?? [], this.settings.showConfigFiles),
+    );
   }
 
   private persistWorkspaceState(): void {
@@ -1134,6 +1152,12 @@ class BradbitApp {
       if (!this.folder || this.folder.rootPath !== root) {
         await backend.opencodeStop();
         return;
+      }
+      try {
+        this.chatModels = await backend.opencodeListModels();
+      } catch (err) {
+        console.error("No se pudieron listar los modelos de OpenCode", err);
+        this.chatModels = [];
       }
 
       const available = await backend.opencodeListSessions();
@@ -1222,6 +1246,7 @@ class BradbitApp {
     this.chatSessions.clear();
     this.chatSessionOrder = [];
     this.activeChatSessionId = null;
+    this.chatModels = [];
     this.chatState = chatStopped();
     this.updateChatPanel();
   }
@@ -1344,6 +1369,61 @@ class BradbitApp {
     }
   }
 
+  private async changeChatAgent(agent: string | null): Promise<void> {
+    const sessionId = this.activeChatSessionId;
+    if (!sessionId) return;
+    const target = agent || "build";
+    try {
+      await backend.opencodeSwitchAgent(sessionId, target);
+      const state = this.chatSessions.get(sessionId);
+      if (!state) return;
+      const next = { ...state, agent: target };
+      this.chatSessions.set(sessionId, next);
+      if (this.activeChatSessionId === sessionId) {
+        this.chatState = next;
+      }
+      this.updateChatPanel();
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      this.chatState = chatSendFailed(this.chatState, message);
+      this.chatSessions.set(sessionId, this.chatState);
+      this.updateChatPanel();
+    }
+  }
+
+  private async changeChatModel(
+    providerId: string,
+    modelId: string,
+    variant?: string,
+  ): Promise<void> {
+    const sessionId = this.activeChatSessionId;
+    if (!sessionId) return;
+    try {
+      await backend.opencodeSwitchModel(
+        sessionId,
+        providerId,
+        modelId,
+        variant,
+      );
+      const state = this.chatSessions.get(sessionId);
+      if (!state) return;
+      const next = {
+        ...state,
+        model: `${providerId}/${modelId}${variant ? `#${variant}` : ""}`,
+      };
+      this.chatSessions.set(sessionId, next);
+      if (this.activeChatSessionId === sessionId) {
+        this.chatState = next;
+      }
+      this.updateChatPanel();
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      this.chatState = chatSendFailed(this.chatState, message);
+      this.chatSessions.set(sessionId, this.chatState);
+      this.updateChatPanel();
+    }
+  }
+
   private async openChatToolFile(
     rawPath: string,
     showDiff: boolean,
@@ -1397,7 +1477,21 @@ class BradbitApp {
     this.chatPanel?.clearDraft();
     this.updateChatPanel();
     try {
-      await backend.opencodeSend(sessionId, text);
+      const command = parseSlashCommand(text);
+      const kitCommand = command
+        ? this.kitCatalog.commands.find(
+            (candidate) => candidate.name === command.name,
+          )
+        : undefined;
+      if (command && kitCommand) {
+        await backend.opencodeRunCommand(
+          sessionId,
+          command.name,
+          command.args,
+        );
+      } else {
+        await backend.opencodeSend(sessionId, text);
+      }
     } catch (err) {
       this.chatState = chatSendFailed(
         this.chatState,
@@ -2411,6 +2505,7 @@ class BradbitApp {
         this.chatPanel = null;
         this.folder = null;
         this.kitCatalog = { agents: [], commands: [], skills: [] };
+        this.chatModels = [];
         this.tabState = { tabs: [], activeTabPath: null };
         this.gitStatus = null;
         this.gitHistory = [];
@@ -3057,6 +3152,7 @@ class BradbitApp {
           language: lang,
           onTogglePreview: () => this.togglePreview(),
           onCopy: () => this.copyActiveDocument(),
+          onSendSelection: () => this.sendSelectionToChat(),
           onExportPdf: isTauriEnvironment()
             ? () => void this.exportActiveFountainPdf()
             : undefined,
@@ -3123,6 +3219,30 @@ class BradbitApp {
 
     col.appendChild(surface);
     return col;
+  }
+
+  private sendSelectionToChat(): void {
+    const active = this.getActiveTab();
+    if (!active) return;
+    const selection = this.editor?.getSelection() ?? "";
+    if (!selection.trim()) {
+      this.statusNotice = t(this.settings.language, "chatSelectionEmpty");
+      this.render();
+      return;
+    }
+    if (!this.chatVisible) {
+      this.chatVisible = true;
+      this.render();
+    }
+    const quoted = selection
+      .trim()
+      .split("\n")
+      .map((line) => `> ${line}`)
+      .join("\n");
+    this.ensureChatPanel().appendDraft(
+      `Contexto de \`${active.path}\`:\n${quoted}`,
+    );
+    this.persistWorkspaceState();
   }
 
   private handlePreviewClick(event: MouseEvent, activeTab: OpenTab): void {

@@ -7,6 +7,7 @@ export interface DocumentHeaderOptions {
   language: Language;
   onTogglePreview: () => void;
   onCopy: () => Promise<boolean>;
+  onSendSelection?: () => void;
   onExportPdf?: () => void;
   canDiff?: boolean;
   diffActive?: boolean;
@@ -41,6 +42,17 @@ export function createDocumentHeader(options: DocumentHeaderOptions): HTMLElemen
 
   const actions = document.createElement("div");
   actions.className = "document-actions";
+
+  if (options.onSendSelection) {
+    const sendBtn = document.createElement("button");
+    sendBtn.className = "icon-btn document-action";
+    sendBtn.dataset.action = "send-selection";
+    sendBtn.title = t(language, "chatSendSelection");
+    sendBtn.setAttribute("aria-label", t(language, "chatSendSelection"));
+    sendBtn.textContent = "↗";
+    sendBtn.onclick = () => options.onSendSelection?.();
+    actions.appendChild(sendBtn);
+  }
 
   if (isMarkdownPath(tab.path)) {
     const previewBtn = document.createElement("button");

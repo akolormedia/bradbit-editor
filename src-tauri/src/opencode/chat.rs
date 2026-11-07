@@ -47,6 +47,7 @@ pub struct OpenCodeChatMessage {
     pub parts: Vec<OpenCodeMessagePart>,
     pub tokens: Option<OpenCodeTokens>,
     pub model: Option<String>,
+    pub agent: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize)]
@@ -108,6 +109,7 @@ pub fn parse_chat_message(value: &Value) -> Option<OpenCodeChatMessage> {
             parts: vec![OpenCodeMessagePart::Text { text }],
             tokens: None,
             model: None,
+            agent: None,
         });
     }
 
@@ -149,6 +151,10 @@ pub fn parse_chat_message(value: &Value) -> Option<OpenCodeChatMessage> {
         parts,
         tokens: value.get("tokens").and_then(parse_tokens),
         model: parse_model(value.get("model")),
+        agent: value
+            .get("agent")
+            .and_then(Value::as_str)
+            .map(str::to_string),
     })
 }
 

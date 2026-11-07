@@ -26,6 +26,17 @@ pub struct OpenCodeSession {
     pub title: String,
     pub updated: Option<i64>,
     pub directory: Option<String>,
+    pub agent: Option<String>,
+    pub model: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct OpenCodeModel {
+    pub id: String,
+    pub name: String,
+    pub provider_id: String,
+    pub variants: Vec<String>,
 }
 
 #[derive(Debug, Clone, Serialize, PartialEq, Eq)]
@@ -193,6 +204,58 @@ impl OpenCodeState {
             .as_ref()
             .ok_or_else(|| "OpenCode no está iniciado".to_string())?;
         server.client().reply_form(session_id, form_id, answer)
+    }
+
+    pub fn models(&self) -> Result<Vec<OpenCodeModel>, String> {
+        let server = self
+            .server
+            .lock()
+            .map_err(|_| "No se pudo bloquear el estado de OpenCode".to_string())?;
+        let server = server
+            .as_ref()
+            .ok_or_else(|| "OpenCode no está iniciado".to_string())?;
+        server.client().model_catalog()
+    }
+
+    pub fn switch_agent(&self, session_id: &str, agent: &str) -> Result<(), String> {
+        let server = self
+            .server
+            .lock()
+            .map_err(|_| "No se pudo bloquear el estado de OpenCode".to_string())?;
+        let server = server
+            .as_ref()
+            .ok_or_else(|| "OpenCode no está iniciado".to_string())?;
+        server.client().switch_agent(session_id, agent)
+    }
+
+    pub fn switch_model(
+        &self,
+        session_id: &str,
+        provider_id: &str,
+        model_id: &str,
+        variant: Option<&str>,
+    ) -> Result<(), String> {
+        let server = self
+            .server
+            .lock()
+            .map_err(|_| "No se pudo bloquear el estado de OpenCode".to_string())?;
+        let server = server
+            .as_ref()
+            .ok_or_else(|| "OpenCode no está iniciado".to_string())?;
+        server
+            .client()
+            .switch_model(session_id, provider_id, model_id, variant)
+    }
+
+    pub fn run_command(&self, session_id: &str, name: &str, text: &str) -> Result<(), String> {
+        let server = self
+            .server
+            .lock()
+            .map_err(|_| "No se pudo bloquear el estado de OpenCode".to_string())?;
+        let server = server
+            .as_ref()
+            .ok_or_else(|| "OpenCode no está iniciado".to_string())?;
+        server.client().run_command(session_id, name, text)
     }
 
     pub fn status(&self) -> OpenCodeStatus {

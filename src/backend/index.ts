@@ -19,6 +19,7 @@ import {
   OpenCodeChatMessage,
   OpenCodeEvent,
   OpenCodeForm,
+  OpenCodeModel,
   OpenCodePermission,
   OpenCodeSession,
   OpenCodeStatus,
@@ -858,6 +859,50 @@ export const backend = {
       sessionId,
       requestId,
       decision,
+    });
+  },
+
+  async opencodeListModels(): Promise<OpenCodeModel[]> {
+    if (!isTauriEnvironment()) return [];
+    return tauriInvoke<OpenCodeModel[]>("opencode_list_models");
+  },
+
+  async opencodeSwitchAgent(sessionId: string, agent: string): Promise<void> {
+    if (!isTauriEnvironment()) {
+      throw new Error("OpenCode requiere la app de escritorio");
+    }
+    return tauriInvoke<void>("opencode_switch_agent", { sessionId, agent });
+  },
+
+  async opencodeSwitchModel(
+    sessionId: string,
+    providerId: string,
+    modelId: string,
+    variant?: string,
+  ): Promise<void> {
+    if (!isTauriEnvironment()) {
+      throw new Error("OpenCode requiere la app de escritorio");
+    }
+    return tauriInvoke<void>("opencode_switch_model", {
+      sessionId,
+      providerId,
+      modelId,
+      variant: variant ?? null,
+    });
+  },
+
+  async opencodeRunCommand(
+    sessionId: string,
+    name: string,
+    text: string,
+  ): Promise<void> {
+    if (!isTauriEnvironment()) {
+      throw new Error("OpenCode requiere la app de escritorio");
+    }
+    return tauriInvoke<void>("opencode_run_command", {
+      sessionId,
+      name,
+      text,
     });
   },
 

@@ -12,7 +12,9 @@ use serde_json::{json, Value};
 
 use super::chat::{parse_chat_message, parse_form, parse_permission};
 use super::event::read_events;
-use super::{OpenCodeChatMessage, OpenCodeForm, OpenCodePermission, OpenCodeSession};
+use super::{
+    OpenCodeChatMessage, OpenCodeForm, OpenCodeModel, OpenCodePermission, OpenCodeSession,
+};
 use crate::git::redact_secrets;
 
 const REQUEST_TIMEOUT: Duration = Duration::from_secs(20);
@@ -143,6 +145,104 @@ impl OpenCodeClient {
             .and_then(Value::as_array)
             .ok_or_else(|| "OpenCode no devolvió los formularios pendientes".to_string())?;
         Ok(data.iter().filter_map(parse_form).collect())
+    }
+
+    pub fn model_catalog(&self) -> Result<Vec<OpenCodeModel>, String> {
+        let payload = self.get("/api/model")?;
+        let data = payload
+            .get("data")
+            .and_then(Value::as_array)
+            .ok_or_else(|| "OpenCode no devolvió una lista de modelos".to_string())?;
+        let mut models = std::collections::BTreeMap::new();
+        for item in data {
+            let kind = item.get("type").and_then(Value::as_str).unwrap_or("chat");
+            if kind != "chat" || item.get("enabled").and_then(Value::as_bool) == Some(false) {
+                continue;
+            }
+            let Some(id) = item
+                .get("modelID")
+                .and_then(Value::as_str)
+                .or_else(|| item.get("id").and_then(Value::as_str))
+            else {
+                continue;
+            };
+            let Some(provider_id) = item.get("providerID").and_then(Value::as_str) else {
+                continue;
+            };
+            let name = item
+                .get("name")
+                .and_then(Value::as_str)
+                .unwrap_or(id)
+                .to_string();
+            let variants = item
+                .get("variants")
+                .and_then(Value::as_array)
+                .map(|variants| {
+                    variants
+                        .iter()
+                        .filter_map(|variant| variant.get("id").and_then(Value::as_str))
+                        .map(str::to_string)
+                        .collect::<Vec<_>>()
+                })
+                .unwrap_or_default();
+            models.insert(
+                (provider_id.to_string(), id.to_string()),
+                OpenCodeModel {
+                    id: id.to_string(),
+                    name,
+                    provider_id: provider_id.to_string(),
+                    variants,
+                },
+            );
+        }
+        Ok(models.into_values().collect())
+    }
+
+    pub fn switch_agent(&self, session_id: &str, agent: &str) -> Result<(), String> {
+        validate_session_id(session_id)?;
+        validate_agent_id(agent)?;
+        self.post(
+            &format!("/api/session/{session_id}/agent"),
+            &json!({ "agent": agent }),
+        )?;
+        Ok(())
+    }
+
+    pub fn switch_model(
+        &self,
+        session_id: &str,
+        provider_id: &str,
+        model_id: &str,
+        variant: Option<&str>,
+    ) -> Result<(), String> {
+        validate_session_id(session_id)?;
+        validate_model_part(provider_id)?;
+        validate_model_part(model_id)?;
+        if let Some(variant) = variant {
+            validate_model_part(variant)?;
+        }
+        let mut model = json!({ "id": model_id, "providerID": provider_id });
+        if let Some(variant) = variant {
+            model["variant"] = json!(variant);
+        }
+        self.post(
+            &format!("/api/session/{session_id}/model"),
+            &json!({ "model": model }),
+        )?;
+        Ok(())
+    }
+
+    pub fn run_command(&self, session_id: &str, name: &str, text: &str) -> Result<(), String> {
+        validate_session_id(session_id)?;
+        validate_command_name(name)?;
+        if text.len() > 200_000 {
+            return Err("El texto del comando es demasiado largo".to_string());
+        }
+        self.post(
+            &format!("/api/session/{session_id}/command"),
+            &json!({ "name": name, "text": text }),
+        )?;
+        Ok(())
     }
 
     pub fn reply_form(
@@ -296,6 +396,19 @@ fn api_error(status: u16, body: &str) -> String {
     )
 }
 
+fn parse_model_ref(value: &Value) -> Option<String> {
+    let provider = value.get("providerID").and_then(Value::as_str)?;
+    let id = value.get("id").and_then(Value::as_str)?;
+    let variant = value
+        .get("variant")
+        .and_then(Value::as_str)
+        .filter(|variant| !variant.is_empty());
+    Some(match variant {
+        Some(variant) => format!("{provider}/{id}#{variant}"),
+        None => format!("{provider}/{id}"),
+    })
+}
+
 fn parse_session(value: &Value) -> Option<OpenCodeSession> {
     let id = value.get("id").and_then(Value::as_str)?;
     if !id.starts_with("ses_") {
@@ -313,7 +426,48 @@ fn parse_session(value: &Value) -> Option<OpenCodeSession> {
             .pointer("/location/directory")
             .and_then(Value::as_str)
             .map(str::to_string),
+        agent: value
+            .get("agent")
+            .and_then(Value::as_str)
+            .map(str::to_string),
+        model: value.get("model").and_then(parse_model_ref),
     })
+}
+
+fn validate_agent_id(agent: &str) -> Result<(), String> {
+    if !agent.is_empty()
+        && agent
+            .chars()
+            .all(|character| character.is_ascii_alphanumeric() || "-_.".contains(character))
+    {
+        Ok(())
+    } else {
+        Err("ID de agente de OpenCode inválido".to_string())
+    }
+}
+
+fn validate_model_part(value: &str) -> Result<(), String> {
+    if !value.is_empty()
+        && value
+            .chars()
+            .all(|character| character.is_ascii_alphanumeric() || "-_.:/".contains(character))
+    {
+        Ok(())
+    } else {
+        Err("Identificador de modelo inválido".to_string())
+    }
+}
+
+fn validate_command_name(name: &str) -> Result<(), String> {
+    if !name.is_empty()
+        && name
+            .chars()
+            .all(|character| character.is_ascii_alphanumeric() || "-_.".contains(character))
+    {
+        Ok(())
+    } else {
+        Err("Nombre de comando inválido".to_string())
+    }
 }
 
 fn validate_session_id(session_id: &str) -> Result<(), String> {
@@ -396,12 +550,16 @@ mod tests {
             "id": "ses_abc",
             "title": "Sesión 1",
             "time": { "created": 1, "updated": 42 },
-            "location": { "directory": "/proyecto" }
+            "location": { "directory": "/proyecto" },
+            "agent": "guionista",
+            "model": { "id": "hy4", "providerID": "opencode-go", "variant": "high" }
         }))
         .expect("session");
         assert_eq!(session.id, "ses_abc");
         assert_eq!(session.updated, Some(42));
         assert_eq!(session.directory.as_deref(), Some("/proyecto"));
+        assert_eq!(session.agent.as_deref(), Some("guionista"));
+        assert_eq!(session.model.as_deref(), Some("opencode-go/hy4#high"));
 
         let user = parse_chat_message(&json!({
             "id": "msg_user",
