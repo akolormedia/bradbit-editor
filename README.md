@@ -1,108 +1,145 @@
 # Bradbit Editor (`bradbit-editor`)
 
-Editor de texto de escritorio agnóstico para escritura creativa (`.md`, `.mdx`, `.fountain`, `.txt`), construido con **Tauri v2**, **CodeMirror 6** y **Rust**.
+Desktop text editor for creative writing (`.md`, `.mdx`, `.fountain`, `.txt`), agnostic by design, built with **Tauri v2**, **CodeMirror 6** and **Rust**.
 
-## Características (Fase 1 + inicio de Fase 2)
+> **Alpha version `0.1.0-alpha.1`** · macOS only · early testing. Change history in [`CHANGELOG.md`](CHANGELOG.md).
 
-- **Chat integrado con OpenCode (`T-2.1.1`):**
-  - Layout dividido estilo `opencode-desktop`: **sesión de escritura a la izquierda** y `EditorWorkspace` a la derecha, con divisor redimensionable.
-  - Los botones **💬** y **◫** de la barra superior muestran/ocultan el chat y el editor sin perder el estado de CodeMirror. Al ocultar uno, el otro ocupa todo el ancho de la ventana, con los mensajes y el composer centrados.
-  - **Pestañas de sesión múltiples** con `+`, cambio y cierre; cada pestaña conserva su historial, su estado de generación y su borrador del composer.
-  - **Persistencia por proyecto:** al reabrir la app se restauran las pestañas abiertas, la sesión activa, el ancho del chat y el estado de los paneles.
-  - Inicia o reutiliza **`opencode serve`** automáticamente para la carpeta abierta, crea una sesión si no hay ninguna y transmite la respuesta en vivo.
-  - Composer con **Enter para enviar**, **Shift+Enter** para nueva línea y botón **Detener** durante la generación.
-  - **Herramientas en vivo con permisos (`T-2.1.3`):** tarjetas compactas para `read`, `edit`, `write`, `shell`, búsquedas y skills, con estado en curso/completado/error y detalle expandible de entrada y resultado. Al pulsar un archivo leído/editado se abre en el editor; si la herramienta lo modificó, el botón abre directamente su **Diff**. Si OpenCode pide permiso, aparece una tarjeta para **Permitir una vez**, **Permitir siempre** o **Rechazar**.
-  - **Preguntas interactivas (`T-2.1.4`):** cuando el agente usa la herramienta `question`, aparece una tarjeta con opciones, respuesta libre y varios campos; al responder, la tarjeta queda como **Respondida** o **Cancelada** y la conversación continúa automáticamente con la respuesta del escritor.
-  - **Kit del proyecto (`T-2.2.1`/`T-2.2.2`):** descubre agentes, comandos y skills de `.opencode/` y `.bradbit/`, con actualización automática al editar el kit. El composer incluye autocompletado de comandos con **`/`**, adjuntos con **`@`** o el botón **＋**, y el botón **↗** del editor envía la selección actual al chat activo.
-  - **Composer estilo `opencode-desktop` (`T-2.2.3`):** panel único con placeholder instructivo, selector de **modelo** con búsqueda, recientes y agrupación por proveedor, selector de **effort/variante** separado, botón de enviar **↑** y menú **＋** con archivo de contexto, comando, agente del kit y **Gestionar modelos**. En *Ajustes → Gestionar modelos* se busca y activa/desactiva qué modelos aparecen; la visibilidad y los recientes se guardan en los ajustes.
-  - **Terminal integrada (`T-2.3.1`):** botón **`>_`** en la barra inferior para alternar **Chat / Terminal** en la columna izquierda sin perder el editor ni el buffer. PTY nativo en Rust con selector **Shell / opencode / claude / comando personalizado**, resize automático, reinicio, limpieza y cierre de la sesión al cerrar la carpeta.
-  - **Barra superior mínima y menú de aplicación (`T-2.4.2`):** el título del proyecto y los toggles **Chat/Editor** viven arriba; las acciones de archivo, edición, vista y ajustes se agrupan en un menú desplegable accesible con atajos. Los toggles del panel izquierdo y del terminal están en la barra inferior, junto al branch.
-  - **Superficies Chat/Editor (`T-2.4.3`):** Chat/Terminal y `EditorWorkspace` se presentan como dos paneles independientes con borde, radio y separación sobre el fondo de la app, al estilo `opencode-desktop`. El árbol y el documento comparten la superficie del editor y los divisores mantienen el resize relativo al arrastre.
-  - Muestra estado de conexión, errores accionables, uso de contexto/tokens y conserva el historial de la sesión mientras cambias de archivo.
-  - Usa la configuración, agentes y modelos de OpenCode; Bradbit no almacena claves de modelo.
+## Features
 
-- **Menú nativo de macOS (`Story 1.1.1`):** La barra superior del sistema incluye **Bradbit Editor, Archivo, Edición, Visualización y Ventana**:
-  - *Archivo:* Abrir carpeta (`⌘O`), Abrir reciente, Nuevo proyecto (`⇧⌘N`), Guardar como plantilla, Abrir carpeta de plantillas, Apertura rápida (`⌘P`), Nuevo archivo (`⌘N`), Guardar (`⌘S`), Exportar PDF (`⌘E`) y Cerrar pestaña (`⌘W`).
-  - *Edición:* Deshacer/Rehacer conectados al historial de cada pestaña, Negrita (`⌘B`) y Cursiva (`⌘I`) en Markdown/MDX, Cortar/Copiar/Pegar/Seleccionar todo, Buscar (`⌘F`), Buscar y reemplazar (`⌥⌘F`) y Buscar en proyecto (`⌘⇧F`).
-  - *Visualización:* Mostrar/ocultar explorador (`⌘⇧E`), Vista previa (`⌘⌥P`), Ajuste de línea, Números de línea y Pantalla completa.
-  - *Ventana:* Minimizar, Zoom y Traer todo al frente.
-  - Los ítems se habilitan, deshabilitan y marcan según el estado real, y las etiquetas cambian con el idioma.
-- **Cualquier carpeta es un proyecto:** Abre cualquier carpeta del disco sin requerir archivos de configuración propietarios (`project.yaml`).
-- **Pantalla de bienvenida y proyectos recientes:** Abre carpetas del disco o retoma cualquiera de tus proyectos recientes en un clic.
-- **Nuevo proyecto y plantillas (`T-1.3.2`):**
-  - **Nuevo proyecto (`⇧⌘N`)** desde la pantalla de bienvenida, la barra superior o el menú *Archivo*: elige plantilla, nombre y carpeta de destino.
-  - Plantillas integradas: **Guion Audiovisual (`guionista-kit`)** con biblia, estructura, guion, investigación, agentes, comandos y skills; y **Proyecto en blanco**.
-  - **Plantillas de usuario:** cualquier carpeta en `~/Library/Application Support/Bradbit/templates/` aparece automáticamente en el selector.
-  - Al crear el proyecto se ejecuta **`git init`** si Git está disponible y la app abre la carpeta resultante.
-  - **Guardar proyecto actual como plantilla…** y **Abrir carpeta de plantillas** desde el modal y el menú *Archivo*.
-- **Explorador de archivos lateral redimensionable y colapsable (`⌘⇧E`):**
-  - Selector compacto de iconos **Archivos / Esquema / Versiones** en el extremo izquierdo de la barra inferior; solo se muestra la sección activa y el árbol gana altura al no ocupar una fila de pestañas.
-  - Oculta por defecto `.git`, `.DS_Store` y `.opencode` con opción *Mostrar archivos de configuración*.
-  - **Filtrar archivos (`T-2.4.5`):** campo sobre el árbol que filtra por nombre o ruta, conserva las carpetas ancestro, auto-expande las coincidencias y se limpia con `Escape`.
-  - Acciones integradas: Nuevo archivo (`⌘N`), Nueva carpeta, Renombrar y Eliminar (con confirmación).
-  - **Nuevo archivo sin título (`T-2.4.6`):** `⌘N`, el menú y el árbol abren una pestaña **Sin título**; el nombre real se pide al guardar con el diálogo nativo, dentro de la carpeta del proyecto. Las pestañas sin título no se persisten.
-- **Esquema del documento (`T-1.2.2`):**
-  - En Markdown/MDX: encabezados (`#`, `##`, `###`…) clicables que saltan a la línea exacta.
-  - En Fountain: secciones (`# Acto`) y escenas (`INT.`, `EXT.`, `I/E.`, `.forzada`) con jerarquía y conteo estimado de páginas (`~N páginas`).
-  - Se actualiza automáticamente al escribir y funciona también desde la vista previa (al hacer clic vuelve a edición y salta a la línea).
-- **Búsqueda y navegación rápida (`T-1.2.4`):**
-  - **Apertura rápida (`⌘P`):** paleta que filtra cualquier archivo del proyecto por nombre o ruta y lo abre con Enter.
-  - **Buscar en proyecto (`⌘⇧F`):** búsqueda de texto en todos los archivos con resultados `ruta:línea` y fragmento; Enter abre el archivo en la línea exacta.
-  - Ambas paletas respetan el ajuste *Mostrar archivos de configuración* y funcionan con navegación por teclado (`↑↓`, Enter, Esc).
-- **Pestañas inteligentes:**
-  - Un clic abre en modo *preview* (cursiva); doble clic o editar fija la pestaña.
-  - Indicador de cambios sin guardar (`•`), cierre seguro con confirmación (`⌘W`) y guardado atómico en disco (`⌘S`).
-- **Archivos externos en vivo (`T-1.4.1`):**
-  - Los cambios hechos por `opencode`, `claude` o cualquier proceso externo actualizan el árbol de archivos al instante.
-  - Las pestañas limpias se recargan automáticamente.
-  - Si una pestaña tiene cambios sin guardar, se conserva tu texto y aparece un aviso `⚠` con el mensaje *Cambió en disco*; nunca se sobrescribe tu borrador.
-  - Los archivos eliminados cierran su pestaña si estaba limpia; si tenía cambios, se mantiene la copia para que puedas guardarla.
-- **Insignias de estado Git (`T-1.4.2`):**
-  - Insignias en el explorador y las pestañas: **`M`** modificado, **`+`** nuevo/untracked, **`D`** eliminado, **`R`** renombrado y **`!`** conflicto.
-  - La barra inferior muestra la rama actual y los contadores `↑`/`↓` de commits adelante/atrás.
-  - Las insignias se actualizan al guardar y cuando el File Watcher detecta cambios externos.
-  - Los archivos eliminados del disco se reflejarán en el panel de Versiones (`T-1.4.4`), ya que dejan de existir en el árbol.
-- **Visor de Diffs integrado (`T-1.4.3`):**
-  - El botón **Diff** de la cabecera compara lado a lado la última versión guardada (Git `HEAD`) con el contenido actual de la pestaña, con cambios resaltados y tramos sin cambios colapsados.
-  - Los archivos nuevos muestran el aviso *Archivo nuevo (sin versión guardada)* y se comparan contra un documento vacío.
-  - El botón **↺ Descartar cambios** pide confirmación y restaura el archivo a `HEAD`; si es un archivo nuevo, lo elimina del disco y del índice. La pestaña, el árbol y las insignias se refrescan al instante.
-  - Funciona también con cambios sin guardar: el Diff muestra el texto vivo de la pestaña y el descarte elimina tanto el borrador como los cambios en disco.
-- **Panel de Versiones (`T-1.4.4`):**
-  - Sección **Versiones** del selector lateral, también accesible con **`⌘⌥G`**.
-  - **Guardar versión:** resume los cambios pendientes, permite escribir el resumen y firma el commit con el nombre y correo configurados en *Ajustes → Autor de las versiones*.
-  - **Cambios actuales:** lista humana de archivos *Editado*, *Nuevo*, *Eliminado*, *Renombrado* o *Conflicto*; cada fila abre su Diff y ofrece descartar/restaurar.
-  - **Historial de versiones:** línea de tiempo de commits con fecha y autor; al expandir una versión se inspeccionan sus archivos y se puede restaurar cualquiera de ellos sin salir del editor.
-  - **Borradores paralelos:** lista de ramas Git, creación de un borrador nuevo desde la versión actual y cambio de borrador con recarga segura de las pestañas abiertas.
-  - En carpetas sin Git, el panel ofrece **Activar historial** para crear el repositorio y empezar a guardar versiones.
-  - Los archivos eliminados del disco ahora sí aparecen en *Cambios actuales* con su acción de restauración.
-- **Sincronización con GitHub (`T-1.5.4`):**
-  - **Cuenta de GitHub en Ajustes:** token guardado exclusivamente en el **Keychain de macOS** (nunca en `settings.json` ni en el proyecto), verificación de la cuenta, cierre de sesión y enlace para crear un Personal Access Token.
-  - **Publicar en GitHub:** crea el repositorio remoto (privado o público) y sube la versión actual. Si ya existía un remoto que no era de GitHub, añade un remoto `github` sin tocar `origin`.
-  - **Subir cambios / Traer cambios:** `push` y `pull --ff-only` con el token en el entorno del proceso Git, sin incrustarlo en la URL del remoto. La traída recarga las pestañas abiertas de forma segura.
-  - **Proponer cambios al equipo:** sube el borrador actual y abre un Pull Request con título, descripción y rama base; el panel lista los Pull Requests abiertos y permite abrirlos en GitHub.
-- **Edición profesional con CodeMirror 6:**
-  - Deshacer/rehacer por pestaña, buscar y reemplazar en el archivo (`⌘F`), *word wrap*, números de línea opcionales, corrector ortográfico nativo y resaltado para Markdown y Fountain.
-  - Negrita (`⌘B`) y cursiva (`⌘I`) en Markdown/MDX, con selección o cursor entre marcadores.
-- **Fountain 1.1 y exportación a PDF (`T-1.2.3`):**
-  - Resaltado diferenciado de escenas, secciones, transiciones, personajes, diálogos, paréntesis y notas `[[...]]`.
-  - **Exportar PDF (`⌘E`)** desde la cabecera del documento o el menú *Archivo*: genera un PDF determinista con formato de guion (US Letter, Courier 12pt, 55 líneas por página, reglas de `(MORE)` / `(CONT'D)` y numeración de páginas).
-  - El PDF se guarda en `exports/` del proyecto conservando la subcarpeta del guion (`exports/guion/acto-1.pdf`) y se abre automáticamente en el visor del sistema. Funciona sin conexión a internet.
-- **Cabecera del documento y vista previa de lectura (`T-1.2.1`):**
-  - La cabecera sobre el editor muestra el nombre y la ruta del archivo activo, con acciones **Copiar**, **`</>` Vista previa / Editar** (Markdown) y **PDF** (Fountain).
-  - Vista previa Markdown/MDX renderizada y sanitizada (`⌘⌥P`), con soporte de encabezados, listas, citas, código, tablas y enlaces.
-  - Los enlaces externos se abren en el navegador; los enlaces relativos del proyecto se abren directamente en el editor.
-- **Ajustes de aplicación (`⌘,`, `T-2.4.4`):** ventana con buscador y categorías a la izquierda (General, Apariencia, Editor, Archivos y búsqueda, Terminal, Git, GitHub, IA y modelos). Incluye idioma, tema, tamaño de fuente (`12`–`24` px), ajuste de línea, números de línea, archivos de configuración, comando de terminal, autor de Git, cuenta de GitHub y gestión de modelos.
+- **Integrated chat with OpenCode (`T-2.1.1`):**
+  - Layout in the style of `opencode-desktop`: **writing session on the left** and the `EditorWorkspace` on the right, with a resizable divider.
+  - The **Chat** and **Editor** icons in the top bar show or hide each panel without losing the CodeMirror state. When one is hidden, the other uses the full window width, with messages and composer centered.
+  - **Multiple session tabs** with `+`, switching and closing. Each tab keeps its history, generation state and composer draft.
+  - **Per-project persistence:** reopening the app restores open tabs, the active session, the chat width and the panel state.
+  - Starts or reuses **`opencode serve`** automatically for the open folder, creates a session if there is none, and streams the response live.
+  - Composer with **Enter to send**, **Shift+Enter** for a new line, and a **Stop** button during generation.
+  - **Live tools with permissions (`T-2.1.3`):** compact cards for `read`, `edit`, `write`, `shell`, searches and skills, with running, completed and error status and expandable input and result details. Clicking a file that was read or edited opens it in the editor; if the tool changed it, the button opens its **Diff** directly. When OpenCode asks for permission, a card offers **Allow once**, **Always allow** or **Reject**.
+  - **Interactive questions (`T-2.1.4`):** when the agent uses the `question` tool, a card appears with options, free text and multiple fields. After answering, the card shows **Answered** or **Cancelled**, and the conversation continues automatically with the writer's answer.
+  - **Project kit (`T-2.2.1`/`T-2.2.2`):** discovers agents, commands and skills from `.opencode/` and `.bradbit/`, and updates automatically when the kit changes. The composer offers command autocomplete with **`/`**, attachments with **`@`** or the **＋** button, and the editor's **↗** button sends the current selection to the active chat.
+  - **Composer in the style of `opencode-desktop` (`T-2.2.3`):** a single panel with a helpful placeholder, a **model** picker with search, recents and provider grouping, a separate **effort/variant** picker, the **↑** send button, and a **＋** menu with a context file, command, kit agent and **Manage models**. In *Settings → Manage models* you can search and enable or disable which models appear. Visibility and recents are saved in the settings.
+  - **Integrated terminal (`T-2.3.1`):** the **`>_`** button in the bottom bar switches between **Chat / Terminal** in the left column, without losing the editor or the buffer. Native PTY in Rust with a **Shell / opencode / claude / custom command** picker, automatic resize, restart and clear. The session closes when the folder closes.
+  - **Minimal top bar and application menu (`T-2.4.2`):** the project title and the **Chat/Editor** toggles live at the top. File, edit, view and settings actions are grouped in a dropdown menu with shortcuts. The left panel and terminal toggles are in the bottom bar, next to the branch.
+  - **Chat and editor surfaces (`T-2.4.3`):** Chat/Terminal and the `EditorWorkspace` are two independent panels with a border, radius and spacing over the app background, in the style of `opencode-desktop`. The tree and the document share the editor surface, and the dividers keep the drag-relative resize.
+  - Shows connection status, actionable errors and context/token usage, and keeps the session history while you switch files.
+  - Uses OpenCode's configuration, agents and models. Bradbit does not store model keys.
 
-## Desarrollo y pruebas
+- **Native macOS menu (`Story 1.1.1`):** the system menu bar includes **Bradbit Editor, File, Edit, View and Window**:
+  - *File:* Open folder (`⌘O`), Open recent, New project (`⇧⌘N`), Save as template, Open templates folder, Quick open (`⌘P`), New file (`⌘N`), Save (`⌘S`), Export PDF (`⌘E`) and Close tab (`⌘W`).
+  - *Edit:* Undo and Redo connected to each tab's history, Bold (`⌘B`) and Italic (`⌘I`) in Markdown/MDX, Cut, Copy, Paste and Select all, Find (`⌘F`), Find and replace (`⌥⌘F`) and Find in project (`⌘⇧F`).
+  - *View:* Show or hide the explorer (`⌘⇧E`), Preview (`⌘⌥P`), Word wrap, Line numbers and Full screen.
+  - *Window:* Minimize, Zoom and Bring all to front.
+  - Items are enabled, disabled and checked according to the real state, and labels change with the language.
+- **Any folder is a project:** open any folder on disk without proprietary configuration files (`project.yaml`).
+- **Welcome screen and recent projects:** open folders from disk or reopen any recent project in one click.
+- **New project and templates (`T-1.3.2`):**
+  - **New project (`⇧⌘N`)** from the welcome screen, the top bar or the *File* menu: choose a template, a name and a destination folder.
+  - Built-in templates: **Audiovisual script (`guionista-kit`)**, with bible, structure, script, research, agents, commands and skills; and **Blank project**.
+  - **User templates:** any folder in `~/Library/Application Support/Bradbit/templates/` appears automatically in the template picker.
+  - When the project is created, **`git init`** runs if Git is available, and the app opens the resulting folder.
+  - **Save current project as template…** and **Open templates folder**, from the modal and the *File* menu.
+- **Resizable and collapsible side explorer (`⌘⇧E`):**
+  - Compact **Files / Outline / Versions** icon selector at the left end of the bottom bar. Only the active section is shown, and the tree gets more height because it no longer needs a tab row.
+  - Hides `.git`, `.DS_Store` and `.opencode` by default, with the option *Show configuration files*.
+  - **Filter files (`T-2.4.5`):** a field above the tree that filters by name or path, keeps ancestor folders, auto-expands matches and clears with `Escape`.
+  - Built-in actions: New file (`⌘N`), New folder, Rename and Delete (with confirmation).
+  - **Untitled new file (`T-2.4.6`):** `⌘N`, the menu and the tree open an **Untitled** tab. The real name is requested when saving, through the native dialog, inside the project folder. Untitled tabs are not persisted.
+- **Document outline (`T-1.2.2`):**
+  - In Markdown/MDX: headings (`#`, `##`, `###`…) that jump to the exact line when clicked.
+  - In Fountain: sections (`# Acto`) and scenes (`INT.`, `EXT.`, `I/E.`, `.forced`) with hierarchy and an estimated page count (`~N pages`).
+  - Updates automatically while you type, and also works from the preview: clicking returns to editing and jumps to the line.
+- **Search and quick navigation (`T-1.2.4`):**
+  - **Quick open (`⌘P`):** a palette that filters any project file by name or path and opens it with Enter.
+  - **Find in project (`⌘⇧F`):** full-text search across all files, with `path:line` results and snippets. Enter opens the file at the exact line.
+  - Both palettes respect the *Show configuration files* setting and support keyboard navigation (`↑↓`, Enter, Esc).
+- **Smart tabs:**
+  - A single click opens a tab in *preview* mode (italic). A double click or an edit pins the tab.
+  - Unsaved-changes indicator (`•`), safe close with confirmation (`⌘W`) and atomic writes to disk (`⌘S`).
+- **Live external files (`T-1.4.1`):**
+  - Changes made by `opencode`, `claude` or any other external process update the file tree immediately.
+  - Clean tabs reload automatically.
+  - If a tab has unsaved changes, your text is kept and a `⚠` notice appears with the message *Changed on disk*. Your draft is never overwritten.
+  - Deleted files close their tab if it was clean. If it had changes, the copy is kept so you can save it.
+- **Git status badges (`T-1.4.2`):**
+  - Badges in the explorer and tabs: **`M`** modified, **`+`** new or untracked, **`D`** deleted, **`R`** renamed and **`!`** conflict.
+  - The bottom bar shows the current branch and the `↑`/`↓` counters for commits ahead and behind.
+  - Badges update on save and when the file watcher detects external changes.
+  - Files deleted from disk appear in the Versions panel (`T-1.4.4`), since they no longer exist in the tree.
+- **Integrated Diff viewer (`T-1.4.3`):**
+  - The **Diff** button in the header compares the last saved version (Git `HEAD`) with the tab's current content, side by side, with highlighted changes and collapsed unchanged sections.
+  - New files show the notice *New file (no saved version)* and are compared against an empty document.
+  - The **↺ Discard changes** button asks for confirmation and restores the file to `HEAD`. If it is a new file, it is deleted from disk and from the index. The tab, tree and badges refresh immediately.
+  - Also works with unsaved changes: the Diff shows the live text of the tab, and discarding removes both the draft and the changes on disk.
+- **Versions panel (`T-1.4.4`):**
+  - **Versions** section of the side selector, also available with **`⌘⌥G`**.
+  - **Save version:** summarizes pending changes, lets you write the summary, and signs the commit with the name and email configured in *Settings → Version author*.
+  - **Current changes:** a readable list of *Edited*, *New*, *Deleted*, *Renamed* or *Conflict* files. Each row opens its Diff and offers discard or restore.
+  - **Version history:** a timeline of commits with date and author. Expanding a version lets you inspect its files and restore any of them without leaving the editor.
+  - **Parallel drafts:** a list of Git branches, creation of a new draft from the current version, and switching drafts with a safe reload of open tabs.
+  - In folders without Git, the panel offers **Enable history** to create the repository and start saving versions.
+  - Files deleted from disk now appear in *Current changes* with their restore action.
+- **GitHub sync (`T-1.5.4`):**
+  - **GitHub account in Settings:** the token is stored only in the **macOS Keychain**, never in `settings.json` or the project. Includes account verification, sign-out and a link to create a Personal Access Token.
+  - **Publish to GitHub:** creates the remote repository (private or public) and uploads the current version. If a non-GitHub remote already existed, it adds a `github` remote without touching `origin`.
+  - **Push and pull changes:** `push` and `pull --ff-only`, with the token in the Git process environment and not embedded in the remote URL. Pulling reloads open tabs safely.
+  - **Propose changes to the team:** pushes the current draft and opens a Pull Request with title, description and base branch. The panel lists open Pull Requests and opens them in GitHub.
+- **Professional editing with CodeMirror 6:**
+  - Undo and redo per tab, find and replace in the file (`⌘F`), word wrap, optional line numbers, a native spellchecker, and highlighting for Markdown and Fountain.
+  - Bold (`⌘B`) and italic (`⌘I`) in Markdown/MDX, with the selection or cursor wrapped in markers.
+- **Fountain 1.1 and PDF export (`T-1.2.3`):**
+  - Distinct highlighting for scenes, sections, transitions, characters, dialogue, parentheticals and `[[...]]` notes.
+  - **Export PDF (`⌘E`)** from the document header or the *File* menu. It produces a deterministic screenplay-formatted PDF (US Letter, Courier 12pt, 55 lines per page, `(MORE)` and `(CONT'D)` rules, and page numbering).
+  - The PDF is saved in the project's `exports/` folder, keeping the script subfolder (`exports/guion/acto-1.pdf`), and opens automatically in the system viewer. It works offline.
+- **Document header and reading preview (`T-1.2.1`):**
+  - The header above the editor shows the active file's name and path, with **Copy**, **Preview / Edit** (Markdown) and **PDF** (Fountain) actions.
+  - Rendered and sanitized Markdown/MDX preview (`⌘⌥P`), with headings, lists, quotes, code, tables and links.
+  - External links open in the browser. Relative project links open directly in the editor.
+- **Application settings (`⌘,`, `T-2.4.4`):** a window with a search field and categories on the left (General, Appearance, Editor, Files & search, Terminal, Git, GitHub, AI & models). Includes language, theme, font size (`12`–`24` px), word wrap, line numbers, configuration files, the default terminal command, the Git author, the GitHub account and model management.
+
+## Installation (alpha)
+
+**Requirements**
+- macOS. The alpha has only been tested on macOS.
+- [OpenCode](https://opencode.ai) installed to use the chat. Bradbit looks for it on the `PATH` and in `~/.opencode/bin`.
+- Git (optional): needed for the Versions panel and GitHub sync.
+- GitHub token (optional): only needed to publish and sync repositories.
+
+**Option A: installer**
+1. Download `Bradbit Editor_0.1.0-alpha.1_<architecture>.dmg` from the releases page.
+2. Drag the app into *Applications*.
+3. The alpha is not signed. On first launch, right-click the app, choose **Open** and confirm.
+
+**Option B: build from source**
 
 ```bash
-# Instalar dependencias frontend
+npm install
+npm run tauri build
+# The installer is written to src-tauri/target/release/bundle/dmg/
+```
+
+## Known limitations (alpha)
+
+The full list is in [`CHANGELOG.md`](CHANGELOG.md#known-limitations). Summary:
+- The chat shows agent responses as plain text. Markdown rendering is planned.
+- Markdown documents open in edit mode. Preview by default is planned.
+- Renaming sessions and color themes are planned.
+- Fountain has no on-screen view; only PDF export.
+
+## Development and tests
+
+```bash
+# Install frontend dependencies
 npm install
 
-# Ejecutar pruebas unitarias (Frontend + Rust)
+# Full verification (frontend + Rust)
+npm run typecheck
 npm test
+npm run build
 cargo test --manifest-path src-tauri/Cargo.toml
+cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets -- -D warnings
 
-# Ejecutar en modo escritorio nativo (Tauri)
+# Run in native desktop mode (Tauri)
 npm run tauri dev
+
+# Build the macOS installer
+npm run tauri build
 ```
