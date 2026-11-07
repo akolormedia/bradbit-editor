@@ -3,6 +3,7 @@ pub mod fountain;
 pub mod fs_ops;
 pub mod git;
 pub mod github;
+pub mod kit;
 pub mod menu;
 pub mod opencode;
 pub mod search;
@@ -489,6 +490,11 @@ fn save_workspace_state(
 }
 
 #[tauri::command]
+fn discover_kit(root: String) -> Result<kit::KitCatalog, String> {
+    kit::discover(&root)
+}
+
+#[tauri::command]
 fn open_folder(path: String, show_config: bool) -> Result<OpenedFolder, String> {
     let opened = fs_ops::open_folder(&path, show_config)?;
     let _ = settings::record_recent_project(&opened.root_path, &opened.name);
@@ -612,6 +618,7 @@ pub fn run() {
             load_workspace_state,
             save_workspace_state,
             open_folder,
+            discover_kit,
             list_directory_tree,
             read_text_file,
             write_text_file,

@@ -13,6 +13,7 @@ import {
   GitHubPullRequest,
   GitHubRepository,
   GitHubUser,
+  KitCatalog,
   MenuCommand,
   MenuUiState,
   OpenCodeChatMessage,
@@ -217,6 +218,13 @@ export const backend = {
       return typeof selected === "string" ? selected : null;
     }
     return DEMO_GUIONISTA_KIT.rootPath;
+  },
+
+  async discoverKit(rootPath: string): Promise<KitCatalog> {
+    if (!isTauriEnvironment()) {
+      return { agents: [], commands: [], skills: [] };
+    }
+    return tauriInvoke<KitCatalog>("discover_kit", { root: rootPath });
   },
 
   async openFolder(path: string, showConfigFiles: boolean): Promise<OpenedFolder> {

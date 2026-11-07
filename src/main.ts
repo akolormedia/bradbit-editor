@@ -13,6 +13,7 @@ import {
   GitRemote,
   GitStatus,
   GitHubPullRequest,
+  KitCatalog,
   MenuCommand,
   MenuUiState,
   OpenCodeChatMessage,
@@ -160,6 +161,7 @@ class BradbitApp {
   private sidebarVisible = true;
   private sidebarTab: SidebarTab = "files";
   private sidebarWidth = 260;
+  private kitCatalog: KitCatalog = { agents: [], commands: [], skills: [] };
   private outlineRefreshTimer: number | null = null;
   private modal: ModalState = { kind: "none" };
   private statusNotice = "";
@@ -278,6 +280,7 @@ class BradbitApp {
       await this.stopChatSession();
       this.chatPanel = null;
       this.folder = opened;
+      this.kitCatalog = { agents: [], commands: [], skills: [] };
       try {
         this.workspaceState = await backend.loadWorkspaceState(opened.rootPath);
         this.applyWorkspaceLayout(this.workspaceState.layout);
@@ -316,6 +319,7 @@ class BradbitApp {
         console.error("No se pudo iniciar el watcher", err);
         this.statusNotice = err instanceof Error ? err.message : String(err);
       }
+      await this.refreshKitCatalog();
       await this.refreshGitStatus();
       await this.refreshGitMeta();
       this.render();
@@ -1770,6 +1774,19 @@ class BradbitApp {
     this.editor?.gotoLine(line);
   }
 
+  private async refreshKitCatalog(): Promise<void> {
+    if (!this.folder) {
+      this.kitCatalog = { agents: [], commands: [], skills: [] };
+      return;
+    }
+    try {
+      this.kitCatalog = await backend.discoverKit(this.folder.rootPath);
+    } catch (err) {
+      console.error("No se pudo descubrir el kit del proyecto", err);
+      this.kitCatalog = { agents: [], commands: [], skills: [] };
+    }
+  }
+
   private async handleFsChange(event: FsChangeEvent): Promise<void> {
     if (!this.folder || event.paths.length === 0) return;
     const root = this.folder.rootPath;
@@ -1790,6 +1807,14 @@ class BradbitApp {
       await this.refreshTree();
     } catch (err) {
       console.error("No se pudo actualizar el árbol de archivos", err);
+    }
+
+    if (
+      event.paths.some(
+        (path) => path.startsWith(".opencode/") || path.startsWith(".bradbit/"),
+      )
+    ) {
+      await this.refreshKitCatalog();
     }
 
     const result = reconcileTabsWithDisk(this.tabState, event.paths, diskContents);
@@ -2315,7 +2340,18 @@ class BradbitApp {
       const badge = document.createElement("span");
       badge.className = "project-badge";
       badge.textContent = this.folder.name;
-      badge.title = this.folder.rootPath;
+      const kitTotal =
+        this.kitCatalog.agents.length +
+        this.kitCatalog.commands.length +
+        this.kitCatalog.skills.length;
+      badge.title =
+        kitTotal > 0
+          ? `${this.folder.rootPath}\n${t(lang, "kitSummary", {
+              agents: String(this.kitCatalog.agents.length),
+              commands: String(this.kitCatalog.commands.length),
+              skills: String(this.kitCatalog.skills.length),
+            })}`
+          : this.folder.rootPath;
       left.appendChild(badge);
     } else {
       const brand = document.createElement("span");
@@ -2374,6 +2410,7 @@ class BradbitApp {
         void this.stopChatSession();
         this.chatPanel = null;
         this.folder = null;
+        this.kitCatalog = { agents: [], commands: [], skills: [] };
         this.tabState = { tabs: [], activeTabPath: null };
         this.gitStatus = null;
         this.gitHistory = [];
