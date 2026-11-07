@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { hasIcon } from "../ui/icons";
 import { SIDEBAR_SECTIONS } from "./sidebarSections";
 
 describe("sidebar sections (T-1.4.5)", () => {
@@ -11,9 +12,9 @@ describe("sidebar sections (T-1.4.5)", () => {
     expect(new Set(SIDEBAR_SECTIONS.map((section) => section.id)).size).toBe(3);
   });
 
-  it("provides a compact icon and translation keys for every section", () => {
+  it("provides a registered line icon and translation keys for every section", () => {
     for (const section of SIDEBAR_SECTIONS) {
-      expect(section.icon.trim().length).toBeGreaterThan(0);
+      expect(hasIcon(section.icon)).toBe(true);
       expect(section.titleKey.length).toBeGreaterThan(0);
       expect(section.labelKey.length).toBeGreaterThan(0);
     }

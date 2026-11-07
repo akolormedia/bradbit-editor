@@ -4,6 +4,7 @@ import "@xterm/xterm/css/xterm.css";
 import { backend } from "../backend";
 import { t } from "../i18n";
 import { Language } from "../types";
+import { createIconButton } from "../ui/iconButton";
 
 export interface TerminalPanelOptions {
   language: Language;
@@ -98,29 +99,21 @@ export class TerminalPanel {
     };
     this.customWrap.appendChild(this.customInput);
 
-    this.restartBtn = document.createElement("button");
-    this.restartBtn.type = "button";
-    this.restartBtn.className = "icon-btn terminal-action";
-    this.restartBtn.dataset.testid = "terminal-restart";
-    this.restartBtn.textContent = "↻";
-    this.restartBtn.title = t(options.language, "terminalRestart");
-    this.restartBtn.setAttribute(
-      "aria-label",
-      t(options.language, "terminalRestart"),
-    );
-    this.restartBtn.onclick = () => void this.restart();
+    this.restartBtn = createIconButton({
+      icon: "refresh-cw",
+      label: t(options.language, "terminalRestart"),
+      className: "terminal-action",
+      testId: "terminal-restart",
+      onClick: () => void this.restart(),
+    });
 
-    this.clearBtn = document.createElement("button");
-    this.clearBtn.type = "button";
-    this.clearBtn.className = "icon-btn terminal-action";
-    this.clearBtn.dataset.testid = "terminal-clear";
-    this.clearBtn.textContent = "⌫";
-    this.clearBtn.title = t(options.language, "terminalClear");
-    this.clearBtn.setAttribute(
-      "aria-label",
-      t(options.language, "terminalClear"),
-    );
-    this.clearBtn.onclick = () => this.terminal?.clear();
+    this.clearBtn = createIconButton({
+      icon: "eraser",
+      label: t(options.language, "terminalClear"),
+      className: "terminal-action",
+      testId: "terminal-clear",
+      onClick: () => this.terminal?.clear(),
+    });
 
     header.append(
       this.titleEl,

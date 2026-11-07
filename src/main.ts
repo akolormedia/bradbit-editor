@@ -69,6 +69,8 @@ import { projectRelativePath } from "./session/chatPaths";
 import { parseSlashCommand } from "./session/composer";
 import { SessionView, toggleSessionView } from "./session/sessionView";
 import { TerminalPanel } from "./terminal/terminalPanel";
+import { createIcon, prependIcon } from "./ui/icons";
+import { createIconButton } from "./ui/iconButton";
 import { MenuSyncQueue } from "./workspace/menuSync";
 import { extractOutline, OutlineItem } from "./workspace/outline";
 import {
@@ -2486,11 +2488,12 @@ class BradbitApp {
       tabEl.classList.toggle("preview", active.preview);
       const dot = tabEl.querySelector(".tab-dirty-dot") as HTMLElement | null;
       if (dot) {
-        dot.textContent = active.externalChange
-          ? "⚠"
-          : isTabDirty(active)
-            ? "•"
-            : "";
+        dot.replaceChildren();
+        if (active.externalChange) {
+          dot.appendChild(createIcon("triangle-alert", 12));
+        } else {
+          dot.textContent = isTabDirty(active) ? "•" : "";
+        }
         dot.classList.toggle("external", Boolean(active.externalChange));
         dot.title = active.externalChange
           ? t(this.settings.language, "externalChangeBadge")
@@ -2512,52 +2515,30 @@ class BradbitApp {
     left.className = "topbar-left";
 
     if (this.folder) {
-      const toggleBtn = document.createElement("button");
-      toggleBtn.className = "icon-btn";
-      toggleBtn.title = `${t(lang, "toggleSidebar")} (⌘⇧E)`;
-      toggleBtn.textContent = "☰";
-      toggleBtn.onclick = () => this.toggleSidebar();
-      left.appendChild(toggleBtn);
-
-      const chatBtn = document.createElement("button");
-      chatBtn.className = "icon-btn";
-      chatBtn.dataset.testid = "toggle-chat-btn";
-      chatBtn.title = t(lang, "chatToggleChat");
-      chatBtn.setAttribute("aria-label", t(lang, "chatToggleChat"));
-      chatBtn.setAttribute("aria-pressed", String(this.chatVisible));
-      chatBtn.classList.toggle("active", this.chatVisible);
-      chatBtn.textContent = "💬";
-      chatBtn.onclick = () => this.toggleChatPanel();
+      const chatBtn = createIconButton({
+        icon: "message-square",
+        label: t(lang, "chatToggleChat"),
+        testId: "toggle-chat-btn",
+        active: this.chatVisible,
+        onClick: () => this.toggleChatPanel(),
+      });
       left.appendChild(chatBtn);
 
-      const editorBtn = document.createElement("button");
-      editorBtn.className = "icon-btn";
-      editorBtn.dataset.testid = "toggle-editor-btn";
-      editorBtn.title = t(lang, "chatToggleEditor");
-      editorBtn.setAttribute("aria-label", t(lang, "chatToggleEditor"));
-      editorBtn.setAttribute("aria-pressed", String(this.editorVisible));
-      editorBtn.classList.toggle("active", this.editorVisible);
-      editorBtn.textContent = "◫";
-      editorBtn.onclick = () => this.toggleEditorPanel();
+      const editorBtn = createIconButton({
+        icon: "panel-right",
+        label: t(lang, "chatToggleEditor"),
+        testId: "toggle-editor-btn",
+        active: this.editorVisible,
+        onClick: () => this.toggleEditorPanel(),
+      });
       left.appendChild(editorBtn);
-
-      const terminalBtn = document.createElement("button");
-      terminalBtn.className = "icon-btn terminal-toggle-btn";
-      terminalBtn.dataset.testid = "toggle-terminal-btn";
-      terminalBtn.title = t(lang, "chatToggleTerminal");
-      terminalBtn.setAttribute("aria-label", t(lang, "chatToggleTerminal"));
-      terminalBtn.setAttribute(
-        "aria-pressed",
-        String(this.sessionView === "terminal"),
-      );
-      terminalBtn.classList.toggle("active", this.sessionView === "terminal");
-      terminalBtn.textContent = ">_";
-      terminalBtn.onclick = () => this.toggleTerminalView();
-      left.appendChild(terminalBtn);
 
       const badge = document.createElement("span");
       badge.className = "project-badge";
-      badge.textContent = this.folder.name;
+      badge.append(
+        createIcon("folder", 14),
+        document.createTextNode(this.folder.name),
+      );
       const kitTotal =
         this.kitCatalog.agents.length +
         this.kitCatalog.commands.length +
@@ -2574,7 +2555,10 @@ class BradbitApp {
     } else {
       const brand = document.createElement("span");
       brand.className = "project-badge";
-      brand.textContent = t(lang, "appName");
+      brand.append(
+        createIcon("pen-line", 14),
+        document.createTextNode(t(lang, "appName")),
+      );
       left.appendChild(brand);
     }
 
@@ -2585,42 +2569,48 @@ class BradbitApp {
     openBtn.className = "toolbar-btn";
     openBtn.textContent = t(lang, "openFolder");
     openBtn.onclick = () => void this.handleOpenFolderDialog();
+    prependIcon(openBtn, "folder-open");
     right.appendChild(openBtn);
 
     if (isTauriEnvironment()) {
       const newProjectBtn = document.createElement("button");
       newProjectBtn.className = "toolbar-btn";
       newProjectBtn.dataset.testid = "topbar-new-project-btn";
-      newProjectBtn.textContent = `＋ ${t(lang, "projectShort")}`;
+      newProjectBtn.textContent = t(lang, "projectShort");
       newProjectBtn.title = `${t(lang, "newProjectButton")} (⇧⌘N)`;
       newProjectBtn.onclick = () => void this.openNewProjectModal();
+      prependIcon(newProjectBtn, "folder-plus");
       right.appendChild(newProjectBtn);
     }
 
     if (this.folder) {
       const newFileBtn = document.createElement("button");
       newFileBtn.className = "toolbar-btn";
-      newFileBtn.textContent = `+ ${t(lang, "newFile")}`;
+      newFileBtn.textContent = t(lang, "newFile");
       newFileBtn.onclick = () => this.openEntryModal("new-file");
+      prependIcon(newFileBtn, "file-plus");
       right.appendChild(newFileBtn);
 
       if (activeTab) {
         const findBtn = document.createElement("button");
         findBtn.className = "toolbar-btn";
-        findBtn.textContent = `🔍 ${t(lang, "findReplace")}`;
+        findBtn.textContent = t(lang, "findReplace");
         findBtn.onclick = () => this.editor?.openFindPanel();
+        prependIcon(findBtn, "search");
         right.appendChild(findBtn);
 
         const saveBtn = document.createElement("button");
         saveBtn.className = "toolbar-btn primary";
         saveBtn.textContent = `${t(lang, "save")} (⌘S)`;
         saveBtn.onclick = () => void this.saveActiveTab();
+        prependIcon(saveBtn, "save");
         right.appendChild(saveBtn);
       }
 
       const closeFolderBtn = document.createElement("button");
       closeFolderBtn.className = "toolbar-btn";
       closeFolderBtn.textContent = t(lang, "closeFolder");
+      prependIcon(closeFolderBtn, "folder-x");
       closeFolderBtn.onclick = () => {
         void backend.stopWatching().catch((err) => {
           console.error("No se pudo detener el watcher", err);
@@ -2654,10 +2644,11 @@ class BradbitApp {
     const settingsBtn = document.createElement("button");
     settingsBtn.className = "toolbar-btn";
     settingsBtn.dataset.testid = "open-settings-btn";
-    settingsBtn.textContent = `⚙ ${t(lang, "settings")}`;
+    settingsBtn.textContent = t(lang, "settings");
     settingsBtn.onclick = () => {
       this.openSettingsModal();
     };
+    prependIcon(settingsBtn, "settings");
     right.appendChild(settingsBtn);
 
     bar.append(left, right);
@@ -2734,15 +2725,16 @@ class BradbitApp {
         pathEl.textContent = item.path;
         info.append(nameEl, pathEl);
 
-        const removeBtn = document.createElement("button");
-        removeBtn.className = "tree-mini-btn";
-        removeBtn.title = t(lang, "removeRecent");
-        removeBtn.textContent = "×";
-        removeBtn.onclick = async (e) => {
-          e.stopPropagation();
-          this.recents = await backend.removeRecentProject(item.path);
-          this.render();
-        };
+        const removeBtn = createIconButton({
+          icon: "x",
+          label: t(lang, "removeRecent"),
+          className: "tree-mini-btn",
+          onClick: async (e) => {
+            e.stopPropagation();
+            this.recents = await backend.removeRecentProject(item.path);
+            this.render();
+          },
+        });
 
         row.append(info, removeBtn);
         list.appendChild(row);
@@ -2773,19 +2765,22 @@ class BradbitApp {
     actions.className = "sidebar-actions";
 
     if (this.sidebarTab === "files") {
-      const newFileBtn = document.createElement("button");
-      newFileBtn.className = "tree-mini-btn";
-      newFileBtn.dataset.testid = "sidebar-new-file-btn";
-      newFileBtn.title = `${t(lang, "newFile")} (⌘N)`;
-      newFileBtn.textContent = "+📄";
-      newFileBtn.onclick = () => this.openEntryModal("new-file");
+      const newFileBtn = createIconButton({
+        icon: "file-plus",
+        label: t(lang, "newFile"),
+        title: `${t(lang, "newFile")} (⌘N)`,
+        testId: "sidebar-new-file-btn",
+        className: "tree-mini-btn",
+        onClick: () => this.openEntryModal("new-file"),
+      });
 
-      const newFolderBtn = document.createElement("button");
-      newFolderBtn.className = "tree-mini-btn";
-      newFolderBtn.dataset.testid = "sidebar-new-folder-btn";
-      newFolderBtn.title = t(lang, "newFolder");
-      newFolderBtn.textContent = "+📁";
-      newFolderBtn.onclick = () => this.openEntryModal("new-folder");
+      const newFolderBtn = createIconButton({
+        icon: "folder-plus",
+        label: t(lang, "newFolder"),
+        testId: "sidebar-new-folder-btn",
+        className: "tree-mini-btn",
+        onClick: () => this.openEntryModal("new-folder"),
+      });
 
       actions.append(newFileBtn, newFolderBtn);
     }
@@ -2810,28 +2805,26 @@ class BradbitApp {
     switcher.setAttribute("aria-label", t(lang, "sidebarSections"));
 
     for (const section of SIDEBAR_SECTIONS) {
-      const button = document.createElement("button");
-      button.type = "button";
-      button.className = "sidebar-switch";
-      button.dataset.sidebarTab = section.id;
-      button.dataset.testid = `sidebar-tab-${section.id}`;
-      button.textContent = section.icon;
       const label = t(lang, section.labelKey);
-      button.title = label;
-      button.setAttribute("aria-label", label);
       const active = this.sidebarVisible && this.sidebarTab === section.id;
-      button.classList.toggle("active", active);
-      button.setAttribute("aria-pressed", String(active));
-      button.onclick = () => {
-        const changed = this.sidebarTab !== section.id;
-        if (!changed && this.sidebarVisible) return;
-        this.sidebarVisible = true;
-        this.sidebarTab = section.id;
-        this.render();
-        if (changed && section.id === "versions") {
-          void this.refreshGitPanelData();
-        }
-      };
+      const button = createIconButton({
+        icon: section.icon,
+        label,
+        className: "sidebar-switch",
+        testId: `sidebar-tab-${section.id}`,
+        active,
+        onClick: () => {
+          const changed = this.sidebarTab !== section.id;
+          if (!changed && this.sidebarVisible) return;
+          this.sidebarVisible = true;
+          this.sidebarTab = section.id;
+          this.render();
+          if (changed && section.id === "versions") {
+            void this.refreshGitPanelData();
+          }
+        },
+      });
+      button.dataset.sidebarTab = section.id;
       switcher.appendChild(button);
     }
     return switcher;
@@ -2862,15 +2855,18 @@ class BradbitApp {
         label.className = "tree-row-label";
 
         const icon = document.createElement("span");
+        icon.className = "tree-icon";
         const isCollapsed = this.collapsedDirs.has(node.path);
         if (node.isDir) {
-          icon.textContent = isCollapsed ? "▸ 📁" : "▾ 📂";
+          icon.appendChild(
+            createIcon(isCollapsed ? "folder" : "folder-open", 15),
+          );
         } else if (node.name.endsWith(".fountain")) {
-          icon.textContent = "🎬";
+          icon.appendChild(createIcon("clapperboard", 15));
         } else if (node.name.endsWith(".md") || node.name.endsWith(".mdx")) {
-          icon.textContent = "📝";
+          icon.appendChild(createIcon("file-text", 15));
         } else {
-          icon.textContent = "📄";
+          icon.appendChild(createIcon("file", 15));
         }
 
         const nameSpan = document.createElement("span");
@@ -2889,35 +2885,38 @@ class BradbitApp {
         rowActions.className = "tree-row-actions";
 
         if (node.isDir) {
-          const addInDirBtn = document.createElement("button");
-          addInDirBtn.className = "tree-mini-btn";
-          addInDirBtn.title = t(lang, "newFile");
-          addInDirBtn.textContent = "+";
-          addInDirBtn.onclick = (e) => {
-            e.stopPropagation();
-            this.openEntryModal("new-file", node.path);
-          };
+          const addInDirBtn = createIconButton({
+            icon: "plus",
+            label: t(lang, "newFile"),
+            className: "tree-mini-btn",
+            onClick: (e) => {
+              e.stopPropagation();
+              this.openEntryModal("new-file", node.path);
+            },
+          });
           rowActions.appendChild(addInDirBtn);
         }
 
-        const renameBtn = document.createElement("button");
-        renameBtn.className = "tree-mini-btn";
-        renameBtn.title = t(lang, "rename");
-        renameBtn.textContent = "✎";
-        renameBtn.onclick = (e) => {
-          e.stopPropagation();
-          this.openEntryModal("rename", node.path);
-        };
+        const renameBtn = createIconButton({
+          icon: "pencil",
+          label: t(lang, "rename"),
+          className: "tree-mini-btn",
+          onClick: (e) => {
+            e.stopPropagation();
+            this.openEntryModal("rename", node.path);
+          },
+        });
 
-        const deleteBtn = document.createElement("button");
-        deleteBtn.className = "tree-mini-btn";
-        deleteBtn.title = t(lang, "delete");
-        deleteBtn.textContent = "🗑";
-        deleteBtn.onclick = (e) => {
-          e.stopPropagation();
-          this.modal = { kind: "confirm-delete", targetPath: node.path };
-          this.render();
-        };
+        const deleteBtn = createIconButton({
+          icon: "trash",
+          label: t(lang, "delete"),
+          className: "tree-mini-btn",
+          onClick: (e) => {
+            e.stopPropagation();
+            this.modal = { kind: "confirm-delete", targetPath: node.path };
+            this.render();
+          },
+        });
 
         rowActions.append(renameBtn, deleteBtn);
         row.append(label, rowActions);
@@ -2996,8 +2995,12 @@ class BradbitApp {
 
     const icon = document.createElement("span");
     icon.className = "outline-icon";
-    icon.textContent = item.kind === "scene" ? "🎬" : item.kind === "section" ? "§" : "";
-    if (icon.textContent) {
+    if (item.kind === "scene") {
+      icon.appendChild(createIcon("clapperboard", 13));
+    } else if (item.kind === "section") {
+      icon.appendChild(createIcon("hash", 13));
+    }
+    if (icon.childElementCount > 0) {
       row.appendChild(icon);
     }
 
@@ -3226,23 +3229,25 @@ class BradbitApp {
 
         const dirtyDot = document.createElement("span");
         dirtyDot.className = "tab-dirty-dot";
-        dirtyDot.textContent = tab.externalChange
-          ? "⚠"
-          : isTabDirty(tab)
-            ? "•"
-            : "";
+        if (tab.externalChange) {
+          dirtyDot.appendChild(createIcon("triangle-alert", 12));
+        } else {
+          dirtyDot.textContent = isTabDirty(tab) ? "•" : "";
+        }
         dirtyDot.classList.toggle("external", Boolean(tab.externalChange));
         dirtyDot.title = tab.externalChange
           ? t(lang, "externalChangeBadge")
           : "";
 
-        const closeBtn = document.createElement("button");
-        closeBtn.className = "tab-close-btn";
-        closeBtn.textContent = "×";
-        closeBtn.onclick = (e) => {
-          e.stopPropagation();
-          this.requestCloseTab(tab.path);
-        };
+        const closeBtn = createIconButton({
+          icon: "x",
+          label: t(lang, "close"),
+          className: "tab-close-btn",
+          onClick: (e) => {
+            e.stopPropagation();
+            this.requestCloseTab(tab.path);
+          },
+        });
 
         tabEl.onclick = () => {
           this.tabState = { ...this.tabState, activeTabPath: tab.path };
@@ -3398,6 +3403,13 @@ class BradbitApp {
     }
   }
 
+  private renderStatusbarDivider(): HTMLElement {
+    const divider = document.createElement("span");
+    divider.className = "statusbar-divider";
+    divider.setAttribute("aria-hidden", "true");
+    return divider;
+  }
+
   private renderStatusbar(lang: AppSettings["language"], activeTab: OpenTab | null): HTMLElement {
     const bar = document.createElement("footer");
     bar.className = "statusbar";
@@ -3406,18 +3418,45 @@ class BradbitApp {
     left.className = "statusbar-left";
 
     if (this.folder) {
+      const sidebarToggle = createIconButton({
+        icon: "panel-left",
+        label: t(lang, "toggleSidebar"),
+        title: `${t(lang, "toggleSidebar")} (⌘⇧E)`,
+        testId: "statusbar-toggle-sidebar",
+        active: this.sidebarVisible,
+        onClick: () => this.toggleSidebar(),
+      });
+      left.appendChild(sidebarToggle);
+      left.appendChild(this.renderStatusbarDivider());
+
       const sections = this.renderSidebarSwitcher(lang);
       sections.classList.add("statusbar-sections");
       left.appendChild(sections);
-    }
+      left.appendChild(this.renderStatusbarDivider());
 
-    if (this.gitStatus?.isRepository) {
-      const branchSpan = document.createElement("span");
-      branchSpan.className = "git-branch";
-      const ahead = this.gitStatus.ahead > 0 ? ` ↑${this.gitStatus.ahead}` : "";
-      const behind = this.gitStatus.behind > 0 ? ` ↓${this.gitStatus.behind}` : "";
-      branchSpan.textContent = `⑂ ${this.gitStatus.branch ?? t(lang, "gitNoBranch")}${ahead}${behind}`;
-      left.appendChild(branchSpan);
+      const terminalToggle = createIconButton({
+        icon: "terminal",
+        label: t(lang, "chatToggleTerminal"),
+        testId: "toggle-terminal-btn",
+        active: this.sessionView === "terminal",
+        onClick: () => this.toggleTerminalView(),
+      });
+      left.appendChild(terminalToggle);
+
+      if (this.gitStatus?.isRepository) {
+        left.appendChild(this.renderStatusbarDivider());
+        const branchSpan = document.createElement("span");
+        branchSpan.className = "git-branch";
+        const ahead = this.gitStatus.ahead > 0 ? ` ↑${this.gitStatus.ahead}` : "";
+        const behind = this.gitStatus.behind > 0 ? ` ↓${this.gitStatus.behind}` : "";
+        branchSpan.append(
+          createIcon("git-branch", 12),
+          document.createTextNode(
+            `${this.gitStatus.branch ?? t(lang, "gitNoBranch")}${ahead}${behind}`,
+          ),
+        );
+        left.appendChild(branchSpan);
+      }
     }
 
     if (activeTab) {
@@ -3428,7 +3467,10 @@ class BradbitApp {
       const dirtySpan = document.createElement("span");
       const dirty = isTabDirty(activeTab);
       dirtySpan.className = `status-pill ${dirty ? "dirty" : "saved"}`;
-      dirtySpan.textContent = dirty ? `● ${t(lang, "unsaved")}` : `✓ ${t(lang, "saved")}`;
+      dirtySpan.append(
+        createIcon(dirty ? "circle" : "check", 11),
+        document.createTextNode(dirty ? ` ${t(lang, "unsaved")}` : ` ${t(lang, "saved")}`),
+      );
       left.appendChild(dirtySpan);
 
       if (this.statusNotice) {
@@ -3700,7 +3742,7 @@ class BradbitApp {
     searchWrap.className = "manage-models-search-wrap";
     const searchIcon = document.createElement("span");
     searchIcon.className = "manage-models-search-icon";
-    searchIcon.textContent = "⌕";
+    searchIcon.appendChild(createIcon("search", 14));
     const searchInput = document.createElement("input");
     searchInput.type = "text";
     searchInput.className = "manage-models-search";

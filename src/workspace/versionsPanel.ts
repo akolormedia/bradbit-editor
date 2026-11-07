@@ -10,6 +10,7 @@ import {
   GitHubPullRequest,
   Language,
 } from "../types";
+import { createIconButton } from "../ui/iconButton";
 
 export interface VersionsPanelState {
   language: Language;
@@ -211,14 +212,15 @@ function renderChangesSection(
     label.className = "version-change-label";
     label.textContent = changeLabel(kind, state.language);
 
-    const discard = document.createElement("button");
-    discard.className = "tree-mini-btn version-row-btn";
-    discard.title = t(state.language, "discardChangesTitle");
-    discard.textContent = "↺";
-    discard.onclick = (event) => {
-      event.stopPropagation();
-      handlers.onDiscardChange(entry.path);
-    };
+    const discard = createIconButton({
+      icon: "rotate-ccw",
+      label: t(state.language, "discardChangesTitle"),
+      className: "tree-mini-btn version-row-btn",
+      onClick: (event) => {
+        event.stopPropagation();
+        handlers.onDiscardChange(entry.path);
+      },
+    });
 
     row.append(badge, name, label, discard);
 
@@ -335,15 +337,17 @@ function renderCommitFile(
   name.textContent = file.path;
   name.title = file.oldPath ? `${file.oldPath} → ${file.path}` : file.path;
 
-  const restore = document.createElement("button");
-  restore.className = "tree-mini-btn version-row-btn";
+  const restore = createIconButton({
+    icon: "rotate-ccw",
+    label: t(state.language, "versionsRestore"),
+    title: `${t(state.language, "versionsRestore")} · ${commit.subject}`,
+    className: "tree-mini-btn version-row-btn",
+    onClick: (event) => {
+      event.stopPropagation();
+      handlers.onRestoreFile(commit.id, file.path);
+    },
+  });
   restore.dataset.restorePath = file.path;
-  restore.title = `${t(state.language, "versionsRestore")} · ${commit.subject}`;
-  restore.textContent = "↺";
-  restore.onclick = (event) => {
-    event.stopPropagation();
-    handlers.onRestoreFile(commit.id, file.path);
-  };
 
   row.append(badge, name, restore);
   if (kind !== "deleted") {
@@ -364,13 +368,14 @@ function renderBranchesSection(
   const title = document.createElement("h4");
   title.className = "versions-section-title";
   title.textContent = t(state.language, "versionsBranches");
-  const add = document.createElement("button");
-  add.className = "tree-mini-btn";
-  add.dataset.testid = "new-branch-btn";
-  add.title = t(state.language, "versionsNewBranch");
-  add.textContent = "＋";
-  add.disabled = state.busy;
-  add.onclick = () => handlers.onCreateBranch();
+  const add = createIconButton({
+    icon: "plus",
+    label: t(state.language, "versionsNewBranch"),
+    className: "tree-mini-btn",
+    testId: "new-branch-btn",
+    disabled: state.busy,
+    onClick: () => handlers.onCreateBranch(),
+  });
   header.append(title, add);
   section.appendChild(header);
 
@@ -532,13 +537,14 @@ function renderGitHubSection(
   const prTitle = document.createElement("span");
   prTitle.className = "versions-github-pr-title";
   prTitle.textContent = t(state.language, "githubPrOpenList");
-  const refresh = document.createElement("button");
-  refresh.className = "tree-mini-btn";
-  refresh.dataset.testid = "github-pr-refresh";
-  refresh.title = t(state.language, "githubPrRefresh");
-  refresh.textContent = "↻";
-  refresh.disabled = state.githubPrLoading;
-  refresh.onclick = () => handlers.onRefreshPullRequests();
+  const refresh = createIconButton({
+    icon: "refresh-cw",
+    label: t(state.language, "githubPrRefresh"),
+    className: "tree-mini-btn",
+    testId: "github-pr-refresh",
+    disabled: state.githubPrLoading,
+    onClick: () => handlers.onRefreshPullRequests(),
+  });
   prHeader.append(prTitle, refresh);
   section.appendChild(prHeader);
 

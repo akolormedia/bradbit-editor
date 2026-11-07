@@ -1,22 +1,29 @@
+import type { IconName } from "../ui/icons";
+
 export const SIDEBAR_SECTIONS = [
   {
     id: "files",
     titleKey: "explorerTitle",
     labelKey: "filesTab",
-    icon: "▤",
+    icon: "files",
   },
   {
     id: "outline",
     titleKey: "outlineTitle",
     labelKey: "outlineTab",
-    icon: "☰",
+    icon: "list-tree",
   },
   {
     id: "versions",
     titleKey: "versionsTitle",
     labelKey: "versionsTab",
-    icon: "◷",
+    icon: "history",
   },
-] as const;
+] as const satisfies ReadonlyArray<{
+  id: string;
+  titleKey: string;
+  labelKey: string;
+  icon: IconName;
+}>;
 
 export type SidebarTab = (typeof SIDEBAR_SECTIONS)[number]["id"];

@@ -28,7 +28,7 @@ export function renderMarkdownPreview(source: string): string {
     if (/^(https?:|data:)/i.test(src)) continue;
     const placeholder = document.createElement("span");
     placeholder.className = "preview-image-placeholder";
-    placeholder.textContent = `🖼 ${image.getAttribute("alt") || src}`;
+    placeholder.textContent = image.getAttribute("alt") || src;
     image.replaceWith(placeholder);
   }
   return template.innerHTML;
