@@ -9,6 +9,8 @@ export const DEFAULT_SETTINGS: AppSettings = {
   showConfigFiles: false,
   gitAuthorName: "",
   gitAuthorEmail: "",
+  hiddenModels: [],
+  recentModels: [],
 };
 
 const CONFIG_NAMES = new Set([

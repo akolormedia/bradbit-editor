@@ -25,8 +25,11 @@ function options(overrides: Partial<ChatPanelOptions> = {}): ChatPanelOptions {
     kit: { agents: [], commands: [], skills: [] },
     models: [],
     projectFiles: [],
+    hiddenModels: [],
+    recentModels: [],
     onAgentChange: vi.fn(),
     onModelChange: vi.fn(),
+    onManageModels: vi.fn(),
     ...overrides,
   };
 }
@@ -39,11 +42,15 @@ function readyState() {
 }
 
 describe("chat panel (T-2.1.1)", () => {
-  it("shows the empty state and connection status", () => {
+  it("shows the empty state, connection status and composer instructions", () => {
     const panel = new ChatPanel(options());
     expect(panel.element.textContent).toContain("Habla con tu agente");
     expect(panel.element.textContent).toContain("Sin sesión");
-    expect(panel.element.querySelector('[data-testid="chat-input"]')).not.toBeNull();
+    const input = panel.element.querySelector<HTMLTextAreaElement>(
+      '[data-testid="chat-input"]',
+    )!;
+    expect(input.placeholder).toContain("/");
+    expect(input.placeholder).toContain("@");
   });
 
   it("sends the composer text with the send button and Enter", () => {
@@ -442,9 +449,107 @@ describe("chat panel (T-2.1.1)", () => {
     expect(panel.element.textContent).toContain("Color favorito: Rojo");
   });
 
-  it("shows kit agents and model variants and reports changes (T-2.2.2)", () => {
-    const onAgentChange = vi.fn();
+  it("shows the current model and effort and filters the model picker (T-2.2.3)", () => {
     const onModelChange = vi.fn();
+    const panel = new ChatPanel(
+      options({
+        models: [
+          {
+            id: "hy4",
+            name: "Hy4",
+            providerId: "opencode-go",
+            variants: ["high", "max"],
+          },
+          {
+            id: "gpt-5",
+            name: "GPT-5",
+            providerId: "openai",
+            variants: ["none"],
+          },
+        ],
+        onModelChange,
+      }),
+    );
+    panel.update({ ...readyState(), model: "opencode-go/hy4#max" });
+
+    const modelButton = panel.element.querySelector<HTMLButtonElement>(
+      '[data-testid="chat-model-button"]',
+    )!;
+    expect(modelButton.textContent).toContain("OpenCode Go");
+    expect(modelButton.textContent).toContain("Hy4");
+    const effortButton = panel.element.querySelector<HTMLButtonElement>(
+      '[data-testid="chat-effort-button"]',
+    )!;
+    expect(effortButton.textContent).toContain("Max");
+
+    modelButton.click();
+    expect(
+      panel.element.querySelector<HTMLElement>(".chat-model-popover")?.hidden,
+    ).toBe(false);
+    const search = panel.element.querySelector<HTMLInputElement>(
+      '[data-testid="chat-model-search"]',
+    )!;
+    search.value = "gpt";
+    search.dispatchEvent(new Event("input"));
+    expect(
+      panel.element.querySelector('[data-testid="chat-model-row-openai-gpt-5"]'),
+    ).not.toBeNull();
+    panel.element
+      .querySelector<HTMLButtonElement>(
+        '[data-testid="chat-model-row-openai-gpt-5"]',
+      )
+      ?.click();
+    expect(onModelChange).toHaveBeenCalledWith("openai", "gpt-5", undefined);
+
+    panel.update({ ...readyState(), model: "opencode-go/hy4#max" });
+    effortButton.click();
+    panel.element
+      .querySelector<HTMLButtonElement>('[data-testid="chat-effort-row-high"]')
+      ?.click();
+    expect(onModelChange).toHaveBeenCalledWith(
+      "opencode-go",
+      "hy4",
+      "high",
+    );
+  });
+
+  it("hides disabled models and shows recent models (T-2.2.3)", () => {
+    const panel = new ChatPanel(
+      options({
+        models: [
+          {
+            id: "hy4",
+            name: "Hy4",
+            providerId: "opencode-go",
+            variants: ["max"],
+          },
+          {
+            id: "gpt-5",
+            name: "GPT-5",
+            providerId: "openai",
+            variants: [],
+          },
+        ],
+        hiddenModels: ["openai/gpt-5"],
+        recentModels: ["opencode-go/hy4"],
+      }),
+    );
+    panel.update({ ...readyState(), model: "opencode-go/hy4#max" });
+    panel.element
+      .querySelector<HTMLButtonElement>('[data-testid="chat-model-button"]')
+      ?.click();
+    expect(panel.element.textContent).toContain("Recientes");
+    expect(
+      panel.element.querySelector('[data-testid="chat-model-row-openai-gpt-5"]'),
+    ).toBeNull();
+    expect(
+      panel.element.querySelector('[data-testid="chat-model-row-opencode-go-hy4"]'),
+    ).not.toBeNull();
+  });
+
+  it("opens the plus menu with files, commands, agents and model settings (T-2.2.3)", () => {
+    const onAgentChange = vi.fn();
+    const onManageModels = vi.fn();
     const panel = new ChatPanel(
       options({
         kit: {
@@ -459,44 +564,30 @@ describe("chat panel (T-2.1.1)", () => {
           commands: [],
           skills: [],
         },
-        models: [
-          {
-            id: "hy4",
-            name: "Hy4",
-            providerId: "opencode-go",
-            variants: ["high"],
-          },
-        ],
         onAgentChange,
-        onModelChange,
+        onManageModels,
       }),
     );
     panel.update(readyState());
-
-    const agentSelect = panel.element.querySelector<HTMLSelectElement>(
-      '[data-testid="chat-agent-select"]',
+    const plus = panel.element.querySelector<HTMLButtonElement>(
+      '[data-testid="chat-plus"]',
     )!;
-    expect([...agentSelect.options].map((option) => option.value)).toEqual([
-      "",
-      "guionista",
-    ]);
-    agentSelect.value = "guionista";
-    agentSelect.dispatchEvent(new Event("change"));
+    plus.click();
+    expect(panel.element.textContent).toContain("Archivo de contexto");
+    expect(panel.element.textContent).toContain("Comando");
+    expect(panel.element.textContent).toContain("Agente del kit");
+    panel.element
+      .querySelector<HTMLButtonElement>('[data-testid="composer-agent-guionista"]')
+      ?.click();
     expect(onAgentChange).toHaveBeenCalledWith("guionista");
 
-    const modelSelect = panel.element.querySelector<HTMLSelectElement>(
-      '[data-testid="chat-model-select"]',
-    )!;
-    expect([...modelSelect.options].map((option) => option.value)).toContain(
-      "opencode-go/hy4#high",
-    );
-    modelSelect.value = "opencode-go/hy4#high";
-    modelSelect.dispatchEvent(new Event("change"));
-    expect(onModelChange).toHaveBeenCalledWith(
-      "opencode-go",
-      "hy4",
-      "high",
-    );
+    plus.click();
+    panel.element
+      .querySelector<HTMLButtonElement>(
+        '[data-testid="composer-plus-manage-models"]',
+      )
+      ?.click();
+    expect(onManageModels).toHaveBeenCalledOnce();
   });
 
   it("completes slash commands without sending the message (T-2.2.2)", () => {
@@ -554,7 +645,10 @@ describe("chat panel (T-2.1.1)", () => {
     input.setSelectionRange(4, 4);
     input.dispatchEvent(new Event("input"));
     panel.element
-      .querySelector<HTMLButtonElement>('[data-testid="chat-attach"]')
+      .querySelector<HTMLButtonElement>('[data-testid="chat-plus"]')
+      ?.click();
+    panel.element
+      .querySelector<HTMLButtonElement>('[data-testid="composer-plus-file"]')
       ?.click();
     expect(input.value).toBe("hola @");
     panel.element
