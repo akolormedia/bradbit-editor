@@ -67,6 +67,8 @@ import {
 import { addSessionTab, removeSessionTab, SessionTabInfo } from "./session/sessionTabs";
 import { projectRelativePath } from "./session/chatPaths";
 import { parseSlashCommand } from "./session/composer";
+import { SessionView, toggleSessionView } from "./session/sessionView";
+import { TerminalPanel } from "./terminal/terminalPanel";
 import { MenuSyncQueue } from "./workspace/menuSync";
 import { extractOutline, OutlineItem } from "./workspace/outline";
 import {
@@ -166,6 +168,8 @@ class BradbitApp {
   private sidebarWidth = 260;
   private kitCatalog: KitCatalog = { agents: [], commands: [], skills: [] };
   private chatModels: OpenCodeModel[] = [];
+  private sessionView: SessionView = "chat";
+  private terminalPanel: TerminalPanel | null = null;
   private outlineRefreshTimer: number | null = null;
   private modal: ModalState = { kind: "none" };
   private statusNotice = "";
@@ -282,6 +286,7 @@ class BradbitApp {
     try {
       const opened = await backend.openFolder(path, this.settings.showConfigFiles);
       await this.stopChatSession();
+      this.stopTerminalSession();
       this.chatPanel = null;
       this.folder = opened;
       this.kitCatalog = { agents: [], commands: [], skills: [] };
@@ -1577,6 +1582,48 @@ class BradbitApp {
     this.persistWorkspaceState();
   }
 
+  private toggleTerminalView(): void {
+    if (!this.chatVisible) {
+      this.sessionView = "terminal";
+      this.chatVisible = true;
+    } else {
+      this.sessionView = toggleSessionView(this.sessionView);
+    }
+    this.render();
+    if (this.sessionView === "terminal") {
+      this.terminalPanel?.focus();
+    }
+  }
+
+  private ensureTerminalPanel(lang: AppSettings["language"]): TerminalPanel {
+    const options = {
+      language: lang,
+      projectName: this.folder?.name ?? "",
+      rootPath: this.folder?.rootPath ?? "",
+      command: this.settings.terminalCommand,
+      fontSize: this.settings.fontSize,
+      onCommandChange: (command: string) =>
+        void this.updateSettings({ terminalCommand: command }),
+    };
+    if (!this.terminalPanel) {
+      this.terminalPanel = new TerminalPanel(options);
+    } else {
+      this.terminalPanel.update(options);
+    }
+    return this.terminalPanel;
+  }
+
+  private stopTerminalSession(): void {
+    this.terminalPanel?.dispose();
+    this.terminalPanel = null;
+    this.sessionView = "chat";
+    if (isTauriEnvironment()) {
+      void backend.ptyStop().catch((error) => {
+        console.error("No se pudo detener el terminal", error);
+      });
+    }
+  }
+
   private async openFileFromTree(relPath: string, pin: boolean): Promise<void> {
     if (!this.folder) return;
     try {
@@ -2494,6 +2541,20 @@ class BradbitApp {
       editorBtn.onclick = () => this.toggleEditorPanel();
       left.appendChild(editorBtn);
 
+      const terminalBtn = document.createElement("button");
+      terminalBtn.className = "icon-btn terminal-toggle-btn";
+      terminalBtn.dataset.testid = "toggle-terminal-btn";
+      terminalBtn.title = t(lang, "chatToggleTerminal");
+      terminalBtn.setAttribute("aria-label", t(lang, "chatToggleTerminal"));
+      terminalBtn.setAttribute(
+        "aria-pressed",
+        String(this.sessionView === "terminal"),
+      );
+      terminalBtn.classList.toggle("active", this.sessionView === "terminal");
+      terminalBtn.textContent = ">_";
+      terminalBtn.onclick = () => this.toggleTerminalView();
+      left.appendChild(terminalBtn);
+
       const badge = document.createElement("span");
       badge.className = "project-badge";
       badge.textContent = this.folder.name;
@@ -2565,6 +2626,7 @@ class BradbitApp {
           console.error("No se pudo detener el watcher", err);
         });
         void this.stopChatSession();
+        this.stopTerminalSession();
         this.chatPanel = null;
         this.folder = null;
         this.kitCatalog = { agents: [], commands: [], skills: [] };
@@ -3112,6 +3174,12 @@ class BradbitApp {
     column.className = "session-column";
     column.classList.toggle("full", !this.editorVisible);
     column.style.width = this.editorVisible ? `${this.sessionWidth}px` : "100%";
+    if (this.sessionView === "terminal" && this.folder) {
+      const terminal = this.ensureTerminalPanel(lang);
+      column.appendChild(terminal.element);
+      terminal.focus();
+      return column;
+    }
     const panel = this.ensureChatPanel();
     panel.update(this.chatState, {
       language: lang,

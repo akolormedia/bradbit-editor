@@ -6,6 +6,7 @@ pub mod github;
 pub mod kit;
 pub mod menu;
 pub mod opencode;
+pub mod pty;
 pub mod search;
 pub mod settings;
 pub mod templates;
@@ -413,6 +414,75 @@ fn opencode_abort(
 }
 
 #[tauri::command]
+fn pty_start(
+    app: tauri::AppHandle,
+    state: tauri::State<pty::PtyState>,
+    root: String,
+    command: String,
+    cols: u16,
+    rows: u16,
+) -> Result<pty::PtyStartResult, String> {
+    let id = state.next_id();
+    let output_app = app.clone();
+    let output_id = id.clone();
+    let exit_app = app.clone();
+    let exit_id = id.clone();
+    state.start(
+        pty::PtyStartOptions {
+            id,
+            root,
+            command,
+            cols,
+            rows,
+        },
+        move |data| {
+            let _ = output_app.emit(
+                pty::OUTPUT_EVENT,
+                pty::PtyOutputEvent {
+                    id: output_id.clone(),
+                    data,
+                },
+            );
+        },
+        move |code| {
+            let _ = exit_app.emit(
+                pty::EXIT_EVENT,
+                pty::PtyExitEvent {
+                    id: exit_id.clone(),
+                    code,
+                },
+            );
+        },
+    )
+}
+
+#[tauri::command]
+fn pty_write(state: tauri::State<pty::PtyState>, id: String, data: String) -> Result<(), String> {
+    state.write(&id, &data)
+}
+
+#[tauri::command]
+fn pty_resize(
+    state: tauri::State<pty::PtyState>,
+    id: String,
+    cols: u16,
+    rows: u16,
+) -> Result<(), String> {
+    state.resize(&id, cols, rows)
+}
+
+#[tauri::command]
+fn pty_stop(state: tauri::State<pty::PtyState>) -> Result<(), String> {
+    state.stop();
+    Ok(())
+}
+
+#[tauri::command]
+fn pty_status(state: tauri::State<pty::PtyState>) -> pty::PtyStatus {
+    state.status()
+}
+
+#[tauri::command]
 fn opencode_status(state: tauri::State<opencode::OpenCodeState>) -> opencode::OpenCodeStatus {
     state.status()
 }
@@ -577,6 +647,7 @@ pub fn run() {
         .manage(watcher::WatcherState::default())
         .manage(github::secrets::GitHubSecrets::new())
         .manage(opencode::OpenCodeState::default())
+        .manage(pty::PtyState::default())
         .setup(|app| {
             let settings = settings::load_settings().unwrap_or_default();
             let state = MenuUiState {
@@ -656,6 +727,11 @@ pub fn run() {
             opencode_switch_agent,
             opencode_switch_model,
             opencode_run_command,
+            pty_start,
+            pty_write,
+            pty_resize,
+            pty_stop,
+            pty_status,
             load_workspace_state,
             save_workspace_state,
             open_folder,

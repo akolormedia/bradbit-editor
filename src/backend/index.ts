@@ -25,6 +25,10 @@ import {
   OpenCodeStatus,
   OpenedFolder,
   ProjectWorkspaceState,
+  PtyExitEvent,
+  PtyOutputEvent,
+  PtyStartResult,
+  PtyStatus,
   RecentProject,
   SearchMatch,
   TemplateInfo,
@@ -938,6 +942,70 @@ export const backend = {
       };
     }
     return tauriInvoke<OpenCodeStatus>("opencode_status");
+  },
+
+  async ptyStart(
+    rootPath: string,
+    command: string,
+    cols: number,
+    rows: number,
+  ): Promise<PtyStartResult> {
+    if (!isTauriEnvironment()) {
+      throw new Error("El terminal requiere la app de escritorio");
+    }
+    return tauriInvoke<PtyStartResult>("pty_start", {
+      root: rootPath,
+      command,
+      cols,
+      rows,
+    });
+  },
+
+  async ptyWrite(id: string, data: string): Promise<void> {
+    if (!isTauriEnvironment()) return;
+    return tauriInvoke<void>("pty_write", { id, data });
+  },
+
+  async ptyResize(id: string, cols: number, rows: number): Promise<void> {
+    if (!isTauriEnvironment()) return;
+    return tauriInvoke<void>("pty_resize", { id, cols, rows });
+  },
+
+  async ptyStop(): Promise<void> {
+    if (!isTauriEnvironment()) return;
+    return tauriInvoke<void>("pty_stop");
+  },
+
+  async ptyStatus(): Promise<PtyStatus> {
+    if (!isTauriEnvironment()) {
+      return {
+        running: false,
+        id: null,
+        root: null,
+        command: null,
+      };
+    }
+    return tauriInvoke<PtyStatus>("pty_status");
+  },
+
+  async listenPtyOutput(
+    handler: (event: PtyOutputEvent) => void,
+  ): Promise<() => void> {
+    if (!isTauriEnvironment()) return () => {};
+    const { listen } = await import("@tauri-apps/api/event");
+    return listen<PtyOutputEvent>("bradbit-pty-output", (event) =>
+      handler(event.payload),
+    );
+  },
+
+  async listenPtyExit(
+    handler: (event: PtyExitEvent) => void,
+  ): Promise<() => void> {
+    if (!isTauriEnvironment()) return () => {};
+    const { listen } = await import("@tauri-apps/api/event");
+    return listen<PtyExitEvent>("bradbit-pty-exit", (event) =>
+      handler(event.payload),
+    );
   },
 
   async listenOpenCodeEvents(
