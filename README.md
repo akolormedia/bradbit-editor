@@ -89,7 +89,7 @@ Editor de texto de escritorio agnóstico para escritura creativa (`.md`, `.mdx`,
   - La cabecera sobre el editor muestra el nombre y la ruta del archivo activo, con acciones **Copiar**, **`</>` Vista previa / Editar** (Markdown) y **PDF** (Fountain).
   - Vista previa Markdown/MDX renderizada y sanitizada (`⌘⌥P`), con soporte de encabezados, listas, citas, código, tablas y enlaces.
   - Los enlaces externos se abren en el navegador; los enlaces relativos del proyecto se abren directamente en el editor.
-- **Ajustes de aplicación (`⌘,`):** Idioma (Español / Inglés), tema (Oscuro / Claro / Sistema), tamaño de fuente (`12`–`24` px), ajuste de línea, números de línea y visibilidad de archivos de configuración.
+- **Ajustes de aplicación (`⌘,`, `T-2.4.4`):** ventana con buscador y categorías a la izquierda (General, Apariencia, Editor, Archivos y búsqueda, Terminal, Git, GitHub, IA y modelos). Incluye idioma, tema, tamaño de fuente (`12`–`24` px), ajuste de línea, números de línea, archivos de configuración, comando de terminal, autor de Git, cuenta de GitHub y gestión de modelos.
 
 ## Desarrollo y pruebas
 

@@ -68,6 +68,8 @@ import { addSessionTab, removeSessionTab, SessionTabInfo } from "./session/sessi
 import { projectRelativePath } from "./session/chatPaths";
 import { parseSlashCommand } from "./session/composer";
 import { SessionView, toggleSessionView } from "./session/sessionView";
+import { SettingsPanel } from "./settings/settingsPanel";
+import type { SettingsCategoryId } from "./settings/catalog";
 import { TerminalPanel } from "./terminal/terminalPanel";
 import { AppMenu } from "./ui/appMenu";
 import { createIcon } from "./ui/icons";
@@ -178,6 +180,8 @@ class BradbitApp {
   private appMenu: AppMenu | null = null;
   private outlineRefreshTimer: number | null = null;
   private modal: ModalState = { kind: "none" };
+  private settingsCategory: SettingsCategoryId = "general";
+  private settingsQuery = "";
   private statusNotice = "";
   private gitStatus: GitStatus | null = null;
   private gitHistory: GitCommit[] = [];
@@ -676,6 +680,7 @@ class BradbitApp {
 
   private openSettingsModal(): void {
     this.modal = { kind: "settings" };
+    this.settingsQuery = "";
     this.githubTokenDraft = "";
     this.githubAccountError = "";
     this.render();
@@ -3874,283 +3879,38 @@ class BradbitApp {
     dialog.className = "modal-dialog";
 
     if (this.modal.kind === "settings") {
-      const h3 = document.createElement("h3");
-      h3.textContent = t(lang, "settings");
-      dialog.appendChild(h3);
-
-      // Language
-      const langRow = document.createElement("div");
-      langRow.className = "form-row-inline";
-      const langLabel = document.createElement("label");
-      langLabel.className = "form-label";
-      langLabel.textContent = t(lang, "language");
-      const langSelect = document.createElement("select");
-      langSelect.className = "select-input";
-      langSelect.style.width = "160px";
-      langSelect.innerHTML = `<option value="es">Español</option><option value="en">English</option>`;
-      langSelect.value = this.settings.language;
-      langSelect.onchange = () =>
-        void this.updateSettings({ language: langSelect.value as AppSettings["language"] });
-      langRow.append(langLabel, langSelect);
-
-      // Theme
-      const themeRow = document.createElement("div");
-      themeRow.className = "form-row-inline";
-      const themeLabel = document.createElement("label");
-      themeLabel.className = "form-label";
-      themeLabel.textContent = t(lang, "theme");
-      const themeSelect = document.createElement("select");
-      themeSelect.className = "select-input";
-      themeSelect.style.width = "160px";
-      themeSelect.innerHTML = `
-        <option value="dark">${t(lang, "themeDark")}</option>
-        <option value="light">${t(lang, "themeLight")}</option>
-        <option value="system">${t(lang, "themeSystem")}</option>
-      `;
-      themeSelect.value = this.settings.theme;
-      themeSelect.onchange = () =>
-        void this.updateSettings({ theme: themeSelect.value as AppSettings["theme"] });
-      themeRow.append(themeLabel, themeSelect);
-
-      // Font size
-      const fontRow = document.createElement("div");
-      fontRow.className = "form-row-inline";
-      const fontLabel = document.createElement("label");
-      fontLabel.className = "form-label";
-      fontLabel.textContent = `${t(lang, "fontSize")} (${this.settings.fontSize}px)`;
-      const fontInput = document.createElement("input");
-      fontInput.type = "range";
-      fontInput.min = "12";
-      fontInput.max = "24";
-      fontInput.value = String(this.settings.fontSize);
-      fontInput.onchange = () =>
-        void this.updateSettings({ fontSize: Number(fontInput.value) });
-      fontRow.append(fontLabel, fontInput);
-
-      // Word wrap
-      const wrapRow = document.createElement("div");
-      wrapRow.className = "form-row-inline";
-      const wrapLabel = document.createElement("label");
-      wrapLabel.className = "form-label";
-      wrapLabel.textContent = t(lang, "wordWrap");
-      const wrapCheck = document.createElement("input");
-      wrapCheck.type = "checkbox";
-      wrapCheck.checked = this.settings.wordWrap;
-      wrapCheck.onchange = () => void this.updateSettings({ wordWrap: wrapCheck.checked });
-      wrapRow.append(wrapLabel, wrapCheck);
-
-      // Line numbers
-      const lnRow = document.createElement("div");
-      lnRow.className = "form-row-inline";
-      const lnLabel = document.createElement("label");
-      lnLabel.className = "form-label";
-      lnLabel.textContent = t(lang, "lineNumbers");
-      const lnCheck = document.createElement("input");
-      lnCheck.type = "checkbox";
-      lnCheck.checked = this.settings.lineNumbers;
-      lnCheck.onchange = () => void this.updateSettings({ lineNumbers: lnCheck.checked });
-      lnRow.append(lnLabel, lnCheck);
-
-      // Show config files
-      const cfgRow = document.createElement("div");
-      cfgRow.className = "form-row-inline";
-      const cfgLabel = document.createElement("label");
-      cfgLabel.className = "form-label";
-      cfgLabel.textContent = t(lang, "showConfigFiles");
-      const cfgCheck = document.createElement("input");
-      cfgCheck.type = "checkbox";
-      cfgCheck.dataset.testid = "toggle-config-files-checkbox";
-      cfgCheck.checked = this.settings.showConfigFiles;
-      cfgCheck.onchange = () =>
-        void this.updateSettings({ showConfigFiles: cfgCheck.checked });
-      cfgRow.append(cfgLabel, cfgCheck);
-
-      const authorSection = document.createElement("div");
-      authorSection.className = "settings-author";
-      const authorTitle = document.createElement("div");
-      authorTitle.className = "settings-section-title";
-      authorTitle.textContent = t(lang, "gitAuthorSection");
-      const authorHint = document.createElement("p");
-      authorHint.className = "settings-hint";
-      authorHint.textContent = t(lang, "gitAuthorHint");
-
-      const authorNameRow = document.createElement("div");
-      authorNameRow.className = "form-row";
-      const authorNameLabel = document.createElement("label");
-      authorNameLabel.className = "form-label";
-      authorNameLabel.textContent = t(lang, "gitAuthorName");
-      const authorNameInput = document.createElement("input");
-      authorNameInput.className = "text-input";
-      authorNameInput.dataset.testid = "git-author-name";
-      authorNameInput.value = this.settings.gitAuthorName;
-      authorNameInput.placeholder = "Ada Lovelace";
-      authorNameRow.append(authorNameLabel, authorNameInput);
-
-      const authorEmailRow = document.createElement("div");
-      authorEmailRow.className = "form-row";
-      const authorEmailLabel = document.createElement("label");
-      authorEmailLabel.className = "form-label";
-      authorEmailLabel.textContent = t(lang, "gitAuthorEmail");
-      const authorEmailInput = document.createElement("input");
-      authorEmailInput.className = "text-input";
-      authorEmailInput.dataset.testid = "git-author-email";
-      authorEmailInput.type = "email";
-      authorEmailInput.value = this.settings.gitAuthorEmail;
-      authorEmailInput.placeholder = "ada@example.com";
-      authorEmailRow.append(authorEmailLabel, authorEmailInput);
-
-      const authorSave = document.createElement("button");
-      authorSave.className = "toolbar-btn";
-      authorSave.dataset.testid = "save-git-author";
-      authorSave.textContent = t(lang, "save");
-      authorSave.onclick = () =>
-        void this.saveGitAuthor(authorNameInput.value, authorEmailInput.value);
-
-      authorSection.append(
-        authorTitle,
-        authorHint,
-        authorNameRow,
-        authorEmailRow,
-        authorSave,
-      );
-
-      const modelsSection = document.createElement("div");
-      modelsSection.className = "settings-models";
-      const modelsTitle = document.createElement("div");
-      modelsTitle.className = "settings-section-title";
-      modelsTitle.textContent = t(lang, "chatModelsTitle");
-      const modelsHint = document.createElement("p");
-      modelsHint.className = "settings-hint";
-      modelsHint.textContent = t(lang, "chatModelsHint");
-      const modelsButton = document.createElement("button");
-      modelsButton.className = "toolbar-btn";
-      modelsButton.dataset.testid = "manage-models-btn";
-      modelsButton.textContent = t(lang, "chatManageModels");
-      modelsButton.onclick = () => this.openManageModels(true);
-      modelsSection.append(modelsTitle, modelsHint, modelsButton);
-
-      const githubSection = document.createElement("div");
-      githubSection.className = "settings-github";
-      const githubTitle = document.createElement("div");
-      githubTitle.className = "settings-section-title";
-      githubTitle.textContent = t(lang, "githubAccountSection");
-      const githubHint = document.createElement("p");
-      githubHint.className = "settings-hint";
-      githubHint.textContent = t(lang, "githubConnectHint");
-      githubSection.append(githubTitle, githubHint);
-
-      if (this.githubAccount) {
-        const connected = document.createElement("p");
-        connected.className = "settings-github-status";
-        connected.textContent = t(lang, "githubConnectedAs", {
-          login: this.githubAccount,
-        });
-        githubSection.appendChild(connected);
-
-        const disconnect = document.createElement("button");
-        disconnect.className = "toolbar-btn";
-        disconnect.dataset.testid = "github-disconnect-btn";
-        disconnect.disabled = this.githubAccountBusy;
-        disconnect.textContent = this.githubAccountBusy
-          ? t(lang, "githubDisconnecting")
-          : t(lang, "githubDisconnect");
-        disconnect.onclick = () => void this.disconnectGitHub();
-        githubSection.appendChild(disconnect);
-      } else {
-        const tokenLabel = document.createElement("label");
-        tokenLabel.className = "form-label";
-        tokenLabel.textContent = t(lang, "githubTokenLabel");
-        const tokenInput = document.createElement("input");
-        tokenInput.className = "text-input";
-        tokenInput.dataset.testid = "github-token-input";
-        tokenInput.type = "password";
-        tokenInput.autocomplete = "off";
-        tokenInput.spellcheck = false;
-        tokenInput.value = this.githubTokenDraft;
-        tokenInput.placeholder = t(lang, "githubTokenPlaceholder");
-        tokenInput.oninput = () => {
-          this.githubTokenDraft = tokenInput.value;
-        };
-        tokenInput.onkeydown = (event) => {
-          if (event.key === "Enter") {
-            event.preventDefault();
-            void this.connectGitHub();
-          }
-        };
-
-        const tokenHint = document.createElement("p");
-        tokenHint.className = "settings-hint";
-        tokenHint.textContent = t(lang, "githubTokenHint");
-
-        const actions = document.createElement("div");
-        actions.className = "settings-github-actions";
-        const connect = document.createElement("button");
-        connect.className = "toolbar-btn primary";
-        connect.dataset.testid = "github-connect-btn";
-        connect.disabled = this.githubAccountBusy || !this.githubTokenDraft.trim();
-        connect.textContent = this.githubAccountBusy
-          ? t(lang, "githubConnecting")
-          : t(lang, "githubConnectAction");
-        connect.onclick = () => void this.connectGitHub();
-
-        const createToken = document.createElement("button");
-        createToken.className = "versions-link-btn";
-        createToken.dataset.testid = "github-token-link";
-        createToken.textContent = t(lang, "githubCreateToken");
-        createToken.onclick = () => this.openGitHubTokenPage();
-
-        actions.append(connect, createToken);
-
-        if (this.githubTokenPresent) {
-          const disconnect = document.createElement("button");
-          disconnect.className = "toolbar-btn";
-          disconnect.dataset.testid = "github-disconnect-btn";
-          disconnect.disabled = this.githubAccountBusy;
-          disconnect.textContent = t(lang, "githubDisconnect");
-          disconnect.onclick = () => void this.disconnectGitHub();
-          actions.appendChild(disconnect);
-        }
-
-        githubSection.append(tokenLabel, tokenInput, tokenHint, actions);
-      }
-
-      if (this.githubAccountError) {
-        const error = document.createElement("div");
-        error.className = "error-banner";
-        error.textContent = this.githubAccountError;
-        githubSection.appendChild(error);
-      }
-
-      if (this.modal.error) {
-        const errEl = document.createElement("div");
-        errEl.className = "error-banner";
-        errEl.textContent = this.modal.error;
-        dialog.appendChild(errEl);
-      }
-
-      const footer = document.createElement("div");
-      footer.className = "modal-footer";
-      const closeBtn = document.createElement("button");
-      closeBtn.className = "toolbar-btn primary";
-      closeBtn.textContent = t(lang, "close");
-      closeBtn.onclick = () => {
-        this.modal = { kind: "none" };
-        this.render();
-      };
-      footer.appendChild(closeBtn);
-
-      dialog.append(
-        langRow,
-        themeRow,
-        fontRow,
-        wrapRow,
-        lnRow,
-        cfgRow,
-        authorSection,
-        modelsSection,
-        githubSection,
-        footer,
-      );
+      dialog.classList.add("settings-dialog");
+      const panel = new SettingsPanel({
+        language: lang,
+        settings: this.settings,
+        github: {
+          account: this.githubAccount,
+          tokenPresent: this.githubTokenPresent,
+          busy: this.githubAccountBusy,
+          error: this.githubAccountError,
+          tokenDraft: this.githubTokenDraft,
+        },
+        initialCategory: this.settingsCategory,
+        initialQuery: this.settingsQuery,
+        modalError: this.modal.error,
+        onCategoryChange: (category) => {
+          this.settingsCategory = category;
+        },
+        onQueryChange: (query) => {
+          this.settingsQuery = query;
+        },
+        onUpdateSettings: (patch) => void this.updateSettings(patch),
+        onSaveGitAuthor: (name, email) => void this.saveGitAuthor(name, email),
+        onGithubTokenDraft: (value) => {
+          this.githubTokenDraft = value;
+        },
+        onConnectGithub: () => void this.connectGitHub(),
+        onDisconnectGithub: () => void this.disconnectGitHub(),
+        onOpenGithubTokenPage: () => this.openGitHubTokenPage(),
+        onManageModels: () => this.openManageModels(true),
+        onClose: () => this.closeModal(),
+      });
+      dialog.appendChild(panel.element);
     } else if (this.modal.kind === "manage-models") {
       this.renderManageModels(lang, dialog);
     } else if (this.modal.kind === "quick-open" || this.modal.kind === "global-search") {
