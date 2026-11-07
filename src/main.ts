@@ -88,6 +88,13 @@ import { computeWorkspaceLayout, WorkspaceLayout } from "./workspace/layout";
 import { isTabAffected, reconcileTabsWithDisk } from "./workspace/reconcile";
 import { widthFromPointerDrag } from "./workspace/resizing";
 import { filterTreeByQuery } from "./workspace/treeFilter";
+import {
+  ensureMarkdownExtension,
+  isUntitledTab,
+  markUntitledTabSaved,
+  openUntitledInTabs,
+  relativePathWithinRoot,
+} from "./workspace/untitled";
 import { SearchPalette } from "./workspace/searchPalette";
 import {
   buildMenuUiState,
@@ -124,7 +131,7 @@ type ModalState =
       submitting?: boolean;
     }
   | { kind: "save-template"; name: string; error?: string; saving?: boolean }
-  | { kind: "entry-input"; mode: "new-file" | "new-folder" | "rename"; targetPath: string; value: string; error?: string }
+  | { kind: "entry-input"; mode: "new-folder" | "rename"; targetPath: string; value: string; error?: string }
   | { kind: "branch-input"; value: string; error?: string }
   | {
       kind: "github-publish";
@@ -170,6 +177,7 @@ class BradbitApp {
   private folder: OpenedFolder | null = null;
   private recents: RecentProject[] = [];
   private tabState: TabListState = { tabs: [], activeTabPath: null };
+  private untitledSequence = 0;
   private collapsedDirs = new Set<string>();
   private sidebarVisible = true;
   private sidebarTab: SidebarTab = "files";
@@ -295,6 +303,7 @@ class BradbitApp {
     this.kitCatalog = { agents: [], commands: [], skills: [] };
     this.chatModels = [];
     this.tabState = { tabs: [], activeTabPath: null };
+    this.untitledSequence = 0;
     this.fileFilter = "";
     this.gitStatus = null;
     this.gitHistory = [];
@@ -338,6 +347,7 @@ class BradbitApp {
         this.applyWorkspaceLayout(this.workspaceState.layout);
       }
       this.tabState = { tabs: [], activeTabPath: null };
+      this.untitledSequence = 0;
       this.collapsedDirs.clear();
       this.fileFilter = "";
       this.gitHistory = [];
@@ -646,7 +656,9 @@ class BradbitApp {
   private async reloadOpenTabsFromDisk(): Promise<void> {
     if (!this.folder) return;
     const root = this.folder.rootPath;
-    const paths = this.tabState.tabs.map((tab) => tab.path);
+    const paths = this.tabState.tabs
+      .filter((tab) => !tab.untitled)
+      .map((tab) => tab.path);
     if (paths.length === 0) return;
     const diskContents = new Map<string, string | null>();
     for (const path of paths) {
@@ -1657,6 +1669,23 @@ class BradbitApp {
     }
   }
 
+  private openUntitledFile(defaultDir = ""): void {
+    if (!this.folder) return;
+    this.untitledSequence += 1;
+    const path = `untitled://${this.untitledSequence}.md`;
+    const name = t(this.settings.language, "untitledFileName", {
+      count: String(this.untitledSequence),
+    });
+    this.tabState = openUntitledInTabs(this.tabState, {
+      path,
+      name,
+      defaultDir,
+    });
+    this.statusNotice = "";
+    this.render();
+    requestAnimationFrame(() => this.editor?.focus());
+  }
+
   private async openFileFromTree(relPath: string, pin: boolean): Promise<void> {
     if (!this.folder) return;
     try {
@@ -1676,10 +1705,64 @@ class BradbitApp {
   private async saveActiveTab(): Promise<boolean> {
     const active = this.getActiveTab();
     if (!active || !this.folder) return false;
+    if (isUntitledTab(active)) {
+      return this.saveUntitledTab(active);
+    }
     try {
       await backend.writeTextFile(this.folder.rootPath, active.path, active.content);
       this.tabState = markTabSaved(this.tabState, active.path);
       this.statusNotice = t(this.settings.language, "saved");
+      await this.refreshGitStatus();
+      this.render();
+      return true;
+    } catch (err) {
+      this.statusNotice = err instanceof Error ? err.message : String(err);
+      this.render();
+      return false;
+    }
+  }
+
+  private async saveUntitledTab(tab: OpenTab): Promise<boolean> {
+    if (!this.folder) return false;
+    try {
+      const directory = tab.defaultDir
+        ? `${this.folder.rootPath}/${tab.defaultDir}`
+        : this.folder.rootPath;
+      const defaultName = t(
+        this.settings.language,
+        "untitledDefaultFileName",
+      );
+      const selected = await backend.pickSaveFileDialog(
+        `${directory}/${defaultName}`,
+      );
+      if (!selected) return false;
+
+      const targetPath = ensureMarkdownExtension(selected);
+      const relativePath = relativePathWithinRoot(
+        this.folder.rootPath,
+        targetPath,
+      );
+      if (!relativePath) {
+        this.statusNotice = t(this.settings.language, "saveOutsideProject");
+        this.render();
+        return false;
+      }
+
+      await backend.writeTextFile(
+        this.folder.rootPath,
+        relativePath,
+        tab.content,
+      );
+      this.editor?.renameDocumentState(tab.path, relativePath);
+      const name = relativePath.split("/").pop() || relativePath;
+      this.tabState = markUntitledTabSaved(
+        this.tabState,
+        tab.path,
+        relativePath,
+        name,
+      );
+      this.statusNotice = t(this.settings.language, "saved");
+      await this.refreshTree();
       await this.refreshGitStatus();
       this.render();
       return true;
@@ -1709,7 +1792,7 @@ class BradbitApp {
   }
 
   private openEntryModal(
-    mode: "new-file" | "new-folder" | "rename",
+    mode: "new-folder" | "rename",
     basePath = "",
   ): void {
     let initialValue = "";
@@ -1717,8 +1800,6 @@ class BradbitApp {
       initialValue = basePath;
     } else if (basePath) {
       initialValue = `${basePath}/`;
-    } else if (mode === "new-file") {
-      initialValue = "nuevo-documento.md";
     } else {
       initialValue = "nueva-carpeta";
     }
@@ -1742,12 +1823,7 @@ class BradbitApp {
     }
 
     try {
-      if (currentModal.mode === "new-file") {
-        await backend.createEntry(this.folder.rootPath, rawValue, false);
-        await this.refreshTree();
-        this.modal = { kind: "none" };
-        await this.openFileFromTree(rawValue, true);
-      } else if (currentModal.mode === "new-folder") {
+      if (currentModal.mode === "new-folder") {
         await backend.createEntry(this.folder.rootPath, rawValue, true);
         await this.refreshTree();
         this.modal = { kind: "none" };
@@ -1890,7 +1966,7 @@ class BradbitApp {
 
   private toggleDiff(): void {
     const active = this.getActiveTab();
-    if (!active || !this.folder) return;
+    if (!active || !this.folder || isUntitledTab(active)) return;
 
     const entering = active.viewMode !== "diff";
     this.tabState = setTabViewMode(
@@ -1957,7 +2033,7 @@ class BradbitApp {
 
   private requestDiscard(): void {
     const active = this.getActiveTab();
-    if (!active || !this.folder) return;
+    if (!active || !this.folder || isUntitledTab(active)) return;
     this.requestDiscardPath(active.path);
   }
 
@@ -2040,8 +2116,8 @@ class BradbitApp {
   private async handleFsChange(event: FsChangeEvent): Promise<void> {
     if (!this.folder || event.paths.length === 0) return;
     const root = this.folder.rootPath;
-    const affected = this.tabState.tabs.filter((tab) =>
-      isTabAffected(tab.path, event.paths),
+    const affected = this.tabState.tabs.filter(
+      (tab) => !tab.untitled && isTabAffected(tab.path, event.paths),
     );
     const diskContents = new Map<string, string | null>();
     for (const tab of affected) {
@@ -2301,9 +2377,7 @@ class BradbitApp {
         }
         break;
       case "file.newFile":
-        if (this.folder) {
-          this.openEntryModal("new-file");
-        }
+        this.openUntitledFile();
         break;
       case "file.newProject":
         await this.openNewProjectModal();
@@ -2405,7 +2479,7 @@ class BradbitApp {
         void this.openNewProjectModal();
       } else if (letter === "n" && this.folder) {
         e.preventDefault();
-        this.openEntryModal("new-file");
+        this.openUntitledFile();
       } else if (letter === "w" && this.tabState.activeTabPath) {
         e.preventDefault();
         this.requestCloseTab(this.tabState.activeTabPath);
@@ -2545,7 +2619,8 @@ class BradbitApp {
         if (active.externalChange) {
           dot.appendChild(createIcon("triangle-alert", 12));
         } else {
-          dot.textContent = isTabDirty(active) ? "•" : "";
+          dot.textContent =
+            active.untitled || isTabDirty(active) ? "•" : "";
         }
         dot.classList.toggle("external", Boolean(active.externalChange));
         dot.title = active.externalChange
@@ -2749,7 +2824,7 @@ class BradbitApp {
         title: `${t(lang, "newFile")} (⌘N)`,
         testId: "sidebar-new-file-btn",
         className: "tree-mini-btn",
-        onClick: () => this.openEntryModal("new-file"),
+        onClick: () => this.openUntitledFile(),
       });
 
       const newFolderBtn = createIconButton({
@@ -2945,7 +3020,7 @@ class BradbitApp {
             className: "tree-mini-btn",
             onClick: (e) => {
               e.stopPropagation();
-              this.openEntryModal("new-file", node.path);
+              this.openUntitledFile(node.path);
             },
           });
           rowActions.appendChild(addInDirBtn);
@@ -3295,7 +3370,7 @@ class BradbitApp {
         const title = document.createElement("span");
         title.className = "tab-title";
         title.textContent = tab.name;
-        title.title = tab.path;
+        title.title = tab.untitled ? tab.name : tab.path;
 
         const gitBadge = gitBadges.get(tab.path);
         let badgeEl: HTMLSpanElement | null = null;
@@ -3310,7 +3385,8 @@ class BradbitApp {
         if (tab.externalChange) {
           dirtyDot.appendChild(createIcon("triangle-alert", 12));
         } else {
-          dirtyDot.textContent = isTabDirty(tab) ? "•" : "";
+          dirtyDot.textContent =
+            tab.untitled || isTabDirty(tab) ? "•" : "";
         }
         dirtyDot.classList.toggle("external", Boolean(tab.externalChange));
         dirtyDot.title = tab.externalChange
@@ -3354,10 +3430,13 @@ class BradbitApp {
     const tabDirty = activeTab ? isTabDirty(activeTab) : false;
     const canDiff = Boolean(
       activeTab &&
+        !isUntitledTab(activeTab) &&
         this.gitStatus?.isRepository &&
         (gitEntry || tabDirty || activeTab.viewMode === "diff"),
     );
-    const canDiscard = Boolean(activeTab && (gitEntry || tabDirty));
+    const canDiscard = Boolean(
+      activeTab && !isUntitledTab(activeTab) && (gitEntry || tabDirty),
+    );
 
     if (activeTab) {
       col.appendChild(
@@ -3453,8 +3532,9 @@ class BradbitApp {
       .split("\n")
       .map((line) => `> ${line}`)
       .join("\n");
+    const contextLabel = active.untitled ? active.name : active.path;
     this.ensureChatPanel().appendDraft(
-      `Contexto de \`${active.path}\`:\n${quoted}`,
+      `Contexto de \`${contextLabel}\`:\n${quoted}`,
     );
     this.persistWorkspaceState();
   }
@@ -3539,11 +3619,13 @@ class BradbitApp {
 
     if (activeTab) {
       const pathSpan = document.createElement("span");
-      pathSpan.textContent = activeTab.path;
+      pathSpan.textContent = activeTab.untitled
+        ? t(lang, "untitledFileHint")
+        : activeTab.path;
       left.appendChild(pathSpan);
 
       const dirtySpan = document.createElement("span");
-      const dirty = isTabDirty(activeTab);
+      const dirty = activeTab.untitled || isTabDirty(activeTab);
       dirtySpan.className = `status-pill ${dirty ? "dirty" : "saved"}`;
       dirtySpan.append(
         createIcon(dirty ? "circle" : "check", 11),
@@ -4033,11 +4115,9 @@ class BradbitApp {
       const modalState = this.modal;
       const h3 = document.createElement("h3");
       h3.textContent =
-        modalState.mode === "new-file"
-          ? t(lang, "newFileTitle")
-          : modalState.mode === "new-folder"
-            ? t(lang, "newFolderTitle")
-            : t(lang, "renameTitle");
+        modalState.mode === "new-folder"
+          ? t(lang, "newFolderTitle")
+          : t(lang, "renameTitle");
 
       const input = document.createElement("input");
       input.className = "text-input";
@@ -4145,8 +4225,8 @@ class BradbitApp {
       saveBtn.onclick = async () => {
         this.tabState = { ...this.tabState, activeTabPath: tabPath };
         const saved = await this.saveActiveTab();
-        if (saved) {
-          this.performCloseTab(tabPath);
+        if (saved && this.tabState.activeTabPath) {
+          this.performCloseTab(this.tabState.activeTabPath);
         }
       };
 

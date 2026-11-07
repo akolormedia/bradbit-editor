@@ -13,6 +13,11 @@ export const translations = {
       "Editor de texto agnóstico para escritura creativa. Abre cualquier carpeta para empezar a escribir.",
     explorerTitle: "Archivos",
     newFile: "Nuevo archivo",
+    untitledFileName: "Sin título {count}",
+    untitledFileHint: "Sin guardar",
+    untitledDefaultFileName: "nuevo-documento.md",
+    saveOutsideProject:
+      "El archivo debe guardarse dentro de la carpeta del proyecto.",
     newFolder: "Nueva carpeta",
     rename: "Renombrar",
     delete: "Eliminar",
@@ -389,6 +394,11 @@ export const translations = {
       "Agnostic creative writing text editor. Open any folder to start writing.",
     explorerTitle: "Files",
     newFile: "New File",
+    untitledFileName: "Untitled {count}",
+    untitledFileHint: "Not saved",
+    untitledDefaultFileName: "untitled.md",
+    saveOutsideProject:
+      "The file must be saved inside the project folder.",
     newFolder: "New Folder",
     rename: "Rename",
     delete: "Delete",

@@ -40,6 +40,7 @@ Editor de texto de escritorio agnóstico para escritura creativa (`.md`, `.mdx`,
   - Oculta por defecto `.git`, `.DS_Store` y `.opencode` con opción *Mostrar archivos de configuración*.
   - **Filtrar archivos (`T-2.4.5`):** campo sobre el árbol que filtra por nombre o ruta, conserva las carpetas ancestro, auto-expande las coincidencias y se limpia con `Escape`.
   - Acciones integradas: Nuevo archivo (`⌘N`), Nueva carpeta, Renombrar y Eliminar (con confirmación).
+  - **Nuevo archivo sin título (`T-2.4.6`):** `⌘N`, el menú y el árbol abren una pestaña **Sin título**; el nombre real se pide al guardar con el diálogo nativo, dentro de la carpeta del proyecto. Las pestañas sin título no se persisten.
 - **Esquema del documento (`T-1.2.2`):**
   - En Markdown/MDX: encabezados (`#`, `##`, `###`…) clicables que saltan a la línea exacta.
   - En Fountain: secciones (`# Acto`) y escenas (`INT.`, `EXT.`, `I/E.`, `.forzada`) con jerarquía y conteo estimado de páginas (`~N páginas`).

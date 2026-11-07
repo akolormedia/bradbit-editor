@@ -225,6 +225,20 @@ export const backend = {
     return DEMO_GUIONISTA_KIT.rootPath;
   },
 
+  async pickSaveFileDialog(defaultPath: string): Promise<string | null> {
+    if (!isTauriEnvironment()) return null;
+    const { save } = await import("@tauri-apps/plugin-dialog");
+    const selected = await save({
+      defaultPath,
+      filters: [
+        { name: "Markdown", extensions: ["md", "mdx"] },
+        { name: "Fountain", extensions: ["fountain"] },
+        { name: "Texto", extensions: ["txt"] },
+      ],
+    });
+    return typeof selected === "string" ? selected : null;
+  },
+
   async discoverKit(rootPath: string): Promise<KitCatalog> {
     if (!isTauriEnvironment()) {
       return { agents: [], commands: [], skills: [] };
