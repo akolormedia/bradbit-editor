@@ -101,6 +101,7 @@ import {
 type ModalState =
   | { kind: "none" }
   | { kind: "settings"; error?: string }
+  | { kind: "manage-models"; search: string; fromSettings?: boolean }
   | { kind: "quick-open" }
   | { kind: "global-search" }
   | {
@@ -1061,9 +1062,12 @@ class BradbitApp {
         kit: this.kitCatalog,
         models: this.chatModels,
         projectFiles: this.projectFiles(),
+        hiddenModels: this.settings.hiddenModels,
+        recentModels: this.settings.recentModels,
         onAgentChange: (agent) => void this.changeChatAgent(agent),
         onModelChange: (providerId, modelId, variant) =>
           void this.changeChatModel(providerId, modelId, variant),
+        onManageModels: () => this.openManageModels(),
       });
     }
     this.updateChatPanel();
@@ -1081,6 +1085,8 @@ class BradbitApp {
       kit: this.kitCatalog,
       models: this.chatModels,
       projectFiles: this.projectFiles(),
+      hiddenModels: this.settings.hiddenModels,
+      recentModels: this.settings.recentModels,
     });
   }
 
@@ -1415,6 +1421,26 @@ class BradbitApp {
       if (this.activeChatSessionId === sessionId) {
         this.chatState = next;
       }
+      const key = `${providerId}/${modelId}`;
+      const recentModels = [
+        key,
+        ...this.settings.recentModels.filter((recent) => recent !== key),
+      ].slice(0, 6);
+      if (
+        recentModels.length !== this.settings.recentModels.length ||
+        recentModels.some(
+          (recent, index) => recent !== this.settings.recentModels[index],
+        )
+      ) {
+        try {
+          this.settings = await backend.saveSettings({
+            ...this.settings,
+            recentModels,
+          });
+        } catch (err) {
+          console.error("No se pudieron guardar los modelos recientes", err);
+        }
+      }
       this.updateChatPanel();
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
@@ -1688,6 +1714,43 @@ class BradbitApp {
       };
       this.render();
     }
+  }
+
+  private providerDisplayName(providerId: string): string {
+    if (providerId === "opencode-go") return "OpenCode Go";
+    if (providerId === "opencode") return "OpenCode";
+    if (providerId === "openai") return "OpenAI";
+    return providerId
+      .replace(/[-_]/g, " ")
+      .replace(/\b\w/g, (character) => character.toUpperCase());
+  }
+
+  private openManageModels(fromSettings = false): void {
+    this.modal = { kind: "manage-models", search: "", fromSettings };
+    this.render();
+  }
+
+  private async setModelVisibility(
+    keys: string[],
+    visible: boolean,
+  ): Promise<void> {
+    const hidden = new Set(this.settings.hiddenModels);
+    for (const key of keys) {
+      if (visible) hidden.delete(key);
+      else hidden.add(key);
+    }
+    await this.updateSettings({ hiddenModels: [...hidden] });
+    const search =
+      this.modal.kind === "manage-models" ? this.modal.search : "";
+    window.setTimeout(() => {
+      const input = this.rootEl.querySelector<HTMLInputElement>(
+        ".manage-models-search",
+      );
+      if (input) {
+        input.value = search;
+        input.focus();
+      }
+    }, 0);
   }
 
   private async updateSettings(patch: Partial<AppSettings>): Promise<void> {
@@ -3551,6 +3614,149 @@ class BradbitApp {
     window.setTimeout(() => input.focus(), 10);
   }
 
+  private renderManageModels(
+    lang: AppSettings["language"],
+    dialog: HTMLElement,
+  ): void {
+    if (this.modal.kind !== "manage-models") return;
+    dialog.classList.add("manage-models-dialog");
+    const hidden = new Set(this.settings.hiddenModels);
+
+    const title = document.createElement("h3");
+    title.textContent = t(lang, "chatModelsTitle");
+    const hint = document.createElement("p");
+    hint.className = "settings-hint";
+    hint.textContent = t(lang, "chatModelsHint");
+
+    const searchWrap = document.createElement("div");
+    searchWrap.className = "manage-models-search-wrap";
+    const searchIcon = document.createElement("span");
+    searchIcon.className = "manage-models-search-icon";
+    searchIcon.textContent = "⌕";
+    const searchInput = document.createElement("input");
+    searchInput.type = "text";
+    searchInput.className = "manage-models-search";
+    searchInput.dataset.testid = "manage-models-search";
+    searchInput.placeholder = t(lang, "chatModelsSearch");
+    searchInput.value = this.modal.search;
+    searchWrap.append(searchIcon, searchInput);
+
+    const list = document.createElement("div");
+    list.className = "manage-models-list";
+
+    const applyFilter = () => {
+      const query = searchInput.value.trim().toLowerCase();
+      for (const group of dialog.querySelectorAll<HTMLElement>(
+        ".manage-models-group",
+      )) {
+        let visibleRows = 0;
+        for (const row of group.querySelectorAll<HTMLElement>(
+          ".manage-models-row",
+        )) {
+          const matches =
+            !query || (row.dataset.search ?? "").includes(query);
+          row.hidden = !matches;
+          if (matches) visibleRows += 1;
+        }
+        group.hidden = visibleRows === 0;
+      }
+    };
+    searchInput.oninput = () => {
+      if (this.modal.kind === "manage-models") {
+        this.modal = { ...this.modal, search: searchInput.value };
+      }
+      applyFilter();
+    };
+
+    if (this.chatModels.length === 0) {
+      const empty = document.createElement("div");
+      empty.className = "manage-models-empty";
+      empty.textContent = t(lang, "chatModelsEmpty");
+      list.appendChild(empty);
+    } else {
+      const byProvider = new Map<string, OpenCodeModel[]>();
+      for (const model of this.chatModels) {
+        const models = byProvider.get(model.providerId) ?? [];
+        models.push(model);
+        byProvider.set(model.providerId, models);
+      }
+      const active = this.activeChatSessionId
+        ? this.chatSessions.get(this.activeChatSessionId)
+        : undefined;
+      const currentProvider = active?.model?.split("/")[0] ?? "opencode-go";
+      const providers = [...byProvider.keys()].sort((a, b) => {
+        if (a === currentProvider) return -1;
+        if (b === currentProvider) return 1;
+        if (a === "opencode-go") return -1;
+        if (b === "opencode-go") return 1;
+        return a.localeCompare(b);
+      });
+      for (const provider of providers) {
+        const models = byProvider.get(provider)!;
+        const group = document.createElement("div");
+        group.className = "manage-models-group";
+        const providerRow = document.createElement("div");
+        providerRow.className = "manage-models-provider";
+        const providerName = document.createElement("span");
+        providerName.textContent = this.providerDisplayName(provider);
+        const providerToggle = document.createElement("input");
+        providerToggle.type = "checkbox";
+        providerToggle.className = "manage-models-toggle";
+        const keys = models.map((model) => `${provider}/${model.id}`);
+        const hiddenCount = keys.filter((key) => hidden.has(key)).length;
+        providerToggle.checked = hiddenCount < keys.length;
+        providerToggle.indeterminate =
+          hiddenCount > 0 && hiddenCount < keys.length;
+        providerToggle.onchange = () =>
+          void this.setModelVisibility(keys, providerToggle.checked);
+        providerRow.append(providerName, providerToggle);
+        group.appendChild(providerRow);
+
+        for (const model of models) {
+          const key = `${provider}/${model.id}`;
+          const row = document.createElement("div");
+          row.className = "manage-models-row";
+          row.dataset.search = `${model.name} ${provider} ${model.id}`.toLowerCase();
+          const name = document.createElement("span");
+          name.className = "manage-models-name";
+          name.textContent = model.name;
+          const label = document.createElement("label");
+          label.className = "manage-models-switch";
+          const toggle = document.createElement("input");
+          toggle.type = "checkbox";
+          toggle.checked = !hidden.has(key);
+          toggle.dataset.testid = `manage-model-${provider}-${model.id}`;
+          toggle.onchange = () =>
+            void this.setModelVisibility([key], toggle.checked);
+          const track = document.createElement("span");
+          track.className = "manage-models-track";
+          label.append(toggle, track);
+          row.append(name, label);
+          group.appendChild(row);
+        }
+        list.appendChild(group);
+      }
+    }
+
+    const footer = document.createElement("div");
+    footer.className = "modal-footer";
+    const closeBtn = document.createElement("button");
+    closeBtn.className = "toolbar-btn primary";
+    closeBtn.textContent = t(lang, "close");
+    closeBtn.onclick = () => {
+      this.modal =
+        this.modal.kind === "manage-models" && this.modal.fromSettings
+          ? { kind: "settings" }
+          : { kind: "none" };
+      this.render();
+    };
+    footer.appendChild(closeBtn);
+
+    dialog.append(title, hint, searchWrap, list, footer);
+    applyFilter();
+    window.setTimeout(() => searchInput.focus(), 10);
+  }
+
   private renderModal(lang: AppSettings["language"]): HTMLElement {
     const backdrop = document.createElement("div");
     backdrop.className = "modal-backdrop";
@@ -3705,6 +3911,21 @@ class BradbitApp {
         authorSave,
       );
 
+      const modelsSection = document.createElement("div");
+      modelsSection.className = "settings-models";
+      const modelsTitle = document.createElement("div");
+      modelsTitle.className = "settings-section-title";
+      modelsTitle.textContent = t(lang, "chatModelsTitle");
+      const modelsHint = document.createElement("p");
+      modelsHint.className = "settings-hint";
+      modelsHint.textContent = t(lang, "chatModelsHint");
+      const modelsButton = document.createElement("button");
+      modelsButton.className = "toolbar-btn";
+      modelsButton.dataset.testid = "manage-models-btn";
+      modelsButton.textContent = t(lang, "chatManageModels");
+      modelsButton.onclick = () => this.openManageModels(true);
+      modelsSection.append(modelsTitle, modelsHint, modelsButton);
+
       const githubSection = document.createElement("div");
       githubSection.className = "settings-github";
       const githubTitle = document.createElement("div");
@@ -3823,9 +4044,12 @@ class BradbitApp {
         lnRow,
         cfgRow,
         authorSection,
+        modelsSection,
         githubSection,
         footer,
       );
+    } else if (this.modal.kind === "manage-models") {
+      this.renderManageModels(lang, dialog);
     } else if (this.modal.kind === "quick-open" || this.modal.kind === "global-search") {
       backdrop.classList.add("palette-backdrop");
       dialog.classList.add("search-palette-dialog");

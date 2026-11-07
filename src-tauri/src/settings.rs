@@ -18,6 +18,10 @@ pub struct AppSettings {
     pub git_author_name: String,
     #[serde(default)]
     pub git_author_email: String,
+    #[serde(default)]
+    pub hidden_models: Vec<String>,
+    #[serde(default)]
+    pub recent_models: Vec<String>,
 }
 
 impl Default for AppSettings {
@@ -31,6 +35,8 @@ impl Default for AppSettings {
             show_config_files: false,
             git_author_name: String::new(),
             git_author_email: String::new(),
+            hidden_models: Vec::new(),
+            recent_models: Vec::new(),
         }
     }
 }
@@ -140,6 +146,8 @@ mod tests {
             show_config_files: true,
             git_author_name: "Ada".to_string(),
             git_author_email: "ada@example.com".to_string(),
+            hidden_models: vec!["openai/gpt-5".to_string()],
+            recent_models: vec!["opencode-go/deepseek-v4.1-flash".to_string()],
         };
         save_settings(&updated).unwrap();
         assert_eq!(load_settings().unwrap(), updated);
@@ -166,5 +174,7 @@ mod tests {
         let parsed: AppSettings = serde_json::from_str(raw).unwrap();
         assert_eq!(parsed.git_author_name, "");
         assert_eq!(parsed.git_author_email, "");
+        assert!(parsed.hidden_models.is_empty());
+        assert!(parsed.recent_models.is_empty());
     }
 }

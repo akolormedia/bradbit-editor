@@ -10,6 +10,8 @@ export interface AppSettings {
   showConfigFiles: boolean;
   gitAuthorName: string;
   gitAuthorEmail: string;
+  hiddenModels: string[];
+  recentModels: string[];
 }
 
 export interface FileTreeNode {
