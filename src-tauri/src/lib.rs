@@ -283,8 +283,9 @@ fn github_client(
     let token = state
         .token()
         .map_err(|err| err.to_string())?
-        .ok_or_else(|| "Conecta tu cuenta de GitHub en Ajustes".to_string())?;
+        .ok_or_else(|| "Connect your GitHub account in Settings".to_string())?;
     github::secrets::validate_github_token(&token).map_err(|err| err.to_string())?;
+    #[allow(unused_mut)]
     let mut config = github::GitHubConfig::github_com(token);
     // Debug-only override so the full UI can be exercised against a local
     // mock GitHub server. Release builds always talk to api.github.com.
