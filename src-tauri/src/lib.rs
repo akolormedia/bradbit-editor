@@ -504,6 +504,15 @@ fn opencode_create_session(
 }
 
 #[tauri::command]
+fn opencode_update_session_title(
+    state: tauri::State<opencode::OpenCodeState>,
+    session_id: String,
+    title: String,
+) -> Result<opencode::OpenCodeSession, String> {
+    state.update_session_title(&session_id, &title)
+}
+
+#[tauri::command]
 fn opencode_session_messages(
     state: tauri::State<opencode::OpenCodeState>,
     session_id: String,
@@ -719,6 +728,7 @@ pub fn run() {
             opencode_status,
             opencode_list_sessions,
             opencode_create_session,
+            opencode_update_session_title,
             opencode_session_messages,
             opencode_pending_permissions,
             opencode_reply_permission,

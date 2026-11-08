@@ -22,7 +22,7 @@ fn spawn_mock() -> (String, Arc<Mutex<Vec<Recorded>>>) {
     let recorded = Arc::new(Mutex::new(Vec::new()));
     let sink = Arc::clone(&recorded);
     thread::spawn(move || {
-        for _ in 0..18 {
+        for _ in 0..19 {
             let Ok((mut stream, _)) = listener.accept() else {
                 return;
             };
@@ -47,6 +47,11 @@ fn spawn_mock() -> (String, Arc<Mutex<Vec<Recorded>>>) {
                         r#"]}"#,
                     )
                     .to_string(),
+                )
+            } else if request.target == "/api/session/ses_test" && request.method == "PATCH" {
+                (
+                    "application/json",
+                    r#"{"data":{"id":"ses_test","title":"Renamed"}}"#.to_string(),
                 )
             } else if request.target == "/api/session" {
                 (
@@ -196,6 +201,9 @@ fn client_covers_info_models_sessions_prompts_interrupts_and_events() {
 
     let session = client.create_session("Session 1").unwrap();
     assert_eq!(session.id, "ses_test");
+
+    let renamed = client.update_session_title("ses_test", "Renamed").unwrap();
+    assert_eq!(renamed.title, "Renamed");
     client.prompt("ses_test", "hola").unwrap();
     assert!(client.interrupt("ses_test").unwrap());
 
@@ -253,6 +261,13 @@ fn client_covers_info_models_sessions_prompts_interrupts_and_events() {
     assert!(log
         .iter()
         .any(|request| request.method == "POST" && request.target == "/api/session"));
+
+    let rename = log
+        .iter()
+        .find(|request| request.method == "PATCH" && request.target == "/api/session/ses_test")
+        .expect("rename request");
+    let rename_body: serde_json::Value = serde_json::from_str(&rename.body).unwrap();
+    assert_eq!(rename_body["title"], "Renamed");
     let prompt = log
         .iter()
         .find(|request| request.target == "/api/session/ses_test/prompt")
