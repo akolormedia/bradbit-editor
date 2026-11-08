@@ -1103,6 +1103,7 @@ class BradbitApp {
         onSelectSession: (id) => this.selectChatSession(id),
         onCreateSession: () => void this.createChatSession(),
         onCloseSession: (id) => void this.closeChatSession(id),
+        onRenameSession: (id, title) => void this.renameChatSession(id, title),
         onOpenToolFile: (path, showDiff) =>
           void this.openChatToolFile(path, showDiff),
         onPermissionReply: (requestId, decision) =>
@@ -1361,6 +1362,31 @@ class BradbitApp {
       : chatStopped();
     this.updateChatPanel();
     this.persistWorkspaceState();
+  }
+
+  private async renameChatSession(id: string, title: string): Promise<void> {
+    const trimmed = title.trim();
+    if (!trimmed) return;
+    const current = this.chatSessions.get(id);
+    if (!current || current.title === trimmed) return;
+
+    const optimistic = { ...current, title: trimmed };
+    this.chatSessions.set(id, optimistic);
+    if (this.activeChatSessionId === id) {
+      this.chatState = optimistic;
+    }
+    this.updateChatPanel();
+
+    try {
+      await backend.opencodeRenameSession(id, trimmed);
+    } catch (err) {
+      this.chatSessions.set(id, current);
+      if (this.activeChatSessionId === id) {
+        this.chatState = current;
+      }
+      this.updateChatPanel();
+      this.showStatusNotice(err instanceof Error ? err.message : String(err));
+    }
   }
 
   private async replyChatPermission(

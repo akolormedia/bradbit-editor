@@ -41,6 +41,7 @@ export interface ChatPanelOptions {
   onSelectSession: (id: string) => void;
   onCreateSession: () => void;
   onCloseSession: (id: string) => void;
+  onRenameSession: (id: string, title: string) => void;
   onOpenToolFile: (path: string, showDiff: boolean) => void;
   onPermissionReply: (
     requestId: string,
@@ -111,6 +112,7 @@ export class ChatPanel {
   private titleEl: HTMLElement;
   private subtitleEl: HTMLElement;
   private stickToBottom = true;
+  private lastTabClick = { id: null as string | null, time: 0 };
   private drafts = new Map<string, string>();
   private draftSessionId: string | null = null;
   private formDrafts = new Map<string, Record<string, unknown>>();
@@ -1029,7 +1031,6 @@ export class ChatPanel {
       tab.className = "session-tab";
       tab.classList.toggle("active", session.id === this.options.activeSessionId);
       tab.dataset.testid = `session-tab-${session.id}`;
-      tab.onclick = () => this.options.onSelectSession(session.id);
 
       const badge = document.createElement("span");
       badge.className = "session-tab-badge";
@@ -1038,6 +1039,19 @@ export class ChatPanel {
       label.className = "session-tab-label";
       label.textContent = session.title;
       tab.append(badge, label);
+      tab.onclick = () => {
+        const now = Date.now();
+        const isDoubleClick =
+          this.lastTabClick.id === session.id &&
+          now - this.lastTabClick.time < 400;
+        if (isDoubleClick) {
+          this.lastTabClick = { id: null, time: 0 };
+          this.beginRenameSession(tab, label, session);
+          return;
+        }
+        this.lastTabClick = { id: session.id, time: now };
+        this.options.onSelectSession(session.id);
+      };
 
       if (session.streaming) {
         const busy = document.createElement("span");
@@ -1078,6 +1092,48 @@ export class ChatPanel {
       onClick: () => this.options.onCreateSession(),
     });
     this.tabsEl.appendChild(add);
+  }
+
+  private beginRenameSession(
+    tab: HTMLButtonElement,
+    label: HTMLSpanElement,
+    session: SessionTabInfo,
+  ): void {
+    if (tab.querySelector(".session-tab-rename")) return;
+    const input = document.createElement("input");
+    input.type = "text";
+    input.className = "session-tab-rename";
+    input.dataset.testid = `session-rename-${session.id}`;
+    input.value = session.title;
+    input.autocomplete = "off";
+    input.spellcheck = false;
+    label.replaceWith(input);
+    input.focus();
+    input.select();
+
+    let finished = false;
+    const finish = (save: boolean) => {
+      if (finished) return;
+      finished = true;
+      const title = input.value.trim();
+      if (save && title && title !== session.title) {
+        this.options.onRenameSession(session.id, title);
+      }
+      input.replaceWith(label);
+    };
+
+    input.onkeydown = (event) => {
+      if (event.key === "Enter") {
+        event.preventDefault();
+        finish(true);
+      } else if (event.key === "Escape") {
+        event.preventDefault();
+        finish(false);
+      }
+    };
+    input.onclick = (event) => event.stopPropagation();
+    input.ondblclick = (event) => event.stopPropagation();
+    input.onblur = () => finish(true);
   }
 
   private renderMessages(): void {

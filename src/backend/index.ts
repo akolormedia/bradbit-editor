@@ -847,6 +847,16 @@ export const backend = {
     return tauriInvoke<OpenCodeSession>("opencode_create_session", { title });
   },
 
+  async opencodeRenameSession(sessionId: string, title: string): Promise<void> {
+    if (!isTauriEnvironment()) {
+      throw new Error("OpenCode requires the desktop app");
+    }
+    return tauriInvoke<void>("opencode_update_session_title", {
+      sessionId,
+      title,
+    });
+  },
+
   async opencodeSessionMessages(
     sessionId: string,
   ): Promise<OpenCodeChatMessage[]> {

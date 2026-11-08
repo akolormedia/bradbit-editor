@@ -139,6 +139,17 @@ impl OpenCodeState {
         server.client().create_session(title)
     }
 
+    pub fn update_session_title(&self, session_id: &str, title: &str) -> Result<(), String> {
+        let server = self
+            .server
+            .lock()
+            .map_err(|_| "Could not lock the OpenCode state".to_string())?;
+        let server = server
+            .as_ref()
+            .ok_or_else(|| "OpenCode is not running".to_string())?;
+        server.client().update_session_title(session_id, title)
+    }
+
     pub fn session_messages(&self, session_id: &str) -> Result<Vec<OpenCodeChatMessage>, String> {
         let server = self
             .server

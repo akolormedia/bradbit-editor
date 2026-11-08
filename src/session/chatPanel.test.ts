@@ -19,6 +19,7 @@ function options(overrides: Partial<ChatPanelOptions> = {}): ChatPanelOptions {
     onSelectSession: vi.fn(),
     onCreateSession: vi.fn(),
     onCloseSession: vi.fn(),
+    onRenameSession: vi.fn(),
     onOpenToolFile: vi.fn(),
     onPermissionReply: vi.fn(),
     onFormReply: vi.fn(),
@@ -51,6 +52,53 @@ describe("chat panel (T-2.1.1)", () => {
     )!;
     expect(input.placeholder).toContain("/");
     expect(input.placeholder).toContain("@");
+  });
+
+  it("renames a session from the tab with Enter and cancels with Escape (T-2.5.3)", () => {
+    const onRenameSession = vi.fn();
+    const panel = new ChatPanel(options({ onRenameSession }));
+    panel.update(readyState());
+
+    const tab = panel.element.querySelector<HTMLButtonElement>(
+      '[data-testid="session-tab-ses_test"]',
+    )!;
+    tab.click();
+    tab.click();
+    const input = panel.element.querySelector<HTMLInputElement>(
+      '[data-testid="session-rename-ses_test"]',
+    )!;
+    expect(input).not.toBeNull();
+
+    input.value = "Guion principal";
+    input.dispatchEvent(
+      new KeyboardEvent("keydown", { key: "Enter", bubbles: true }),
+    );
+    expect(onRenameSession).toHaveBeenCalledWith("ses_test", "Guion principal");
+    expect(
+      panel.element.querySelector('[data-testid="session-rename-ses_test"]'),
+    ).toBeNull();
+
+    tab.click();
+    tab.click();
+    const cancelled = panel.element.querySelector<HTMLInputElement>(
+      '[data-testid="session-rename-ses_test"]',
+    )!;
+    cancelled.value = "No guardar";
+    cancelled.dispatchEvent(
+      new KeyboardEvent("keydown", { key: "Escape", bubbles: true }),
+    );
+    expect(onRenameSession).toHaveBeenCalledTimes(1);
+
+    tab.click();
+    tab.click();
+    const empty = panel.element.querySelector<HTMLInputElement>(
+      '[data-testid="session-rename-ses_test"]',
+    )!;
+    empty.value = "   ";
+    empty.dispatchEvent(
+      new KeyboardEvent("keydown", { key: "Enter", bubbles: true }),
+    );
+    expect(onRenameSession).toHaveBeenCalledTimes(1);
   });
 
   it("sends the composer text with the send button and Enter", () => {
