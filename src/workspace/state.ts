@@ -93,7 +93,7 @@ export function openFileInTabs(
     preview: !pin,
     cursorLine: 1,
     cursorCol: 1,
-    viewMode: "edit",
+    viewMode: isMarkdownPath(file.path) ? "preview" : "edit",
     externalChange: false,
   };
 

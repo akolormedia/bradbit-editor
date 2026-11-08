@@ -107,7 +107,7 @@ impl PtyState {
         let mut guard = self
             .session
             .lock()
-            .map_err(|_| "No se pudo bloquear el terminal".to_string())?;
+            .map_err(|_| "Could not lock the terminal".to_string())?;
         if let Some(existing) = guard.take() {
             drop(existing);
         }
@@ -176,7 +176,7 @@ impl PtyState {
         let mut guard = self
             .session
             .lock()
-            .map_err(|_| "No se pudo bloquear el terminal".to_string())?;
+            .map_err(|_| "Could not lock the terminal".to_string())?;
         let session = guard
             .as_mut()
             .ok_or_else(|| "The terminal is not started".to_string())?;
@@ -194,7 +194,7 @@ impl PtyState {
         let guard = self
             .session
             .lock()
-            .map_err(|_| "No se pudo bloquear el terminal".to_string())?;
+            .map_err(|_| "Could not lock the terminal".to_string())?;
         let session = guard
             .as_ref()
             .ok_or_else(|| "The terminal is not started".to_string())?;

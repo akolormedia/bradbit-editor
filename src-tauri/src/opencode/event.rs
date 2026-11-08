@@ -12,8 +12,7 @@ use serde_json::Value;
 pub fn read_events<R: BufRead>(reader: R, mut on_event: impl FnMut(Value)) -> Result<(), String> {
     let mut data = String::new();
     for line in reader.lines() {
-        let line =
-            line.map_err(|error| format!("Could not read the OpenCode stream: {error}"))?;
+        let line = line.map_err(|error| format!("Could not read the OpenCode stream: {error}"))?;
         if let Some(rest) = line.strip_prefix("data:") {
             if !data.is_empty() {
                 data.push('\n');

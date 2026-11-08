@@ -62,10 +62,10 @@ pub(crate) fn config_dir() -> Result<PathBuf, String> {
         fs::create_dir_all(&p).map_err(|e| e.to_string())?;
         return Ok(p);
     }
-    let base = dirs::config_dir()
-        .ok_or_else(|| "Configuration directory not found".to_string())?;
+    let base = dirs::config_dir().ok_or_else(|| "Configuration directory not found".to_string())?;
     let dir = base.join("Bradbit");
-    fs::create_dir_all(&dir).map_err(|e| format!("Could not create the Bradbit directory: {}", e))?;
+    fs::create_dir_all(&dir)
+        .map_err(|e| format!("Could not create the Bradbit directory: {}", e))?;
     Ok(dir)
 }
 
@@ -82,7 +82,7 @@ pub fn load_settings() -> Result<AppSettings, String> {
 pub fn save_settings(settings: &AppSettings) -> Result<(), String> {
     let path = config_dir()?.join("settings.json");
     let json = serde_json::to_string_pretty(settings).map_err(|e| e.to_string())?;
-    fs::write(&path, json).map_err(|e| format!("No se pudo guardar settings.json: {}", e))
+    fs::write(&path, json).map_err(|e| format!("Could not save settings.json: {}", e))
 }
 
 pub fn list_recent_projects() -> Result<Vec<RecentProject>, String> {

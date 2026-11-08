@@ -110,7 +110,7 @@ pub fn head_file(root: &str, rel_path: &str) -> Result<Option<String>, String> {
 /// new files are removed from the index before the file is deleted.
 pub fn discard_file(root: &str, rel_path: &str) -> Result<DiscardResult, String> {
     let root_path = fs::canonicalize(root)
-        .map_err(|e| format!("No se pudo abrir la carpeta '{}': {}", root, e))?;
+        .map_err(|e| format!("Could not open the folder '{}': {}", root, e))?;
     let repo = Repository::open(&root_path, OpOptions::default()).map_err(|e| e.to_string())?;
     let has_head_version = repo
         .show_file("HEAD", rel_path, OpOptions::default())
@@ -132,8 +132,7 @@ pub fn discard_file(root: &str, rel_path: &str) -> Result<DiscardResult, String>
         if !target.is_file() {
             return Err("Solo se pueden descartar archivos, no carpetas".to_string());
         }
-        fs::remove_file(&target)
-            .map_err(|e| format!("No se pudo eliminar '{}': {}", rel_path, e))?;
+        fs::remove_file(&target).map_err(|e| format!("Could not delete '{}': {}", rel_path, e))?;
     }
     Ok(DiscardResult {
         deleted: true,
@@ -177,7 +176,7 @@ pub fn save_version(
     let name = author_name.trim();
     let email = author_email.trim();
     if name.is_empty() {
-        return Err("Configura tu nombre de autor en Ajustes para guardar versiones".to_string());
+        return Err("Configure your author name in Settings to save versions".to_string());
     }
     if !email.contains('@') || email.starts_with('@') || email.ends_with('@') {
         return Err("Configure a valid author email in Settings".to_string());
@@ -191,7 +190,7 @@ pub fn save_version(
         .status(OpOptions::default())
         .map_err(|e| e.to_string())?;
     if entries.is_empty() {
-        return Err("No hay cambios para guardar".to_string());
+        return Err("There are no changes to save".to_string());
     }
     repo.stage_all(OpOptions::default())
         .map_err(|e| e.to_string())?;
@@ -253,7 +252,7 @@ pub fn restore_from_commit(
     rel_path: &str,
 ) -> Result<GitStatus, String> {
     let root_path = fs::canonicalize(root)
-        .map_err(|e| format!("No se pudo abrir la carpeta '{}': {}", root, e))?;
+        .map_err(|e| format!("Could not open the folder '{}': {}", root, e))?;
     let repo = Repository::open(&root_path, OpOptions::default()).map_err(|e| e.to_string())?;
     let content = repo
         .show_file(commit_id, rel_path, OpOptions::default())

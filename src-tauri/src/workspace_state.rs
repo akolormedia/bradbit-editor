@@ -117,7 +117,7 @@ fn load_from(path: &Path, root: &str) -> Result<ProjectWorkspaceState, String> {
 fn save_to(path: &Path, root: &str, state: &ProjectWorkspaceState) -> Result<(), String> {
     let _guard = STATE_LOCK
         .lock()
-        .map_err(|_| "No se pudo bloquear el estado del workspace".to_string())?;
+        .map_err(|_| "Could not lock the workspace state".to_string())?;
     let mut file: WorkspaceStateFile = fs::read_to_string(path)
         .ok()
         .and_then(|raw| serde_json::from_str(&raw).ok())
@@ -127,11 +127,10 @@ fn save_to(path: &Path, root: &str, state: &ProjectWorkspaceState) -> Result<(),
     file.projects.insert(root.to_string(), normalized);
     if let Some(parent) = path.parent() {
         fs::create_dir_all(parent)
-            .map_err(|error| format!("No se pudo crear la carpeta de estado: {error}"))?;
+            .map_err(|error| format!("Could not create the state folder: {error}"))?;
     }
     let json = serde_json::to_string_pretty(&file).map_err(|error| error.to_string())?;
-    fs::write(path, json)
-        .map_err(|error| format!("No se pudo guardar el estado del workspace: {error}"))
+    fs::write(path, json).map_err(|error| format!("Could not save the workspace state: {error}"))
 }
 
 #[cfg(test)]

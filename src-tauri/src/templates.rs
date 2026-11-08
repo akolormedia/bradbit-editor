@@ -50,8 +50,7 @@ pub fn list_templates_in(user_dir: &Path) -> Result<Vec<TemplateInfo>, String> {
         TemplateInfo {
             id: SCREENWRITER_KIT_ID.to_string(),
             name: "Guion Audiovisual (guionista-kit)".to_string(),
-            description: "Bible, structure, script, research and guionista-kit agents."
-                .to_string(),
+            description: "Bible, structure, script, research and guionista-kit agents.".to_string(),
             source: "bundled".to_string(),
             path: None,
         },
@@ -92,7 +91,7 @@ pub fn list_templates_in(user_dir: &Path) -> Result<Vec<TemplateInfo>, String> {
 pub fn user_templates_dir() -> Result<PathBuf, String> {
     let dir = crate::settings::config_dir()?.join("templates");
     fs::create_dir_all(&dir)
-        .map_err(|e| format!("No se pudo crear la carpeta de plantillas: {}", e))?;
+        .map_err(|e| format!("Could not create the templates folder: {}", e))?;
     Ok(dir)
 }
 
@@ -117,7 +116,7 @@ pub fn create_project_from_template_in(
     let project_path = destination.join(&name);
     if project_path.exists() {
         return Err(format!(
-            "Ya existe una carpeta llamada '{}' en el destino",
+            "A folder named '{}' already exists in the destination",
             name
         ));
     }
@@ -127,12 +126,14 @@ pub fn create_project_from_template_in(
         match template_id {
             BLANK_ID => {
                 fs::create_dir_all(&temp)
-                    .map_err(|e| format!("No se pudo crear el proyecto: {}", e))?;
+                    .map_err(|e| format!("Could not create the project: {}", e))?;
             }
             SCREENWRITER_KIT_ID => {
-                let template = BUILTIN_TEMPLATES.get_dir(SCREENWRITER_KIT_ID).ok_or_else(|| {
-                    "The guionista-kit template is not available in this build".to_string()
-                })?;
+                let template = BUILTIN_TEMPLATES
+                    .get_dir(SCREENWRITER_KIT_ID)
+                    .ok_or_else(|| {
+                        "The guionista-kit template is not available in this build".to_string()
+                    })?;
                 copy_embedded_dir(template, &temp)?;
             }
             other => {
@@ -140,14 +141,14 @@ pub fn create_project_from_template_in(
                     .into_iter()
                     .find(|template| template.id == other && template.source == "user")
                     .ok_or_else(|| format!("Template '{}' not found", other))?;
-                let source = template.path.ok_or_else(|| {
-                    "The user template has no valid path".to_string()
-                })?;
+                let source = template
+                    .path
+                    .ok_or_else(|| "The user template has no valid path".to_string())?;
                 copy_directory(Path::new(&source), &temp)?;
             }
         }
         fs::rename(&temp, &project_path)
-            .map_err(|e| format!("No se pudo finalizar el proyecto: {}", e))
+            .map_err(|e| format!("Could not finalize the project: {}", e))
     })();
 
     if let Err(error) = result {
@@ -177,14 +178,14 @@ pub fn save_folder_as_template_in(
     let source = canonical_directory(folder_path)?;
     let name = validate_template_name(name)?;
     fs::create_dir_all(user_dir)
-        .map_err(|e| format!("No se pudo crear la carpeta de plantillas: {}", e))?;
+        .map_err(|e| format!("Could not create the templates folder: {}", e))?;
     let destination = user_dir.join(&name);
     if destination.exists() {
-        return Err(format!("Ya existe una plantilla llamada '{}'", name));
+        return Err(format!("A template named '{}' already exists", name));
     }
     let user_canon = fs::canonicalize(user_dir).unwrap_or_else(|_| user_dir.to_path_buf());
     if user_canon.starts_with(&source) {
-        return Err("No se puede guardar la carpeta de plantillas como plantilla".to_string());
+        return Err("The templates folder cannot be saved as a template".to_string());
     }
 
     let temp = temp_path(user_dir, &name);
@@ -204,10 +205,10 @@ pub fn save_folder_as_template_in(
                 &meta_path,
                 serde_json::to_string_pretty(&meta).map_err(|e| e.to_string())?,
             )
-            .map_err(|e| format!("No se pudo escribir template.json: {}", e))?;
+            .map_err(|e| format!("Could not write template.json: {}", e))?;
         }
         fs::rename(&temp, &destination)
-            .map_err(|e| format!("No se pudo finalizar la plantilla: {}", e))
+            .map_err(|e| format!("Could not finalize the template: {}", e))
     })();
 
     if let Err(error) = result {
@@ -249,7 +250,7 @@ fn read_user_template(path: &Path, id: &str) -> TemplateInfo {
 
 fn copy_embedded_dir(source: &Dir<'_>, destination: &Path) -> Result<(), String> {
     fs::create_dir_all(destination)
-        .map_err(|e| format!("No se pudo crear '{}': {}", destination.display(), e))?;
+        .map_err(|e| format!("Could not create '{}': {}", destination.display(), e))?;
     for entry in source.entries() {
         let relative = entry
             .path()
@@ -270,10 +271,10 @@ fn copy_embedded_dir(source: &Dir<'_>, destination: &Path) -> Result<(), String>
                 let target = destination.join(relative);
                 if let Some(parent) = target.parent() {
                     fs::create_dir_all(parent)
-                        .map_err(|e| format!("No se pudo crear '{}': {}", parent.display(), e))?;
+                        .map_err(|e| format!("Could not create '{}': {}", parent.display(), e))?;
                 }
                 fs::write(&target, file.contents())
-                    .map_err(|e| format!("No se pudo escribir '{}': {}", target.display(), e))?;
+                    .map_err(|e| format!("Could not write '{}': {}", target.display(), e))?;
             }
         }
     }
@@ -282,9 +283,9 @@ fn copy_embedded_dir(source: &Dir<'_>, destination: &Path) -> Result<(), String>
 
 fn copy_directory(source: &Path, destination: &Path) -> Result<(), String> {
     fs::create_dir_all(destination)
-        .map_err(|e| format!("No se pudo crear '{}': {}", destination.display(), e))?;
+        .map_err(|e| format!("Could not create '{}': {}", destination.display(), e))?;
     let entries = fs::read_dir(source)
-        .map_err(|e| format!("No se pudo leer '{}': {}", source.display(), e))?;
+        .map_err(|e| format!("Could not read '{}': {}", source.display(), e))?;
     for entry in entries.flatten() {
         let name = entry.file_name().to_string_lossy().to_string();
         if SKIPPED_NAMES.contains(&name.as_str()) {
@@ -302,7 +303,7 @@ fn copy_directory(source: &Path, destination: &Path) -> Result<(), String> {
             copy_directory(&entry.path(), &target)?;
         } else if file_type.is_file() {
             fs::copy(entry.path(), &target)
-                .map_err(|e| format!("No se pudo copiar '{}': {}", name, e))?;
+                .map_err(|e| format!("Could not copy '{}': {}", name, e))?;
         }
     }
     Ok(())
@@ -321,9 +322,9 @@ fn try_git_init(path: &Path) -> bool {
 
 fn canonical_directory(path: &str) -> Result<PathBuf, String> {
     let canonical = fs::canonicalize(path)
-        .map_err(|e| format!("No se pudo abrir la carpeta '{}': {}", path, e))?;
+        .map_err(|e| format!("Could not open the folder '{}': {}", path, e))?;
     if !canonical.is_dir() {
-        return Err(format!("La ruta '{}' no es una carpeta", path));
+        return Err(format!("The path '{}' is not a folder", path));
     }
     Ok(canonical)
 }
@@ -346,7 +347,7 @@ fn validate_name(name: &str, label: &str) -> Result<String, String> {
         return Err(format!("{} cannot be empty", label));
     }
     if value == "." || value == ".." || value.starts_with('.') {
-        return Err(format!("{} no puede empezar con punto", label));
+        return Err(format!("{} cannot start with a dot", label));
     }
     if value.chars().count() > 120 {
         return Err(format!("{} es demasiado largo", label));

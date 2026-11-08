@@ -38,10 +38,10 @@ pub fn is_config_entry(name: &str) -> bool {
 
 fn canonical_root(root: &str) -> Result<PathBuf, String> {
     let path = Path::new(root);
-    let canon = fs::canonicalize(path)
-        .map_err(|e| format!("Could not open folder '{}': {}", root, e))?;
+    let canon =
+        fs::canonicalize(path).map_err(|e| format!("Could not open folder '{}': {}", root, e))?;
     if !canon.is_dir() {
-        return Err(format!("La ruta '{}' no es una carpeta", root));
+        return Err(format!("The path '{}' is not a folder", root));
     }
     Ok(canon)
 }
@@ -50,7 +50,7 @@ fn canonical_root(root: &str) -> Result<PathBuf, String> {
 pub fn resolve_safe_relative(root: &Path, rel_path: &str) -> Result<PathBuf, String> {
     let trimmed = rel_path.trim();
     if trimmed.starts_with('/') || Path::new(trimmed).is_absolute() {
-        return Err("No se permiten rutas absolutas".to_string());
+        return Err("Absolute paths are not allowed".to_string());
     }
     let trimmed = trimmed.trim_matches('/');
     if trimmed.is_empty() {
@@ -168,18 +168,15 @@ pub fn read_text_file(root: &str, rel_path: &str) -> Result<String, String> {
     let canon_root = canonical_root(root)?;
     let target = resolve_safe_relative(&canon_root, rel_path)?;
     let meta = fs::symlink_metadata(&target)
-        .map_err(|e| format!("No se pudo leer '{}': {}", rel_path, e))?;
+        .map_err(|e| format!("Could not read '{}': {}", rel_path, e))?;
     if meta.file_type().is_symlink() {
         return Err("Symbolic links are not allowed".to_string());
     }
     if !meta.is_file() {
-        return Err(format!("'{}' no es un archivo regular", rel_path));
+        return Err(format!("'{}' is not a regular file", rel_path));
     }
     if meta.len() > MAX_FILE_BYTES {
-        return Err(format!(
-            "The file '{}' exceeds the 10 MB limit",
-            rel_path
-        ));
+        return Err(format!("The file '{}' exceeds the 10 MB limit", rel_path));
     }
     fs::read_to_string(&target)
         .map_err(|e| format!("The file '{}' is not valid UTF-8 text: {}", rel_path, e))
@@ -197,8 +194,7 @@ pub fn write_text_file(root: &str, rel_path: &str, content: &str) -> Result<(), 
     let parent = target
         .parent()
         .ok_or_else(|| "Ruta sin carpeta contenedora".to_string())?;
-    fs::create_dir_all(parent)
-        .map_err(|e| format!("No se pudo crear carpeta contenedora: {}", e))?;
+    fs::create_dir_all(parent).map_err(|e| format!("Could not create the parent folder: {}", e))?;
 
     let file_name = target
         .file_name()
@@ -208,7 +204,7 @@ pub fn write_text_file(root: &str, rel_path: &str, content: &str) -> Result<(), 
 
     {
         let mut tmp_file = fs::File::create(&tmp_path)
-            .map_err(|e| format!("No se pudo crear archivo temporal: {}", e))?;
+            .map_err(|e| format!("Could not create the temporary file: {}", e))?;
         tmp_file
             .write_all(content.as_bytes())
             .map_err(|e| format!("Error escribiendo contenido: {}", e))?;
@@ -219,7 +215,7 @@ pub fn write_text_file(root: &str, rel_path: &str, content: &str) -> Result<(), 
 
     fs::rename(&tmp_path, &target).map_err(|e| {
         let _ = fs::remove_file(&tmp_path);
-        format!("No se pudo guardar '{}': {}", rel_path, e)
+        format!("Could not save '{}': {}", rel_path, e)
     })
 }
 
@@ -227,22 +223,22 @@ pub fn create_entry(root: &str, rel_path: &str, is_dir: bool) -> Result<(), Stri
     let canon_root = canonical_root(root)?;
     let target = resolve_safe_relative(&canon_root, rel_path)?;
     if target.exists() {
-        return Err(format!("Ya existe '{}'", rel_path));
+        return Err(format!("'{}' already exists", rel_path));
     }
     if is_dir {
         fs::create_dir_all(&target)
-            .map_err(|e| format!("No se pudo crear la carpeta '{}': {}", rel_path, e))
+            .map_err(|e| format!("Could not create the folder '{}': {}", rel_path, e))
     } else {
         if let Some(parent) = target.parent() {
             fs::create_dir_all(parent)
-                .map_err(|e| format!("No se pudo crear la carpeta padre: {}", e))?;
+                .map_err(|e| format!("Could not create the parent folder: {}", e))?;
         }
         OpenOptions::new()
             .write(true)
             .create_new(true)
             .open(&target)
             .map(|_| ())
-            .map_err(|e| format!("No se pudo crear el archivo '{}': {}", rel_path, e))
+            .map_err(|e| format!("Could not create the file '{}': {}", rel_path, e))
     }
 }
 
@@ -254,14 +250,14 @@ pub fn rename_entry(root: &str, old_rel_path: &str, new_rel_path: &str) -> Resul
         return Err(format!("No existe '{}'", old_rel_path));
     }
     if new_target.exists() {
-        return Err(format!("Ya existe un elemento en '{}'", new_rel_path));
+        return Err(format!("An item already exists at '{}'", new_rel_path));
     }
     if let Some(parent) = new_target.parent() {
         fs::create_dir_all(parent)
-            .map_err(|e| format!("No se pudo crear la carpeta destino: {}", e))?;
+            .map_err(|e| format!("Could not create the destination folder: {}", e))?;
     }
     fs::rename(&old_target, &new_target)
-        .map_err(|e| format!("No se pudo renombrar '{}': {}", old_rel_path, e))
+        .map_err(|e| format!("Could not rename '{}': {}", old_rel_path, e))
 }
 
 pub fn delete_entry(root: &str, rel_path: &str) -> Result<(), String> {
@@ -271,10 +267,10 @@ pub fn delete_entry(root: &str, rel_path: &str) -> Result<(), String> {
         fs::symlink_metadata(&target).map_err(|e| format!("No existe '{}': {}", rel_path, e))?;
     if meta.is_dir() {
         fs::remove_dir_all(&target)
-            .map_err(|e| format!("No se pudo eliminar la carpeta '{}': {}", rel_path, e))
+            .map_err(|e| format!("Could not delete the folder '{}': {}", rel_path, e))
     } else {
         fs::remove_file(&target)
-            .map_err(|e| format!("No se pudo eliminar el archivo '{}': {}", rel_path, e))
+            .map_err(|e| format!("Could not delete the file '{}': {}", rel_path, e))
     }
 }
 

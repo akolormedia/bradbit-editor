@@ -98,7 +98,7 @@ fn open_templates_folder(app: tauri::AppHandle) -> Result<(), String> {
     let dir = templates::user_templates_dir()?;
     app.opener()
         .open_path(dir.to_string_lossy().to_string(), None::<&str>)
-        .map_err(|e| format!("No se pudo abrir la carpeta de plantillas: {}", e))
+        .map_err(|e| format!("Could not open the templates folder: {}", e))
 }
 
 #[tauri::command]
@@ -114,7 +114,7 @@ fn start_watching(
     let mut slot = state
         .0
         .lock()
-        .map_err(|_| "No se pudo bloquear el watcher".to_string())?;
+        .map_err(|_| "Could not lock the watcher".to_string())?;
     *slot = Some(service);
     Ok(())
 }
@@ -124,7 +124,7 @@ fn stop_watching(state: tauri::State<watcher::WatcherState>) -> Result<(), Strin
     state
         .0
         .lock()
-        .map_err(|_| "No se pudo bloquear el watcher".to_string())?
+        .map_err(|_| "Could not lock the watcher".to_string())?
         .take();
     Ok(())
 }

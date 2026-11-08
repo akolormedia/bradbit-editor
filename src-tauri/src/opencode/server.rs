@@ -87,7 +87,7 @@ impl RunningServer {
         let models = client.list_models().map_err(|error| {
             let _ = child.kill();
             let _ = child.wait();
-            format!("{error}. Configura un proveedor/modelo en OpenCode.")
+            format!("{error}. Configure a provider/model in OpenCode.")
         })?;
         if models.is_empty() {
             let _ = child.kill();
@@ -205,11 +205,11 @@ fn start_error(message: &str, logs: &Arc<Mutex<VecDeque<String>>>) -> String {
 
 fn free_port() -> Result<u16, String> {
     let listener = TcpListener::bind("127.0.0.1:0")
-        .map_err(|error| format!("No se pudo reservar un puerto local: {error}"))?;
+        .map_err(|error| format!("Could not reserve a local port: {error}"))?;
     listener
         .local_addr()
         .map(|address| address.port())
-        .map_err(|error| format!("No se pudo leer el puerto local: {error}"))
+        .map_err(|error| format!("Could not read the local port: {error}"))
 }
 
 pub fn find_binary() -> Result<PathBuf, String> {

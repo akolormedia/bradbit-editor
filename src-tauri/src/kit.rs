@@ -205,7 +205,7 @@ fn markdown_files(directory: &Path) -> Result<Vec<std::path::PathBuf>, String> {
 }
 
 fn read_file(path: &Path) -> Result<String, String> {
-    fs::read_to_string(path).map_err(|error| format!("No se pudo leer {}: {error}", path.display()))
+    fs::read_to_string(path).map_err(|error| format!("Could not read {}: {error}", path.display()))
 }
 
 fn parse_document(raw: &str) -> (FrontMatter, &str) {
@@ -269,12 +269,12 @@ mod tests {
     #[test]
     fn parses_frontmatter_with_quotes_and_without_it() {
         let (front, body) = parse_document(
-            "---\nname: \"escena\"\ndescription: 'Escribe una escena'\nagent: guionista\n---\n\nContenido\n",
+            "---\nname: \"escena\"\ndescription: 'Write a scene'\nagent: guionista\n---\n\nContent\n",
         );
         assert_eq!(front.name.as_deref(), Some("escena"));
-        assert_eq!(front.description.as_deref(), Some("Escribe una escena"));
+        assert_eq!(front.description.as_deref(), Some("Write a scene"));
         assert_eq!(front.agent.as_deref(), Some("guionista"));
-        assert_eq!(body.trim(), "Contenido");
+        assert_eq!(body.trim(), "Content");
 
         let (front, body) = parse_document("# Sin frontmatter\n");
         assert!(front.name.is_none());
@@ -296,7 +296,7 @@ mod tests {
         .unwrap();
         fs::write(
             opencode.join("commands/escena.md"),
-            "---\nname: escena\ndescription: Escribe una escena\nagent: guionista\n---\n",
+            "---\nname: escena\ndescription: Write a scene\nagent: guionista\n---\n",
         )
         .unwrap();
         fs::write(

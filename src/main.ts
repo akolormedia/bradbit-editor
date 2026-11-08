@@ -2417,9 +2417,11 @@ class BradbitApp {
         this.editor?.toggleItalic();
         break;
       case "edit.find":
+        this.ensureEditMode();
         this.editor?.openFindPanel();
         break;
       case "edit.findReplace":
+        this.ensureEditMode();
         this.editor?.openReplacePanel();
         break;
       case "edit.findInProject":
@@ -2491,6 +2493,7 @@ class BradbitApp {
         this.openGlobalSearch();
       } else if (letter === "f" && this.getActiveTab()) {
         e.preventDefault();
+        this.ensureEditMode();
         this.editor?.openFindPanel();
       } else if (letter === "p" && e.altKey && this.getActiveTab()) {
         e.preventDefault();
