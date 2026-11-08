@@ -18,11 +18,11 @@
   --accent-hover: #919fff;
   --danger: #f36c6c;
   --success: #58c488;
-  --cm-heading: #8aadf4;
+  --cm-heading: #8bd49c;
   --cm-keyword: #f5a97f;
-  --cm-character: #eed49f;
-  --cm-dialogue: #cad3f5;
-  --cm-parenthetical: #939ab7;
+  --cm-character: #a6da95;
+  --cm-dialogue: #e6e9ef;
+  --cm-parenthetical: #9aa4b2;
   --font-ui: -apple-system, BlinkMacSystemFont, "Inter", "Segoe UI", sans-serif;
   --font-editor: "iA Writer Quattro", "Charter", -apple-system, BlinkMacSystemFont, sans-serif;
   --font-mono: "JetBrains Mono", "SF Mono", "Courier Prime", Menlo, monospace;
@@ -49,11 +49,11 @@
   --accent-hover: #364cd6;
   --danger: #d93838;
   --success: #2a8f56;
-  --cm-heading: #274ac4;
+  --cm-heading: #2a8f56;
   --cm-keyword: #b8561b;
-  --cm-character: #8a5600;
-  --cm-dialogue: #242936;
-  --cm-parenthetical: #636c82;
+  --cm-character: #2f7d4f;
+  --cm-dialogue: #1e222a;
+  --cm-parenthetical: #6b7280;
 }
 
 * {
