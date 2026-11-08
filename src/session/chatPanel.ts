@@ -1,6 +1,8 @@
+import { backend } from "../backend";
 import { t } from "../i18n";
 import { KitCatalog, Language, OpenCodeFormField, OpenCodeModel } from "../types";
 import { createIcon, IconName } from "../ui/icons";
+import { renderMarkdownPreview } from "../editor/preview";
 import { createIconButton } from "../ui/iconButton";
 import { QuickOpenFile } from "../workspace/quickOpen";
 import {
@@ -1133,11 +1135,21 @@ export class ChatPanel {
           }
           if (part.text.length === 0) continue;
           const bubble = document.createElement("div");
-          bubble.className = "chat-message-bubble";
+          bubble.className = "chat-message-bubble chat-message-markdown";
           if (message.streaming && part === lastText) {
             bubble.classList.add("streaming");
           }
-          bubble.textContent = part.text;
+          bubble.innerHTML = renderMarkdownPreview(part.text);
+          bubble.addEventListener("click", (event) => {
+            const target = (event.target as HTMLElement).closest("a");
+            if (!target) return;
+            const href = target.getAttribute("href");
+            if (!href) return;
+            event.preventDefault();
+            if (/^(https?:|mailto:)/i.test(href)) {
+              void backend.openExternalUrl(href);
+            }
+          });
           if (message.error) bubble.classList.add("error");
           row.appendChild(bubble);
         }
