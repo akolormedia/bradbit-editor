@@ -139,11 +139,7 @@ impl OpenCodeState {
         server.client().create_session(title)
     }
 
-    pub fn update_session_title(
-        &self,
-        session_id: &str,
-        title: &str,
-    ) -> Result<OpenCodeSession, String> {
+    pub fn update_session_title(&self, session_id: &str, title: &str) -> Result<(), String> {
         let server = self
             .server
             .lock()

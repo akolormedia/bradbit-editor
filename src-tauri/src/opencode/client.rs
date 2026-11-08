@@ -91,20 +91,15 @@ impl OpenCodeClient {
         parse_session(data).ok_or_else(|| "OpenCode returned an invalid session".to_string())
     }
 
-    pub fn update_session_title(
-        &self,
-        session_id: &str,
-        title: &str,
-    ) -> Result<OpenCodeSession, String> {
+    pub fn update_session_title(&self, session_id: &str, title: &str) -> Result<(), String> {
         validate_session_id(session_id)?;
-        let payload = self.patch(
+        // OpenCode replies 204 No Content for this endpoint, so there is no
+        // session payload to parse.
+        self.patch(
             &format!("/api/session/{session_id}"),
             &json!({ "title": title }),
         )?;
-        let data = payload
-            .get("data")
-            .ok_or_else(|| "OpenCode did not return the updated session".to_string())?;
-        parse_session(data).ok_or_else(|| "OpenCode returned an invalid session".to_string())
+        Ok(())
     }
 
     pub fn session_messages(&self, session_id: &str) -> Result<Vec<OpenCodeChatMessage>, String> {

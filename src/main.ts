@@ -1378,16 +1378,7 @@ class BradbitApp {
     this.updateChatPanel();
 
     try {
-      const renamed = await backend.opencodeRenameSession(id, trimmed);
-      const confirmed = {
-        ...(this.chatSessions.get(id) ?? optimistic),
-        title: renamed.title || trimmed,
-      };
-      this.chatSessions.set(id, confirmed);
-      if (this.activeChatSessionId === id) {
-        this.chatState = confirmed;
-      }
-      this.updateChatPanel();
+      await backend.opencodeRenameSession(id, trimmed);
     } catch (err) {
       this.chatSessions.set(id, current);
       if (this.activeChatSessionId === id) {

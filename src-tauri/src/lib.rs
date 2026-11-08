@@ -508,7 +508,7 @@ fn opencode_update_session_title(
     state: tauri::State<opencode::OpenCodeState>,
     session_id: String,
     title: String,
-) -> Result<opencode::OpenCodeSession, String> {
+) -> Result<(), String> {
     state.update_session_title(&session_id, &title)
 }
 

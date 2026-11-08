@@ -49,10 +49,8 @@ fn spawn_mock() -> (String, Arc<Mutex<Vec<Recorded>>>) {
                     .to_string(),
                 )
             } else if request.target == "/api/session/ses_test" && request.method == "PATCH" {
-                (
-                    "application/json",
-                    r#"{"data":{"id":"ses_test","title":"Renamed"}}"#.to_string(),
-                )
+                // OpenCode replies 204 No Content for a session update.
+                ("application/json", String::new())
             } else if request.target == "/api/session" {
                 (
                     "application/json",
@@ -202,8 +200,7 @@ fn client_covers_info_models_sessions_prompts_interrupts_and_events() {
     let session = client.create_session("Session 1").unwrap();
     assert_eq!(session.id, "ses_test");
 
-    let renamed = client.update_session_title("ses_test", "Renamed").unwrap();
-    assert_eq!(renamed.title, "Renamed");
+    client.update_session_title("ses_test", "Renamed").unwrap();
     client.prompt("ses_test", "hola").unwrap();
     assert!(client.interrupt("ses_test").unwrap());
 
