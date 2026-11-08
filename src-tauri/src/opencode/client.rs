@@ -305,7 +305,7 @@ impl OpenCodeClient {
             .call()
             .map_err(|error| {
                 format!(
-                    "No se pudo abrir el stream de OpenCode: {}",
+                    "Could not open the OpenCode stream: {}",
                     redact_secrets(&error.to_string())
                 )
             })?;
@@ -348,7 +348,7 @@ impl OpenCodeClient {
         let body = response
             .body_mut()
             .read_to_string()
-            .map_err(|error| format!("No se pudo leer la respuesta de OpenCode: {error}"))?;
+            .map_err(|error| format!("Could not read the OpenCode response: {error}"))?;
         if !(200..300).contains(&status) {
             return Err(api_error(status, &body));
         }
@@ -361,7 +361,7 @@ impl OpenCodeClient {
 
     fn transport_error(&self, error: ureq::Error) -> String {
         format!(
-            "No se pudo conectar con OpenCode: {}",
+            "Could not connect to OpenCode: {}",
             redact_secrets(&error.to_string())
         )
     }

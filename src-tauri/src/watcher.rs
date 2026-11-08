@@ -32,7 +32,7 @@ impl WatcherService {
         let root_path = std::fs::canonicalize(root)
             .map_err(|e| format!("Could not watch folder '{}': {}", root, e))?;
         if !root_path.is_dir() {
-            return Err(format!("La ruta '{}' no es una carpeta", root));
+            return Err(format!("The path '{}' is not a folder", root));
         }
 
         let handler_root = root_path.clone();
@@ -49,12 +49,12 @@ impl WatcherService {
                 }
             },
         )
-        .map_err(|e| format!("No se pudo iniciar el watcher: {}", e))?;
+        .map_err(|e| format!("Could not start the watcher: {}", e))?;
 
         debouncer
             .watcher()
             .watch(&root_path, RecursiveMode::Recursive)
-            .map_err(|e| format!("No se pudo vigilar '{}': {}", root, e))?;
+            .map_err(|e| format!("Could not watch '{}': {}", root, e))?;
 
         Ok(Self {
             _debouncer: debouncer,

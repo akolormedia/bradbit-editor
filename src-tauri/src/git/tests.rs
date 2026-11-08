@@ -210,7 +210,7 @@ fn history_is_empty_before_the_first_version_and_saving_needs_changes() {
 
     let error =
         super::api::save_version(root, "sin cambios", "Ana", "ana@example.com").unwrap_err();
-    assert!(error.contains("No hay cambios"));
+    assert!(error.contains("There are no changes"));
 }
 
 #[test]

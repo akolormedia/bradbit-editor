@@ -41,8 +41,8 @@ pub fn search_in_folder(
     if needle.is_empty() {
         return Ok(Vec::new());
     }
-    let root = fs::canonicalize(root)
-        .map_err(|e| format!("Could not open folder '{}': {}", root, e))?;
+    let root =
+        fs::canonicalize(root).map_err(|e| format!("Could not open folder '{}': {}", root, e))?;
     if !root.is_dir() {
         return Err(format!("The path '{}' is not a folder", root.display()));
     }

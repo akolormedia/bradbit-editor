@@ -17,9 +17,9 @@ pub fn export_to_project(root: &str, rel_path: &str, content: &str) -> Result<St
     }
 
     let root_path = fs::canonicalize(root)
-        .map_err(|e| format!("No se pudo abrir la carpeta '{}': {}", root, e))?;
+        .map_err(|e| format!("Could not open the folder '{}': {}", root, e))?;
     if !root_path.is_dir() {
-        return Err(format!("La ruta '{}' no es una carpeta", root));
+        return Err(format!("The path '{}' is not a folder", root));
     }
 
     // Validate the source path even though we only need its name: this keeps
@@ -46,10 +46,10 @@ pub fn export_to_project(root: &str, rel_path: &str, content: &str) -> Result<St
 
     let bytes = pdf::export(content, Some(stem));
     let temp = output.with_extension("pdf.tmp");
-    fs::write(&temp, &bytes).map_err(|e| format!("No se pudo escribir el PDF: {}", e))?;
+    fs::write(&temp, &bytes).map_err(|e| format!("Could not write the PDF: {}", e))?;
     if let Err(err) = fs::rename(&temp, &output) {
         let _ = fs::remove_file(&temp);
-        return Err(format!("No se pudo guardar el PDF: {}", err));
+        return Err(format!("Could not save the PDF: {}", err));
     }
     Ok(output.to_string_lossy().to_string())
 }

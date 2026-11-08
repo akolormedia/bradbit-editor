@@ -63,7 +63,7 @@ impl OpenCodeState {
         let mut server = self
             .server
             .lock()
-            .map_err(|_| "No se pudo bloquear el estado de OpenCode".to_string())?;
+            .map_err(|_| "Could not lock the OpenCode state".to_string())?;
 
         if let Some(existing) = server.as_ref() {
             if existing.root == root {
@@ -88,7 +88,7 @@ impl OpenCodeState {
         let server = self
             .server
             .lock()
-            .map_err(|_| "No se pudo bloquear el estado de OpenCode".to_string())?;
+            .map_err(|_| "Could not lock the OpenCode state".to_string())?;
         let server = server
             .as_ref()
             .ok_or_else(|| "OpenCode is not running".to_string())?;
@@ -99,7 +99,7 @@ impl OpenCodeState {
         let server = self
             .server
             .lock()
-            .map_err(|_| "No se pudo bloquear el estado de OpenCode".to_string())?;
+            .map_err(|_| "Could not lock the OpenCode state".to_string())?;
         let server = server
             .as_ref()
             .ok_or_else(|| "OpenCode is not running".to_string())?;
@@ -110,7 +110,7 @@ impl OpenCodeState {
         let server = self
             .server
             .lock()
-            .map_err(|_| "No se pudo bloquear el estado de OpenCode".to_string())?;
+            .map_err(|_| "Could not lock the OpenCode state".to_string())?;
         let server = server
             .as_ref()
             .ok_or_else(|| "OpenCode is not running".to_string())?;
@@ -132,7 +132,7 @@ impl OpenCodeState {
         let server = self
             .server
             .lock()
-            .map_err(|_| "No se pudo bloquear el estado de OpenCode".to_string())?;
+            .map_err(|_| "Could not lock the OpenCode state".to_string())?;
         let server = server
             .as_ref()
             .ok_or_else(|| "OpenCode is not running".to_string())?;
@@ -143,7 +143,7 @@ impl OpenCodeState {
         let server = self
             .server
             .lock()
-            .map_err(|_| "No se pudo bloquear el estado de OpenCode".to_string())?;
+            .map_err(|_| "Could not lock the OpenCode state".to_string())?;
         let server = server
             .as_ref()
             .ok_or_else(|| "OpenCode is not running".to_string())?;
@@ -154,7 +154,7 @@ impl OpenCodeState {
         let server = self
             .server
             .lock()
-            .map_err(|_| "No se pudo bloquear el estado de OpenCode".to_string())?;
+            .map_err(|_| "Could not lock the OpenCode state".to_string())?;
         let server = server
             .as_ref()
             .ok_or_else(|| "OpenCode is not running".to_string())?;
@@ -170,7 +170,7 @@ impl OpenCodeState {
         let server = self
             .server
             .lock()
-            .map_err(|_| "No se pudo bloquear el estado de OpenCode".to_string())?;
+            .map_err(|_| "Could not lock the OpenCode state".to_string())?;
         let server = server
             .as_ref()
             .ok_or_else(|| "OpenCode is not running".to_string())?;
@@ -183,7 +183,7 @@ impl OpenCodeState {
         let server = self
             .server
             .lock()
-            .map_err(|_| "No se pudo bloquear el estado de OpenCode".to_string())?;
+            .map_err(|_| "Could not lock the OpenCode state".to_string())?;
         let server = server
             .as_ref()
             .ok_or_else(|| "OpenCode is not running".to_string())?;
@@ -199,7 +199,7 @@ impl OpenCodeState {
         let server = self
             .server
             .lock()
-            .map_err(|_| "No se pudo bloquear el estado de OpenCode".to_string())?;
+            .map_err(|_| "Could not lock the OpenCode state".to_string())?;
         let server = server
             .as_ref()
             .ok_or_else(|| "OpenCode is not running".to_string())?;
@@ -210,7 +210,7 @@ impl OpenCodeState {
         let server = self
             .server
             .lock()
-            .map_err(|_| "No se pudo bloquear el estado de OpenCode".to_string())?;
+            .map_err(|_| "Could not lock the OpenCode state".to_string())?;
         let server = server
             .as_ref()
             .ok_or_else(|| "OpenCode is not running".to_string())?;
@@ -221,7 +221,7 @@ impl OpenCodeState {
         let server = self
             .server
             .lock()
-            .map_err(|_| "No se pudo bloquear el estado de OpenCode".to_string())?;
+            .map_err(|_| "Could not lock the OpenCode state".to_string())?;
         let server = server
             .as_ref()
             .ok_or_else(|| "OpenCode is not running".to_string())?;
@@ -238,7 +238,7 @@ impl OpenCodeState {
         let server = self
             .server
             .lock()
-            .map_err(|_| "No se pudo bloquear el estado de OpenCode".to_string())?;
+            .map_err(|_| "Could not lock the OpenCode state".to_string())?;
         let server = server
             .as_ref()
             .ok_or_else(|| "OpenCode is not running".to_string())?;
@@ -251,7 +251,7 @@ impl OpenCodeState {
         let server = self
             .server
             .lock()
-            .map_err(|_| "No se pudo bloquear el estado de OpenCode".to_string())?;
+            .map_err(|_| "Could not lock the OpenCode state".to_string())?;
         let server = server
             .as_ref()
             .ok_or_else(|| "OpenCode is not running".to_string())?;
