@@ -1,9 +1,12 @@
+import type { ColorThemeId } from "./theme/palettes";
+
 export type Language = "es" | "en";
 export type ThemeMode = "dark" | "light" | "system";
 
 export interface AppSettings {
   language: Language;
   theme: ThemeMode;
+  colorTheme: ColorThemeId;
   fontSize: number;
   wordWrap: boolean;
   lineNumbers: boolean;

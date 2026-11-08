@@ -1,5 +1,6 @@
 import { t } from "../i18n";
 import { AppSettings, Language } from "../types";
+import { COLOR_THEMES, ColorThemeId } from "../theme/palettes";
 import { createIcon } from "../ui/icons";
 import { createIconButton } from "../ui/iconButton";
 import {
@@ -316,6 +317,28 @@ export class SettingsPanel {
           t(this.options.language, "theme"),
           t(this.options.language, "settingsThemeHint"),
           theme,
+        ),
+      );
+    }
+
+    if (has("colorTheme")) {
+      const colorTheme = this.selectControl(
+        "settings-color-theme",
+        COLOR_THEMES.map((theme) => ({
+          value: theme.id,
+          label: t(this.options.language, theme.labelKey),
+        })),
+        this.options.settings.colorTheme,
+        (value) =>
+          this.options.onUpdateSettings({
+            colorTheme: value as ColorThemeId,
+          }),
+      );
+      this.contentEl.appendChild(
+        this.row(
+          t(this.options.language, "colorTheme"),
+          t(this.options.language, "colorThemeHint"),
+          colorTheme,
         ),
       );
     }

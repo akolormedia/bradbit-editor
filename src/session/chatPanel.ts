@@ -373,7 +373,6 @@ export class ChatPanel {
       header,
       this.errorEl,
       this.messagesEl,
-      this.requestsEl,
       composer,
     );
     this.update(initialChatState, options);
@@ -442,7 +441,6 @@ export class ChatPanel {
     }
 
     this.renderMessages();
-    this.renderRequests();
     this.updateSendState();
   }
 
@@ -1151,6 +1149,8 @@ export class ChatPanel {
       hint.textContent = t(this.options.language, "chatEmptyHint");
       empty.append(title, hint);
       this.messagesEl.appendChild(empty);
+      this.messagesEl.appendChild(this.requestsEl);
+      this.renderRequests();
       return;
     }
 
@@ -1228,6 +1228,9 @@ export class ChatPanel {
       thinking.textContent = t(this.options.language, "chatThinking");
       this.messagesEl.appendChild(thinking);
     }
+
+    this.messagesEl.appendChild(this.requestsEl);
+    this.renderRequests();
 
     if (shouldStick) {
       this.messagesEl.scrollTop = this.messagesEl.scrollHeight;

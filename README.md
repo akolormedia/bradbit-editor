@@ -14,7 +14,7 @@ Desktop text editor for creative writing (`.md`, `.mdx`, `.fountain`, `.txt`), a
   - Starts or reuses **`opencode serve`** automatically for the open folder, creates a session if there is none, and streams the response live.
   - Composer with **Enter to send**, **Shift+Enter** for a new line, and a **Stop** button during generation.
   - **Live tools with permissions (`T-2.1.3`):** compact cards for `read`, `edit`, `write`, `shell`, searches and skills, with running, completed and error status and expandable input and result details. Clicking a file that was read or edited opens it in the editor; if the tool changed it, the button opens its **Diff** directly. When OpenCode asks for permission, a card offers **Allow once**, **Always allow** or **Reject**.
-  - **Interactive questions (`T-2.1.4`):** when the agent uses the `question` tool, a card appears with options, free text and multiple fields. After answering, the card shows **Answered** or **Cancelled**, and the conversation continues automatically with the writer's answer.
+  - **Interactive questions (`T-2.1.4`):** when the agent uses the `question` tool, a card appears with options, free text and multiple fields. After answering, the card shows **Answered** or **Cancelled**, stays in the chat history and no longer occupies a fixed area above the composer.
   - **Project kit (`T-2.2.1`/`T-2.2.2`):** discovers agents, commands and skills from `.opencode/` and `.bradbit/`, and updates automatically when the kit changes. The composer offers command autocomplete with **`/`**, attachments with **`@`** or the **＋** button, and the editor's **↗** button sends the current selection to the active chat.
   - **Composer in the style of `opencode-desktop` (`T-2.2.3`):** a single panel with a helpful placeholder, a **model** picker with search, recents and provider grouping, a separate **effort/variant** picker, the **↑** send button, and a **＋** menu with a context file, command, kit agent and **Manage models**. In *Settings → Manage models* you can search and enable or disable which models appear. Visibility and recents are saved in the settings.
   - **Integrated terminal (`T-2.3.1`):** the **`>_`** button in the bottom bar switches between **Chat / Terminal** in the left column, without losing the editor or the buffer. Native PTY in Rust with a **Shell / opencode / claude / custom command** picker, automatic resize, restart and clear. The session closes when the folder closes.
@@ -83,17 +83,18 @@ Desktop text editor for creative writing (`.md`, `.mdx`, `.fountain`, `.txt`), a
   - **Push and pull changes:** `push` and `pull --ff-only`, with the token in the Git process environment and not embedded in the remote URL. Pulling reloads open tabs safely.
   - **Propose changes to the team:** pushes the current draft and opens a Pull Request with title, description and base branch. The panel lists open Pull Requests and opens them in GitHub.
 - **Professional editing with CodeMirror 6:**
-  - Undo and redo per tab, find and replace in the file (`⌘F`), word wrap, optional line numbers, a native spellchecker, and highlighting for Markdown and Fountain.
+  - Undo and redo per tab, find and replace in the file (`⌘F`), word wrap, optional line numbers, a native spellchecker, and colored syntax for Markdown/MDX and Fountain.
   - Bold (`⌘B`) and italic (`⌘I`) in Markdown/MDX, with the selection or cursor wrapped in markers.
 - **Fountain 1.1 and PDF export (`T-1.2.3`):**
   - Distinct highlighting for scenes, sections, transitions, characters, dialogue, parentheticals and `[[...]]` notes.
   - **Export PDF (`⌘E`)** from the document header or the *File* menu. It produces a deterministic screenplay-formatted PDF (US Letter, Courier 12pt, 55 lines per page, `(MORE)` and `(CONT'D)` rules, and page numbering).
   - The PDF is saved in the project's `exports/` folder, keeping the script subfolder (`exports/guion/acto-1.pdf`), and opens automatically in the system viewer. It works offline.
+  - **Paginated screenplay preview (`T-2.5.7`):** the Preview / Edit button renders the script as numbered paper pages (US Letter, Courier, scene headings, centered cues, dialogue and transitions) without opening the PDF.
 - **Document header and reading preview (`T-1.2.1`):**
-  - The header above the editor shows the active file's name and path, with **Copy**, **Preview / Edit** (Markdown) and **PDF** (Fountain) actions.
-  - Rendered and sanitized Markdown/MDX preview (`⌘⌥P`), with headings, lists, quotes, code, tables and links.
+  - The header above the editor shows the active file's name and path, with **Copy**, **Preview / Edit** (Markdown and Fountain) and **PDF** (Fountain) actions.
+  - Rendered and sanitized Markdown/MDX preview (`⌘⌥P`), with headings, lists, quotes, code, tables and links. The reading view is monochrome so the document reads like a manuscript; links keep an underline and only use the accent color on hover.
   - External links open in the browser. Relative project links open directly in the editor.
-- **Application settings (`⌘,`, `T-2.4.4`):** a window with a search field and categories on the left (General, Appearance, Editor, Files & search, Terminal, Git, GitHub, AI & models). Includes language, theme, font size (`12`–`24` px), word wrap, line numbers, configuration files, the default terminal command, the Git author, the GitHub account and model management.
+- **Application settings (`⌘,`, `T-2.4.4`):** a window with a search field and categories on the left (General, Appearance, Editor, Files & search, Terminal, Git, GitHub, AI & models). Includes language, light/dark/system mode, color themes (Bradbit, Nord, Solarized, Gruvbox) with light and dark variants, font size (`12`–`24` px), word wrap, line numbers, configuration files, the default terminal command, the Git author, the GitHub account and model management.
 
 ## Installation (alpha)
 
@@ -119,10 +120,9 @@ npm run tauri build
 ## Known limitations (alpha)
 
 The full list is in [`CHANGELOG.md`](CHANGELOG.md#known-limitations). Summary:
-- The chat shows agent responses as plain text. Markdown rendering is planned.
-- Markdown documents open in edit mode. Preview by default is planned.
-- Renaming sessions and color themes are planned.
-- Fountain has no on-screen view; only PDF export.
+- Creating a project by chatting with the agent from the welcome screen is still planned (`T-2.5.10`).
+- Only the Guionista kit is bundled. Additional kits and extensions are planned for Phase 4.
+- The app is not signed or notarized, and only macOS has been tested.
 
 ## Development and tests
 

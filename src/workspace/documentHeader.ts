@@ -58,7 +58,7 @@ export function createDocumentHeader(options: DocumentHeaderOptions): HTMLElemen
     actions.appendChild(sendBtn);
   }
 
-  if (isMarkdownPath(tab.path)) {
+  if (isMarkdownPath(tab.path) || isFountainPath(tab.path)) {
     const previewing = tab.viewMode === "preview";
     const previewBtn = createIconButton({
       icon: previewing ? "pencil" : "eye",

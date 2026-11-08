@@ -73,15 +73,40 @@ const fountainStreamLanguage = StreamLanguage.define<FountainStreamState>({
 
 const writerHighlightStyle = HighlightStyle.define([
   { tag: tags.heading, fontWeight: "700", color: "var(--cm-heading)" },
-  { tag: tags.strong, fontWeight: "700" },
-  { tag: tags.emphasis, fontStyle: "italic" },
+  { tag: tags.strong, fontWeight: "700", color: "var(--cm-keyword)" },
+  { tag: tags.emphasis, fontStyle: "italic", color: "var(--cm-character)" },
   { tag: tags.keyword, color: "var(--cm-keyword)", fontWeight: "600" },
-  { tag: tags.special(tags.variableName), color: "var(--cm-character)", fontWeight: "700" },
+  {
+    tag: tags.special(tags.variableName),
+    color: "var(--cm-character)",
+    fontWeight: "700",
+  },
   { tag: tags.string, color: "var(--cm-dialogue)" },
   { tag: tags.meta, color: "var(--cm-parenthetical)", fontStyle: "italic" },
   { tag: tags.comment, color: "var(--text-muted)", fontStyle: "italic" },
-  { tag: tags.link, color: "var(--accent)", textDecoration: "underline" },
-  { tag: tags.monospace, fontFamily: "var(--font-mono)" },
+  {
+    tag: tags.link,
+    color: "var(--accent)",
+    textDecoration: "underline",
+  },
+  { tag: tags.url, color: "var(--accent)" },
+  {
+    tag: tags.monospace,
+    fontFamily: "var(--font-mono)",
+    color: "var(--cm-dialogue)",
+    backgroundColor: "var(--bg-surface)",
+  },
+  {
+    tag: tags.quote,
+    color: "var(--cm-parenthetical)",
+    fontStyle: "italic",
+  },
+  { tag: tags.list, color: "var(--cm-keyword)" },
+  {
+    tag: tags.processingInstruction,
+    color: "var(--text-muted)",
+  },
+  { tag: tags.contentSeparator, color: "var(--text-muted)" },
 ]);
 
 function languageExtensionForPath(path: string): Extension {

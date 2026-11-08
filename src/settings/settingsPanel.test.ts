@@ -108,6 +108,13 @@ describe("settings panel (T-2.4.4)", () => {
     theme.dispatchEvent(new Event("change", { bubbles: true }));
     expect(onUpdateSettings).toHaveBeenCalledWith({ theme: "light" });
 
+    const colorTheme = panel.element.querySelector<HTMLSelectElement>(
+      '[data-testid="settings-color-theme"]',
+    )!;
+    colorTheme.value = "nord";
+    colorTheme.dispatchEvent(new Event("change", { bubbles: true }));
+    expect(onUpdateSettings).toHaveBeenCalledWith({ colorTheme: "nord" });
+
     panel.element
       .querySelector<HTMLButtonElement>(
         '[data-testid="settings-nav-editor"]',
