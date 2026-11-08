@@ -34,7 +34,7 @@ const fountainLineStyle: Record<FountainLineType, string | null> = {
   scene: "heading",
   section: "heading",
   transition: "keyword",
-  character: "variableName.special",
+  character: "variable-2",
   parenthetical: "meta",
   dialogue: "string",
   action: null,
