@@ -1,11 +1,19 @@
-import { Compartment, EditorState, Extension } from "@codemirror/state";
 import {
+  Compartment,
+  EditorState,
+  Extension,
+  RangeSetBuilder,
+} from "@codemirror/state";
+import {
+  Decoration,
+  DecorationSet,
   drawSelection,
   EditorView,
   highlightActiveLine,
   highlightActiveLineGutter,
   keymap,
   lineNumbers as cmLineNumbers,
+  ViewPlugin,
   ViewUpdate,
 } from "@codemirror/view";
 import { defaultKeymap, history, historyKeymap, indentWithTab, redo as cmRedo, undo as cmUndo } from "@codemirror/commands";
@@ -15,61 +23,61 @@ import {
   bracketMatching,
   HighlightStyle,
   indentOnInput,
-  StreamLanguage,
   syntaxHighlighting,
 } from "@codemirror/language";
 import { tags } from "@lezer/highlight";
 import { AppSettings } from "../types";
 import { isMarkdownPath } from "../workspace/state";
-import { classifyFountainLine, createFountainState, FountainLineType, FountainState } from "./fountain";
+import {
+  classifyFountainLine,
+  createFountainState,
+  fountainLineClass,
+} from "./fountain";
 import { computeWrapEdit } from "./markdownFormat";
 
-interface FountainStreamState {
-  fountain: FountainState;
-  lineType: FountainLineType;
+/**
+ * Fountain 1.1 highlighter. A stream parser is not enough here: CodeMirror
+ * never calls the tokenizer for empty lines, so Fountain's blank-line state
+ * never resets and later character cues are misclassified as dialogue. This
+ * line decoration classifies the whole document, including blank lines.
+ */
+function buildFountainDecorations(view: EditorView): DecorationSet {
+  const builder = new RangeSetBuilder<Decoration>();
+  let state = createFountainState();
+  for (let index = 1; index <= view.state.doc.lines; index += 1) {
+    const line = view.state.doc.line(index);
+    const classified = classifyFountainLine(line.text, state);
+    state = classified.state;
+    if (classified.type === "blank") continue;
+    builder.add(
+      line.from,
+      line.from,
+      Decoration.line({
+        class: fountainLineClass(classified.type),
+      }),
+    );
+  }
+  return builder.finish();
 }
 
-const fountainLineStyle: Record<FountainLineType, string | null> = {
-  blank: null,
-  scene: "heading",
-  section: "heading",
-  transition: "keyword",
-  character: "variable-2",
-  parenthetical: "meta",
-  dialogue: "string",
-  action: null,
-};
+const fountainHighlighting = ViewPlugin.fromClass(
+  class {
+    decorations: DecorationSet;
 
-/**
- * Fountain 1.1 highlighter: scene headings, sections, transitions, character
- * cues, parentheticals, dialogue and inline notes.
- */
-const fountainStreamLanguage = StreamLanguage.define<FountainStreamState>({
-  startState: () => ({ fountain: createFountainState(), lineType: "blank" }),
-  token(stream, state) {
-    if (stream.sol()) {
-      const classified = classifyFountainLine(stream.string, state.fountain);
-      state.fountain = classified.state;
-      state.lineType = classified.type;
+    constructor(view: EditorView) {
+      this.decorations = buildFountainDecorations(view);
     }
 
-    // Inline notes [[...]] get their own comment token.
-    if (stream.match(/\[\[.*?\]\]/)) {
-      return "comment";
+    update(update: ViewUpdate) {
+      if (update.docChanged || update.viewportChanged) {
+        this.decorations = buildFountainDecorations(update.view);
+      }
     }
-
-    const style = fountainLineStyle[state.lineType];
-    const start = stream.pos;
-    while (!stream.eol() && !stream.match(/\[\[/, false)) {
-      stream.next();
-    }
-    if (stream.pos === start && !stream.eol()) {
-      // Unclosed note marker: consume one char to guarantee progress.
-      stream.next();
-    }
-    return style;
   },
-});
+  {
+    decorations: (value) => value.decorations,
+  },
+);
 
 const writerHighlightStyle = HighlightStyle.define([
   { tag: tags.heading, fontWeight: "700", color: "var(--cm-heading)" },
@@ -112,7 +120,7 @@ const writerHighlightStyle = HighlightStyle.define([
 function languageExtensionForPath(path: string): Extension {
   const lower = path.toLowerCase();
   if (lower.endsWith(".fountain") || lower.endsWith(".spmd")) {
-    return fountainStreamLanguage;
+    return fountainHighlighting;
   }
   if (lower.endsWith(".md") || lower.endsWith(".mdx") || lower.endsWith(".markdown")) {
     return markdown();

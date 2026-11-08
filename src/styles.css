@@ -2659,6 +2659,36 @@ textarea.text-input {
   height: 100%;
 }
 
+/* Fountain line highlighting (T-2.5.5) */
+.cm-line.fountain-line-scene,
+.cm-line.fountain-line-section {
+  color: var(--cm-heading);
+  font-weight: 700;
+}
+
+.cm-line.fountain-line-character {
+  color: var(--cm-character);
+  font-weight: 700;
+}
+
+.cm-line.fountain-line-dialogue {
+  color: var(--cm-dialogue);
+}
+
+.cm-line.fountain-line-parenthetical {
+  color: var(--cm-parenthetical);
+  font-style: italic;
+}
+
+.cm-line.fountain-line-transition {
+  color: var(--cm-keyword);
+  font-weight: 600;
+}
+
+.cm-line.fountain-line-action {
+  color: var(--text-primary);
+}
+
 /* Diff viewer (T-1.4.3) */
 .diff-wrapper {
   height: 100%;

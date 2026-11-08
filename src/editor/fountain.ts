@@ -73,6 +73,11 @@ function isCharacterCue(line: string): boolean {
   return candidate === candidate.toUpperCase();
 }
 
+/** CSS class used by the editor to color a Fountain line. */
+export function fountainLineClass(type: FountainLineType): string {
+  return `fountain-line-${type}`;
+}
+
 /** Rough page estimate of 55 script lines per page (refined in T-1.2.3). */
 export function estimateFountainPages(source: string): number {
   if (source.trim().length === 0) return 0;
