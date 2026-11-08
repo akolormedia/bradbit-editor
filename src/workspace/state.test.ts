@@ -17,6 +17,7 @@ import {
   toggleTabViewMode,
   updateTabContent,
 } from "./state";
+import { openUntitledInTabs } from "./untitled";
 import { FileTreeNode } from "../types";
 
 describe("workspace tab state (Story 1.1)", () => {
@@ -129,7 +130,7 @@ describe("workspace tab state (Story 1.1)", () => {
     });
   });
 
-  it("toggles preview mode per Markdown tab and ignores non-Markdown files (T-1.2.1)", () => {
+  it("opens Markdown in preview and remembers the mode per tab (T-2.5.2)", () => {
     let state: TabListState = { tabs: [], activeTabPath: null };
     state = openFileInTabs(
       state,
@@ -142,21 +143,31 @@ describe("workspace tab state (Story 1.1)", () => {
       true,
     );
 
+    expect(state.tabs[0].viewMode).toBe("preview");
+    expect(state.tabs[1].viewMode).toBe("edit");
+
+    // Markdown toggles between preview and edit.
+    state = toggleTabViewMode(state, "biblia/premisa.md");
     expect(state.tabs[0].viewMode).toBe("edit");
     state = toggleTabViewMode(state, "biblia/premisa.md");
     expect(state.tabs[0].viewMode).toBe("preview");
-    expect(state.tabs[1].viewMode).toBe("edit");
 
     // Non-Markdown tabs never switch to preview.
     state = toggleTabViewMode(state, "guion/acto-1.fountain");
     expect(state.tabs[1].viewMode).toBe("edit");
 
-    // Each tab remembers its own view mode.
+    // Each tab remembers its own mode when the active tab changes.
+    state = toggleTabViewMode(state, "biblia/premisa.md");
     state = { ...state, activeTabPath: "guion/acto-1.fountain" };
     state = { ...state, activeTabPath: "biblia/premisa.md" };
-    expect(state.tabs[0].viewMode).toBe("preview");
+    expect(state.tabs[0].viewMode).toBe("edit");
+  });
 
-    state = toggleTabViewMode(state, "biblia/premisa.md");
+  it("keeps untitled documents in edit mode (T-2.5.2)", () => {
+    const state = openUntitledInTabs(
+      { tabs: [], activeTabPath: null },
+      { path: "untitled://1.md", name: "Untitled 1" },
+    );
     expect(state.tabs[0].viewMode).toBe("edit");
   });
 
