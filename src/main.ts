@@ -2996,6 +2996,7 @@ class BradbitApp {
       for (const node of nodes) {
         const row = document.createElement("div");
         row.className = "tree-row";
+        if (node.isDir) row.classList.add("tree-row-dir");
         row.setAttribute("role", "button");
         row.tabIndex = 0;
         row.dataset.treePath = node.path;
@@ -3025,6 +3026,7 @@ class BradbitApp {
         }
 
         const nameSpan = document.createElement("span");
+        nameSpan.className = "tree-row-name";
         nameSpan.textContent = node.name;
         label.append(icon, nameSpan);
 

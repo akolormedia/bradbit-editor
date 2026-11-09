@@ -993,6 +993,7 @@ textarea.text-input {
 }
 
 .tree-row {
+  position: relative;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -1022,22 +1023,50 @@ textarea.text-input {
   overflow: hidden;
   text-overflow: ellipsis;
   flex: 1;
+  min-width: 0;
+}
+
+.tree-row-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .tree-row-actions {
+  position: absolute;
+  top: 2px;
+  right: 6px;
   display: inline-flex;
   align-items: center;
   gap: 2px;
   flex-shrink: 0;
   height: 18px;
+  padding-left: 4px;
+  border-radius: 5px;
+  background: var(--bg-hover);
   visibility: hidden;
   opacity: 0;
+}
+
+.tree-row.active .tree-row-actions {
+  background: var(--bg-active);
 }
 
 .tree-row:hover .tree-row-actions,
 .tree-row:focus-within .tree-row-actions {
   visibility: visible;
   opacity: 1;
+}
+
+.tree-row:hover .tree-row-label,
+.tree-row:focus-within .tree-row-label {
+  padding-right: 56px;
+}
+
+.tree-row-dir:hover .tree-row-label,
+.tree-row-dir:focus-within .tree-row-label {
+  padding-right: 76px;
 }
 
 .tree-row .tree-mini-btn {
