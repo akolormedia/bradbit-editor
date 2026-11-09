@@ -29,6 +29,8 @@ pub struct OpenCodeToolCall {
     pub error: String,
     pub executed: bool,
     pub files: Vec<String>,
+    /// Selected labels for each question of a `question` tool call.
+    pub answers: Vec<Vec<String>>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize)]
@@ -345,6 +347,28 @@ pub fn normalize_event(mut event: Value) -> Value {
     event
 }
 
+/// Normalize `metadata.answers` from a `question` tool call. OpenCode stores
+/// one array of selected labels per question, e.g. `[["Pausar"]]`.
+fn parse_answers(value: Option<&Value>) -> Vec<Vec<String>> {
+    value
+        .and_then(Value::as_array)
+        .map(|answers| {
+            answers
+                .iter()
+                .map(|answer| match answer {
+                    Value::Array(items) => items
+                        .iter()
+                        .filter_map(Value::as_str)
+                        .map(str::to_string)
+                        .collect(),
+                    Value::String(label) => vec![label.clone()],
+                    _ => Vec::new(),
+                })
+                .collect()
+        })
+        .unwrap_or_default()
+}
+
 fn parse_tool(value: &Value) -> Option<OpenCodeToolCall> {
     let id = value.get("id").and_then(Value::as_str)?.to_string();
     let name = value.get("name").and_then(Value::as_str)?.to_string();
@@ -372,6 +396,7 @@ fn parse_tool(value: &Value) -> Option<OpenCodeToolCall> {
         .get("executed")
         .and_then(Value::as_bool)
         .unwrap_or(false);
+    let answers = parse_answers(state.pointer("/metadata/answers"));
     Some(OpenCodeToolCall {
         id,
         name,
@@ -381,6 +406,7 @@ fn parse_tool(value: &Value) -> Option<OpenCodeToolCall> {
         error,
         executed,
         files,
+        answers,
     })
 }
 
@@ -404,6 +430,10 @@ fn tool_event(data: &Value, status: &str, input: Option<Value>) -> Option<OpenCo
         })
         .unwrap_or_default();
     let files = files_for_tool(&name, &input);
+    let answers = parse_answers(
+        data.pointer("/metadata/answers")
+            .or_else(|| data.pointer("/tool/metadata/answers")),
+    );
     Some(OpenCodeToolCall {
         id,
         name,
@@ -416,6 +446,7 @@ fn tool_event(data: &Value, status: &str, input: Option<Value>) -> Option<OpenCo
             .and_then(Value::as_bool)
             .unwrap_or(false),
         files,
+        answers,
     })
 }
 
@@ -602,6 +633,39 @@ mod tests {
                 assert_eq!(tool.status, "completed");
                 assert_eq!(tool.output, "Hola");
                 assert_eq!(tool.files, vec!["notas.md"]);
+            }
+            _ => panic!("expected tool part"),
+        }
+    }
+
+    #[test]
+    fn parses_question_answers_from_history_metadata() {
+        let message = parse_chat_message(&json!({
+            "id": "msg_q",
+            "type": "assistant",
+            "content": [{
+                "type": "tool",
+                "id": "call_q",
+                "name": "question",
+                "state": {
+                    "status": "completed",
+                    "input": {
+                        "questions": [{
+                            "question": "¿Seguimos?",
+                            "options": [{ "label": "Sí" }, { "label": "No" }]
+                        }]
+                    },
+                    "content": [{ "type": "text", "text": "User has answered your questions" }],
+                    "metadata": { "answers": [["No"]] }
+                }
+            }]
+        }))
+        .expect("assistant message");
+
+        match &message.parts[0] {
+            OpenCodeMessagePart::Tool { tool } => {
+                assert_eq!(tool.name, "question");
+                assert_eq!(tool.answers, vec![vec!["No".to_string()]]);
             }
             _ => panic!("expected tool part"),
         }

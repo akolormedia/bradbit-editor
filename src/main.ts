@@ -2,6 +2,7 @@ import { backend, isTauriEnvironment } from "./backend";
 import { BradbitCodeMirror } from "./editor/codemirror";
 import { BradbitDiffView } from "./editor/diff";
 import { renderMarkdownPreview } from "./editor/preview";
+import { renderFountainPreview } from "./editor/fountainPreview";
 import { t } from "./i18n";
 import {
   AppSettings,
@@ -71,6 +72,7 @@ import { SessionView, toggleSessionView } from "./session/sessionView";
 import { SettingsPanel } from "./settings/settingsPanel";
 import type { SettingsCategoryId } from "./settings/catalog";
 import { TerminalPanel } from "./terminal/terminalPanel";
+import { applyColorTheme, resolveColorMode } from "./theme/palettes";
 import { AppMenu } from "./ui/appMenu";
 import { createIcon } from "./ui/icons";
 import { createIconButton } from "./ui/iconButton";
@@ -273,11 +275,12 @@ class BradbitApp {
   }
 
   private applyThemeAttribute(): void {
-    let effective = this.settings.theme;
-    if (effective === "system") {
-      effective = window.matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark";
-    }
+    const effective = resolveColorMode(
+      this.settings.theme,
+      window.matchMedia("(prefers-color-scheme: light)").matches,
+    );
     document.documentElement.setAttribute("data-theme", effective);
+    applyColorTheme(this.settings.colorTheme, effective);
   }
 
   private getActiveTab(): OpenTab | null {
@@ -1103,6 +1106,7 @@ class BradbitApp {
         onSelectSession: (id) => this.selectChatSession(id),
         onCreateSession: () => void this.createChatSession(),
         onCloseSession: (id) => void this.closeChatSession(id),
+        onRenameSession: (id, title) => void this.renameChatSession(id, title),
         onOpenToolFile: (path, showDiff) =>
           void this.openChatToolFile(path, showDiff),
         onPermissionReply: (requestId, decision) =>
@@ -1361,6 +1365,31 @@ class BradbitApp {
       : chatStopped();
     this.updateChatPanel();
     this.persistWorkspaceState();
+  }
+
+  private async renameChatSession(id: string, title: string): Promise<void> {
+    const trimmed = title.trim();
+    if (!trimmed) return;
+    const current = this.chatSessions.get(id);
+    if (!current || current.title === trimmed) return;
+
+    const optimistic = { ...current, title: trimmed };
+    this.chatSessions.set(id, optimistic);
+    if (this.activeChatSessionId === id) {
+      this.chatState = optimistic;
+    }
+    this.updateChatPanel();
+
+    try {
+      await backend.opencodeRenameSession(id, trimmed);
+    } catch (err) {
+      this.chatSessions.set(id, current);
+      if (this.activeChatSessionId === id) {
+        this.chatState = current;
+      }
+      this.updateChatPanel();
+      this.showStatusNotice(err instanceof Error ? err.message : String(err));
+    }
   }
 
   private async replyChatPermission(
@@ -1950,7 +1979,9 @@ class BradbitApp {
 
   private togglePreview(): void {
     const active = this.getActiveTab();
-    if (!active || !isMarkdownPath(active.path)) return;
+    if (!active || (!isMarkdownPath(active.path) && !isFountainPath(active.path))) {
+      return;
+    }
     this.tabState = toggleTabViewMode(this.tabState, active.path);
     this.render();
     if (this.getActiveTab()?.viewMode === "edit") {
@@ -2735,13 +2766,6 @@ class BradbitApp {
     openBtn.textContent = `${t(lang, "openFolder")} (⌘O)`;
     openBtn.onclick = () => void this.handleOpenFolderDialog();
 
-    const demoBtn = document.createElement("button");
-    demoBtn.className = "toolbar-btn";
-    demoBtn.dataset.testid = "welcome-open-guionista-kit-btn";
-    demoBtn.textContent = t(lang, "openGuionistaKitDemo");
-    demoBtn.onclick = () =>
-      void this.openFolderByPath("/Users/rafaelolivares/Documents/GitHub/guionista-kit");
-
     actions.append(openBtn);
     if (isTauriEnvironment()) {
       const newProjectBtn = document.createElement("button");
@@ -2751,7 +2775,6 @@ class BradbitApp {
       newProjectBtn.onclick = () => void this.openNewProjectModal();
       actions.appendChild(newProjectBtn);
     }
-    actions.appendChild(demoBtn);
 
     const recentsSec = document.createElement("div");
     recentsSec.className = "recents-section";
@@ -2973,6 +2996,7 @@ class BradbitApp {
       for (const node of nodes) {
         const row = document.createElement("div");
         row.className = "tree-row";
+        if (node.isDir) row.classList.add("tree-row-dir");
         row.setAttribute("role", "button");
         row.tabIndex = 0;
         row.dataset.treePath = node.path;
@@ -3002,6 +3026,7 @@ class BradbitApp {
         }
 
         const nameSpan = document.createElement("span");
+        nameSpan.className = "tree-row-name";
         nameSpan.textContent = node.name;
         label.append(icon, nameSpan);
 
@@ -3464,7 +3489,13 @@ class BradbitApp {
     const surface = document.createElement("div");
     surface.className = "editor-surface";
 
-    if (activeTab && isMarkdownPath(activeTab.path) && activeTab.viewMode === "preview") {
+    if (
+      activeTab &&
+      isFountainPath(activeTab.path) &&
+      activeTab.viewMode === "preview"
+    ) {
+      surface.appendChild(renderFountainPreview(activeTab.content));
+    } else if (activeTab && isMarkdownPath(activeTab.path) && activeTab.viewMode === "preview") {
       const preview = document.createElement("div");
       preview.className = "markdown-preview";
       const inner = document.createElement("div");

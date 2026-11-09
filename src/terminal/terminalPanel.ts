@@ -358,20 +358,14 @@ export class TerminalPanel {
     cursor: string;
     selectionBackground: string;
   } {
-    const light =
-      document.documentElement.getAttribute("data-theme") === "light";
-    return light
-      ? {
-          background: "#ffffff",
-          foreground: "#1f2430",
-          cursor: "#3b6fd8",
-          selectionBackground: "#cfe0ff",
-        }
-      : {
-          background: "#0f1115",
-          foreground: "#d8dee9",
-          cursor: "#7aa2f7",
-          selectionBackground: "#33415c",
-        };
+    const styles = getComputedStyle(document.documentElement);
+    const read = (token: string, fallback: string) =>
+      styles.getPropertyValue(token).trim() || fallback;
+    return {
+      background: read("--bg-editor", "#0f1115"),
+      foreground: read("--text-primary", "#d8dee9"),
+      cursor: read("--accent", "#7aa2f7"),
+      selectionBackground: read("--bg-selection", "#33415c"),
+    };
   }
 }

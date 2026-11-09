@@ -22,7 +22,7 @@ fn spawn_mock() -> (String, Arc<Mutex<Vec<Recorded>>>) {
     let recorded = Arc::new(Mutex::new(Vec::new()));
     let sink = Arc::clone(&recorded);
     thread::spawn(move || {
-        for _ in 0..18 {
+        for _ in 0..19 {
             let Ok((mut stream, _)) = listener.accept() else {
                 return;
             };
@@ -48,6 +48,9 @@ fn spawn_mock() -> (String, Arc<Mutex<Vec<Recorded>>>) {
                     )
                     .to_string(),
                 )
+            } else if request.target == "/api/session/ses_test" && request.method == "PATCH" {
+                // OpenCode replies 204 No Content for a session update.
+                ("application/json", String::new())
             } else if request.target == "/api/session" {
                 (
                     "application/json",
@@ -196,6 +199,8 @@ fn client_covers_info_models_sessions_prompts_interrupts_and_events() {
 
     let session = client.create_session("Session 1").unwrap();
     assert_eq!(session.id, "ses_test");
+
+    client.update_session_title("ses_test", "Renamed").unwrap();
     client.prompt("ses_test", "hola").unwrap();
     assert!(client.interrupt("ses_test").unwrap());
 
@@ -253,6 +258,13 @@ fn client_covers_info_models_sessions_prompts_interrupts_and_events() {
     assert!(log
         .iter()
         .any(|request| request.method == "POST" && request.target == "/api/session"));
+
+    let rename = log
+        .iter()
+        .find(|request| request.method == "PATCH" && request.target == "/api/session/ses_test")
+        .expect("rename request");
+    let rename_body: serde_json::Value = serde_json::from_str(&rename.body).unwrap();
+    assert_eq!(rename_body["title"], "Renamed");
     let prompt = log
         .iter()
         .find(|request| request.target == "/api/session/ses_test/prompt")

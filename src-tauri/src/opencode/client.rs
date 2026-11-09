@@ -91,6 +91,17 @@ impl OpenCodeClient {
         parse_session(data).ok_or_else(|| "OpenCode returned an invalid session".to_string())
     }
 
+    pub fn update_session_title(&self, session_id: &str, title: &str) -> Result<(), String> {
+        validate_session_id(session_id)?;
+        // OpenCode replies 204 No Content for this endpoint, so there is no
+        // session payload to parse.
+        self.patch(
+            &format!("/api/session/{session_id}"),
+            &json!({ "title": title }),
+        )?;
+        Ok(())
+    }
+
     pub fn session_messages(&self, session_id: &str) -> Result<Vec<OpenCodeChatMessage>, String> {
         validate_session_id(session_id)?;
         let payload = self.get(&format!(
@@ -333,6 +344,18 @@ impl OpenCodeClient {
         let response = self
             .agent
             .post(&url)
+            .header("Authorization", &self.auth_header())
+            .header("Content-Type", "application/json")
+            .send_json(body)
+            .map_err(|error| self.transport_error(error))?;
+        self.decode_response(response)
+    }
+
+    fn patch(&self, path: &str, body: &Value) -> Result<Value, String> {
+        let url = format!("{}{path}", self.base_url.trim_end_matches('/'));
+        let response = self
+            .agent
+            .patch(&url)
             .header("Authorization", &self.auth_header())
             .header("Content-Type", "application/json")
             .send_json(body)

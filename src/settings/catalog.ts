@@ -88,6 +88,12 @@ export const SETTINGS_ENTRIES: SettingsEntry[] = [
     descriptionKey: "settingsThemeHint",
   },
   {
+    id: "colorTheme",
+    category: "appearance",
+    labelKey: "colorTheme",
+    descriptionKey: "colorThemeHint",
+  },
+  {
     id: "fontSize",
     category: "appearance",
     labelKey: "fontSize",

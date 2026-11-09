@@ -60,7 +60,19 @@ describe("active document header (T-1.2.1)", () => {
     expect(header.querySelector('[data-action="copy"]')).not.toBeNull();
   });
 
-  it("hides the preview action for non-Markdown files", () => {
+  it("hides the preview action for plain text files", () => {
+    const header = createDocumentHeader({
+      tab: tab({ path: "notas/ideas.txt", name: "ideas.txt" }),
+      language: "es",
+      onTogglePreview: () => {},
+      onCopy: async () => true,
+    });
+
+    expect(header.querySelector('[data-action="preview"]')).toBeNull();
+    expect(header.querySelector('[data-action="copy"]')).not.toBeNull();
+  });
+
+  it("shows the preview action for Fountain (T-2.5.7)", () => {
     const header = createDocumentHeader({
       tab: tab({ path: "guion/acto-1.fountain", name: "acto-1.fountain" }),
       language: "es",
@@ -68,7 +80,7 @@ describe("active document header (T-1.2.1)", () => {
       onCopy: async () => true,
     });
 
-    expect(header.querySelector('[data-action="preview"]')).toBeNull();
+    expect(header.querySelector('[data-action="preview"]')).not.toBeNull();
     expect(header.querySelector('[data-action="copy"]')).not.toBeNull();
   });
 

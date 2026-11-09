@@ -29,6 +29,7 @@ describe("settings catalog (T-2.4.4)", () => {
     for (const id of [
       "language",
       "theme",
+      "colorTheme",
       "fontSize",
       "wordWrap",
       "lineNumbers",
@@ -66,12 +67,12 @@ describe("settings catalog (T-2.4.4)", () => {
       visibleEntriesForCategory("appearance", "es", "tema").map(
         (entry) => entry.id,
       ),
-    ).toEqual(["theme"]);
+    ).toEqual(["theme", "colorTheme"]);
     expect(
       visibleEntriesForCategory("appearance", "es", "apariencia").map(
         (entry) => entry.id,
       ),
-    ).toEqual(["theme", "fontSize"]);
+    ).toEqual(["theme", "colorTheme", "fontSize"]);
     expect(visibleEntriesForCategory("appearance", "es", "zzz")).toEqual([]);
   });
 });

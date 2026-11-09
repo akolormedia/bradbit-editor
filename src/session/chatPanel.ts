@@ -16,6 +16,11 @@ import {
 import { SessionTabInfo } from "./sessionTabs";
 import { projectRelativePath } from "./chatPaths";
 import {
+  questionPrompts,
+  renderAnsweredForm,
+  renderQuestionTool,
+} from "./questionCards";
+import {
   activeCompletion,
   CompletionToken,
   filterCommands,
@@ -41,6 +46,7 @@ export interface ChatPanelOptions {
   onSelectSession: (id: string) => void;
   onCreateSession: () => void;
   onCloseSession: (id: string) => void;
+  onRenameSession: (id: string, title: string) => void;
   onOpenToolFile: (path: string, showDiff: boolean) => void;
   onPermissionReply: (
     requestId: string,
@@ -111,6 +117,7 @@ export class ChatPanel {
   private titleEl: HTMLElement;
   private subtitleEl: HTMLElement;
   private stickToBottom = true;
+  private lastTabClick = { id: null as string | null, time: 0 };
   private drafts = new Map<string, string>();
   private draftSessionId: string | null = null;
   private formDrafts = new Map<string, Record<string, unknown>>();
@@ -371,7 +378,6 @@ export class ChatPanel {
       header,
       this.errorEl,
       this.messagesEl,
-      this.requestsEl,
       composer,
     );
     this.update(initialChatState, options);
@@ -440,7 +446,6 @@ export class ChatPanel {
     }
 
     this.renderMessages();
-    this.renderRequests();
     this.updateSendState();
   }
 
@@ -1029,7 +1034,6 @@ export class ChatPanel {
       tab.className = "session-tab";
       tab.classList.toggle("active", session.id === this.options.activeSessionId);
       tab.dataset.testid = `session-tab-${session.id}`;
-      tab.onclick = () => this.options.onSelectSession(session.id);
 
       const badge = document.createElement("span");
       badge.className = "session-tab-badge";
@@ -1038,6 +1042,19 @@ export class ChatPanel {
       label.className = "session-tab-label";
       label.textContent = session.title;
       tab.append(badge, label);
+      tab.onclick = () => {
+        const now = Date.now();
+        const isDoubleClick =
+          this.lastTabClick.id === session.id &&
+          now - this.lastTabClick.time < 400;
+        if (isDoubleClick) {
+          this.lastTabClick = { id: null, time: 0 };
+          this.beginRenameSession(tab, label, session);
+          return;
+        }
+        this.lastTabClick = { id: session.id, time: now };
+        this.options.onSelectSession(session.id);
+      };
 
       if (session.streaming) {
         const busy = document.createElement("span");
@@ -1080,6 +1097,48 @@ export class ChatPanel {
     this.tabsEl.appendChild(add);
   }
 
+  private beginRenameSession(
+    tab: HTMLButtonElement,
+    label: HTMLSpanElement,
+    session: SessionTabInfo,
+  ): void {
+    if (tab.querySelector(".session-tab-rename")) return;
+    const input = document.createElement("input");
+    input.type = "text";
+    input.className = "session-tab-rename";
+    input.dataset.testid = `session-rename-${session.id}`;
+    input.value = session.title;
+    input.autocomplete = "off";
+    input.spellcheck = false;
+    label.replaceWith(input);
+    input.focus();
+    input.select();
+
+    let finished = false;
+    const finish = (save: boolean) => {
+      if (finished) return;
+      finished = true;
+      const title = input.value.trim();
+      if (save && title && title !== session.title) {
+        this.options.onRenameSession(session.id, title);
+      }
+      input.replaceWith(label);
+    };
+
+    input.onkeydown = (event) => {
+      if (event.key === "Enter") {
+        event.preventDefault();
+        finish(true);
+      } else if (event.key === "Escape") {
+        event.preventDefault();
+        finish(false);
+      }
+    };
+    input.onclick = (event) => event.stopPropagation();
+    input.ondblclick = (event) => event.stopPropagation();
+    input.onblur = () => finish(true);
+  }
+
   private renderMessages(): void {
     const previousScrollTop = this.messagesEl.scrollTop;
     const shouldStick = this.stickToBottom;
@@ -1095,6 +1154,8 @@ export class ChatPanel {
       hint.textContent = t(this.options.language, "chatEmptyHint");
       empty.append(title, hint);
       this.messagesEl.appendChild(empty);
+      this.messagesEl.appendChild(this.requestsEl);
+      this.renderRequests();
       return;
     }
 
@@ -1172,6 +1233,9 @@ export class ChatPanel {
       thinking.textContent = t(this.options.language, "chatThinking");
       this.messagesEl.appendChild(thinking);
     }
+
+    this.messagesEl.appendChild(this.requestsEl);
+    this.renderRequests();
 
     if (shouldStick) {
       this.messagesEl.scrollTop = this.messagesEl.scrollHeight;
@@ -1334,6 +1398,7 @@ export class ChatPanel {
 
     const body = document.createElement("div");
     body.className = "chat-tool-body";
+    const prompts = questionPrompts(tool);
     const files = document.createElement("div");
     files.className = "chat-tool-files";
     if (tool.files.length > 0) {
@@ -1357,31 +1422,35 @@ export class ChatPanel {
       });
     }
 
-    const inputText = this.formatInput(tool.input);
-    if (inputText) {
-      body.appendChild(
-        this.toolSection(lang, "chatToolInput", inputText, ""),
-      );
-    }
-    if (tool.output) {
-      body.appendChild(
-        this.toolSection(
-          lang,
-          "chatToolOutput",
-          this.clip(tool.output, 8000),
-          "",
-        ),
-      );
-    }
-    if (tool.error) {
-      body.appendChild(
-        this.toolSection(
-          lang,
-          "chatToolError",
-          this.clip(tool.error, 4000),
-          "error",
-        ),
-      );
+    if (prompts) {
+      body.appendChild(renderQuestionTool(tool, prompts));
+    } else {
+      const inputText = this.formatInput(tool.input);
+      if (inputText) {
+        body.appendChild(
+          this.toolSection(lang, "chatToolInput", inputText, ""),
+        );
+      }
+      if (tool.output) {
+        body.appendChild(
+          this.toolSection(
+            lang,
+            "chatToolOutput",
+            this.clip(tool.output, 8000),
+            "",
+          ),
+        );
+      }
+      if (tool.error) {
+        body.appendChild(
+          this.toolSection(
+            lang,
+            "chatToolError",
+            this.clip(tool.error, 4000),
+            "error",
+          ),
+        );
+      }
     }
     details.appendChild(body);
     container.append(header);
@@ -1535,36 +1604,6 @@ export class ChatPanel {
     return true;
   }
 
-  private optionLabel(field: OpenCodeFormField, value: string): string {
-    return (
-      field.options?.find((option) => option.value === value)?.label ?? value
-    );
-  }
-
-  private formAnswerSummary(form: ChatForm): string {
-    if (!form.answer) return "";
-    const parts: string[] = [];
-    for (const field of form.fields) {
-      if (field.hidden || field.type === "external") continue;
-      const value = form.answer[field.key];
-      if (value === undefined || value === null) continue;
-      let display: string;
-      if (Array.isArray(value)) {
-        display = value
-          .map((item) => this.optionLabel(field, String(item)))
-          .join(", ");
-      } else if (typeof value === "boolean") {
-        display = value
-          ? t(this.options.language, "chatFormYes")
-          : t(this.options.language, "chatFormNo");
-      } else {
-        display = this.optionLabel(field, String(value));
-      }
-      parts.push(`${field.title || field.key}: ${display}`);
-    }
-    return parts.join(" · ");
-  }
-
   private renderForm(form: ChatForm): HTMLElement {
     const lang = this.options.language;
     const card = document.createElement("div");
@@ -1580,13 +1619,8 @@ export class ChatPanel {
       status.className = "chat-form-status answered";
       status.textContent = t(lang, "chatFormAnswered");
       card.appendChild(status);
-      const summary = this.formAnswerSummary(form);
-      if (summary) {
-        const detail = document.createElement("div");
-        detail.className = "chat-form-summary";
-        detail.textContent = summary;
-        card.appendChild(detail);
-      }
+      const detail = renderAnsweredForm(form, lang);
+      if (detail) card.appendChild(detail);
       return card;
     }
 

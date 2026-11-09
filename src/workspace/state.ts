@@ -3,6 +3,7 @@ import { AppSettings, FileTreeNode, MenuUiState, OpenTab } from "../types";
 export const DEFAULT_SETTINGS: AppSettings = {
   language: "es",
   theme: "dark",
+  colorTheme: "bradbit",
   fontSize: 15,
   wordWrap: true,
   lineNumbers: false,
@@ -216,11 +217,15 @@ export function isFountainPath(path: string): boolean {
   return /\.(fountain|spmd)$/i.test(path);
 }
 
+export function canPreviewPath(path: string): boolean {
+  return isMarkdownPath(path) || isFountainPath(path);
+}
+
 export function toggleTabViewMode(state: TabListState, path: string): TabListState {
   return {
     ...state,
     tabs: state.tabs.map((tab) => {
-      if (tab.path !== path || !isMarkdownPath(tab.path)) return tab;
+      if (tab.path !== path || !canPreviewPath(tab.path)) return tab;
       return {
         ...tab,
         viewMode: tab.viewMode === "preview" ? "edit" : "preview",

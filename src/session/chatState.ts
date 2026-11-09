@@ -29,6 +29,7 @@ export interface ChatToolCall {
   error: string;
   executed: boolean;
   files: string[];
+  answers: string[][];
 }
 
 export type ChatPart =
@@ -149,6 +150,7 @@ function toolFromHistory(tool: OpenCodeToolCall): ChatToolCall {
     error: tool.error,
     executed: tool.executed,
     files: [...tool.files],
+    answers: (tool.answers ?? []).map((answer) => [...answer]),
   };
 }
 
@@ -455,6 +457,15 @@ function toolFromEvent(data: Record<string, unknown>): ChatToolCall | null {
     files: Array.isArray(tool.files)
       ? tool.files.filter((file): file is string => typeof file === "string")
       : [],
+    answers: Array.isArray(tool.answers)
+      ? tool.answers.map((answer) =>
+          Array.isArray(answer)
+            ? answer.filter(
+                (label): label is string => typeof label === "string",
+              )
+            : [],
+        )
+      : [],
   };
 }
 
@@ -491,6 +502,10 @@ function upsertToolPart(
           error: incoming.error || part.tool.error,
           executed: incoming.executed || part.tool.executed,
           files: incoming.files.length > 0 ? incoming.files : part.tool.files,
+          answers:
+            incoming.answers.length > 0
+              ? incoming.answers
+              : part.tool.answers,
         },
       };
     });

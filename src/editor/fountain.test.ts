@@ -3,6 +3,7 @@ import {
   classifyFountainLine,
   createFountainState,
   estimateFountainPages,
+  fountainLineClass,
   FountainState,
 } from "./fountain";
 
@@ -81,6 +82,19 @@ describe("Fountain line classification (T-1.2.2)", () => {
     const [first, second] = classify(["Texto normal.", "UNA ACCIÓN EN MAYÚSCULAS"]);
     expect(first.type).toBe("action");
     expect(second.type).toBe("action");
+  });
+});
+
+describe("Fountain line classes (T-2.5.5)", () => {
+  it("maps each line type to a stable editor class", () => {
+    expect(fountainLineClass("scene")).toBe("fountain-line-scene");
+    expect(fountainLineClass("character")).toBe("fountain-line-character");
+    expect(fountainLineClass("dialogue")).toBe("fountain-line-dialogue");
+    expect(fountainLineClass("parenthetical")).toBe(
+      "fountain-line-parenthetical",
+    );
+    expect(fountainLineClass("transition")).toBe("fountain-line-transition");
+    expect(fountainLineClass("action")).toBe("fountain-line-action");
   });
 });
 

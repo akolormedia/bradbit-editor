@@ -152,7 +152,9 @@ describe("workspace tab state (Story 1.1)", () => {
     state = toggleTabViewMode(state, "biblia/premisa.md");
     expect(state.tabs[0].viewMode).toBe("preview");
 
-    // Non-Markdown tabs never switch to preview.
+    // Fountain also has a preview mode.
+    state = toggleTabViewMode(state, "guion/acto-1.fountain");
+    expect(state.tabs[1].viewMode).toBe("preview");
     state = toggleTabViewMode(state, "guion/acto-1.fountain");
     expect(state.tabs[1].viewMode).toBe("edit");
 

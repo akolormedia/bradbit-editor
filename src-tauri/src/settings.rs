@@ -10,6 +10,8 @@ const MAX_RECENTS: usize = 10;
 pub struct AppSettings {
     pub language: String,
     pub theme: String,
+    #[serde(default = "default_color_theme")]
+    pub color_theme: String,
     pub font_size: u32,
     pub word_wrap: bool,
     pub line_numbers: bool,
@@ -30,11 +32,16 @@ fn default_terminal_command() -> String {
     "shell".to_string()
 }
 
+fn default_color_theme() -> String {
+    "bradbit".to_string()
+}
+
 impl Default for AppSettings {
     fn default() -> Self {
         Self {
             language: "es".to_string(),
             theme: "dark".to_string(),
+            color_theme: default_color_theme(),
             font_size: 15,
             word_wrap: true,
             line_numbers: false,
@@ -147,6 +154,7 @@ mod tests {
         let updated = AppSettings {
             language: "en".to_string(),
             theme: "light".to_string(),
+            color_theme: "nord".to_string(),
             font_size: 18,
             word_wrap: false,
             line_numbers: true,
@@ -185,5 +193,6 @@ mod tests {
         assert!(parsed.hidden_models.is_empty());
         assert!(parsed.recent_models.is_empty());
         assert_eq!(parsed.terminal_command, "shell");
+        assert_eq!(parsed.color_theme, "bradbit");
     }
 }
