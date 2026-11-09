@@ -234,6 +234,8 @@ export interface OpenCodeToolCall {
   error: string;
   executed: boolean;
   files: string[];
+  /** Selected labels for each question of a `question` tool call. */
+  answers?: string[][];
 }
 
 export type OpenCodeMessagePart =

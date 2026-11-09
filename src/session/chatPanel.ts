@@ -16,6 +16,11 @@ import {
 import { SessionTabInfo } from "./sessionTabs";
 import { projectRelativePath } from "./chatPaths";
 import {
+  questionPrompts,
+  renderAnsweredForm,
+  renderQuestionTool,
+} from "./questionCards";
+import {
   activeCompletion,
   CompletionToken,
   filterCommands,
@@ -1393,6 +1398,7 @@ export class ChatPanel {
 
     const body = document.createElement("div");
     body.className = "chat-tool-body";
+    const prompts = questionPrompts(tool);
     const files = document.createElement("div");
     files.className = "chat-tool-files";
     if (tool.files.length > 0) {
@@ -1416,31 +1422,35 @@ export class ChatPanel {
       });
     }
 
-    const inputText = this.formatInput(tool.input);
-    if (inputText) {
-      body.appendChild(
-        this.toolSection(lang, "chatToolInput", inputText, ""),
-      );
-    }
-    if (tool.output) {
-      body.appendChild(
-        this.toolSection(
-          lang,
-          "chatToolOutput",
-          this.clip(tool.output, 8000),
-          "",
-        ),
-      );
-    }
-    if (tool.error) {
-      body.appendChild(
-        this.toolSection(
-          lang,
-          "chatToolError",
-          this.clip(tool.error, 4000),
-          "error",
-        ),
-      );
+    if (prompts) {
+      body.appendChild(renderQuestionTool(tool, prompts));
+    } else {
+      const inputText = this.formatInput(tool.input);
+      if (inputText) {
+        body.appendChild(
+          this.toolSection(lang, "chatToolInput", inputText, ""),
+        );
+      }
+      if (tool.output) {
+        body.appendChild(
+          this.toolSection(
+            lang,
+            "chatToolOutput",
+            this.clip(tool.output, 8000),
+            "",
+          ),
+        );
+      }
+      if (tool.error) {
+        body.appendChild(
+          this.toolSection(
+            lang,
+            "chatToolError",
+            this.clip(tool.error, 4000),
+            "error",
+          ),
+        );
+      }
     }
     details.appendChild(body);
     container.append(header);
@@ -1594,36 +1604,6 @@ export class ChatPanel {
     return true;
   }
 
-  private optionLabel(field: OpenCodeFormField, value: string): string {
-    return (
-      field.options?.find((option) => option.value === value)?.label ?? value
-    );
-  }
-
-  private formAnswerSummary(form: ChatForm): string {
-    if (!form.answer) return "";
-    const parts: string[] = [];
-    for (const field of form.fields) {
-      if (field.hidden || field.type === "external") continue;
-      const value = form.answer[field.key];
-      if (value === undefined || value === null) continue;
-      let display: string;
-      if (Array.isArray(value)) {
-        display = value
-          .map((item) => this.optionLabel(field, String(item)))
-          .join(", ");
-      } else if (typeof value === "boolean") {
-        display = value
-          ? t(this.options.language, "chatFormYes")
-          : t(this.options.language, "chatFormNo");
-      } else {
-        display = this.optionLabel(field, String(value));
-      }
-      parts.push(`${field.title || field.key}: ${display}`);
-    }
-    return parts.join(" · ");
-  }
-
   private renderForm(form: ChatForm): HTMLElement {
     const lang = this.options.language;
     const card = document.createElement("div");
@@ -1639,13 +1619,8 @@ export class ChatPanel {
       status.className = "chat-form-status answered";
       status.textContent = t(lang, "chatFormAnswered");
       card.appendChild(status);
-      const summary = this.formAnswerSummary(form);
-      if (summary) {
-        const detail = document.createElement("div");
-        detail.className = "chat-form-summary";
-        detail.textContent = summary;
-        card.appendChild(detail);
-      }
+      const detail = renderAnsweredForm(form, lang);
+      if (detail) card.appendChild(detail);
       return card;
     }
 

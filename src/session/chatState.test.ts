@@ -299,6 +299,38 @@ describe("chat tools and permissions (T-2.1.3)", () => {
     });
   });
 
+  it("keeps the chosen answers of question tool calls", () => {
+    let state = appendUserMessage(ready(), "Pregunta");
+    state = applyOpenCodeEvent(state, {
+      type: "session.tool.success",
+      data: {
+        sessionID: "ses_test",
+        assistantMessageID: "msg_a",
+        tool: {
+          id: "tool_q",
+          name: "question",
+          status: "completed",
+          input: {
+            questions: [{ question: "¿Seguimos?", options: [{ label: "No" }] }],
+          },
+          output: "User has answered your questions",
+          error: "",
+          executed: false,
+          files: [],
+          answers: [["No"]],
+        },
+      },
+    });
+
+    const assistant = state.messages.find(
+      (message) => message.role === "assistant",
+    )!;
+    expect(assistant.parts[0]).toMatchObject({
+      type: "tool",
+      tool: { name: "question", answers: [["No"]] },
+    });
+  });
+
   it("adds pending permissions, answers them and can roll back", () => {
     let state = ready();
     state = applyOpenCodeEvent(state, {

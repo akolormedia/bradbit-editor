@@ -323,6 +323,7 @@ describe("chat panel (T-2.1.1)", () => {
                 error: "",
                 executed: true,
                 files: ["/proyecto/notas.md"],
+                answers: [],
               },
             },
           ],
@@ -525,7 +526,76 @@ describe("chat panel (T-2.1.1)", () => {
       ],
     });
     expect(panel.element.textContent).toContain("Respondida");
-    expect(panel.element.textContent).toContain("Color favorito: Rojo");
+    const answered = panel.element.querySelector<HTMLElement>(
+      '[data-testid="form-answer-frm_1"]',
+    )!;
+    expect(answered.textContent).toContain("Color favorito");
+    expect(answered.textContent).toContain("Rojo");
+    const selected = answered.querySelectorAll(".chat-question-option.selected");
+    expect(selected).toHaveLength(1);
+    expect(selected[0].textContent).toContain("Rojo");
+  });
+
+  it("renders question tool calls as friendly options with the chosen answer (T-2.5.8)", () => {
+    const panel = new ChatPanel(options());
+    panel.update({
+      ...readyState(),
+      messages: [
+        {
+          id: "msg_q",
+          role: "assistant",
+          parts: [
+            {
+              type: "tool",
+              tool: {
+                id: "tool_q",
+                name: "question",
+                status: "completed",
+                input: {
+                  questions: [
+                    {
+                      header: "Siguiente paso",
+                      question: "¿Qué quieres hacer ahora?",
+                      options: [
+                        {
+                          label: "Revisar Ep.1",
+                          description: "Leer el borrador y dar notas",
+                        },
+                        {
+                          label: "Pausar",
+                          description: "Dejar aquí por ahora",
+                        },
+                      ],
+                    },
+                  ],
+                },
+                output:
+                  'User has answered your questions: "¿Qué quieres hacer ahora?"="Pausar".',
+                error: "",
+                executed: false,
+                files: [],
+                answers: [["Pausar"]],
+              },
+            },
+          ],
+        },
+      ],
+    });
+
+    panel.element
+      .querySelector<HTMLButtonElement>('[data-testid="tool-toggle-tool_q"]')
+      ?.click();
+    const card = panel.element.querySelector<HTMLElement>(
+      '[data-testid="tool-question-tool_q"]',
+    )!;
+    expect(card.textContent).toContain("¿Qué quieres hacer ahora?");
+    expect(card.textContent).toContain("Revisar Ep.1");
+    expect(card.textContent).toContain("Pausar");
+    expect(card.textContent).not.toContain('"questions"');
+    expect(card.textContent).not.toContain("User has answered");
+    const selected = card.querySelectorAll(".chat-question-option.selected");
+    expect(selected).toHaveLength(1);
+    expect(selected[0].textContent).toContain("Pausar");
   });
 
   it("shows the current model and effort and filters the model picker (T-2.2.3)", () => {
