@@ -43,6 +43,16 @@ function readyState() {
 }
 
 describe("chat panel (T-2.1.1)", () => {
+  it("uses the welcome copy in the welcome chat variant (T-2.5.10)", () => {
+    const panel = new ChatPanel(options({ variant: "welcome" }));
+    expect(panel.element.classList.contains("chat-panel-welcome")).toBe(true);
+    const input = panel.element.querySelector<HTMLTextAreaElement>(
+      '[data-testid="chat-input"]',
+    )!;
+    expect(input.placeholder).toContain("Cuéntame qué quieres escribir");
+    expect(panel.element.textContent).toContain("Empecemos tu proyecto");
+  });
+
   it("shows the empty state, connection status and composer instructions", () => {
     const panel = new ChatPanel(options());
     expect(panel.element.textContent).toContain("Habla con tu agente");

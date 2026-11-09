@@ -11,6 +11,18 @@ export const translations = {
     welcomeTitle: "Bradbit Editor",
     welcomeSubtitle:
       "Editor de texto agnóstico para escritura creativa. Abre cualquier carpeta para empezar a escribir.",
+    welcomeChatTitle: "Crea tu proyecto conversando",
+    welcomeChatSubtitle:
+      "Cuéntame qué quieres escribir y te ayudo a elegir plantilla, nombre y estructura.",
+    welcomeChatPlaceholder: "Cuéntame qué quieres escribir…",
+    welcomeChatEmptyTitle: "Empecemos tu proyecto",
+    welcomeChatEmptyHint:
+      "Cuéntame la idea, el género o el formato. Te ayudo a elegir la plantilla y el nombre.",
+    welcomeChatSessionTitle: "Nuevo proyecto",
+    welcomeDraftTitle: "Proyecto propuesto",
+    welcomeDraftHint:
+      "Revisa los datos, elige la carpeta y confirma para crear el proyecto.",
+    welcomeManualTitle: "O empieza a mano",
     explorerTitle: "Archivos",
     newFile: "Nuevo archivo",
     untitledFileName: "Sin título {count}",
@@ -405,6 +417,18 @@ export const translations = {
     welcomeTitle: "Bradbit Editor",
     welcomeSubtitle:
       "Agnostic creative writing text editor. Open any folder to start writing.",
+    welcomeChatTitle: "Create your project by chatting",
+    welcomeChatSubtitle:
+      "Tell me what you want to write and I'll help you choose a template, name and structure.",
+    welcomeChatPlaceholder: "Tell me what you want to write…",
+    welcomeChatEmptyTitle: "Let's start your project",
+    welcomeChatEmptyHint:
+      "Tell me the idea, genre or format. I'll help you choose the template and name.",
+    welcomeChatSessionTitle: "New project",
+    welcomeDraftTitle: "Proposed project",
+    welcomeDraftHint:
+      "Review the details, choose a folder and confirm to create the project.",
+    welcomeManualTitle: "Or start by hand",
     explorerTitle: "Files",
     newFile: "New File",
     untitledFileName: "Untitled {count}",

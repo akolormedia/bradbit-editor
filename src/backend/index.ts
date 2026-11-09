@@ -32,6 +32,9 @@ import {
   RecentProject,
   SearchMatch,
   TemplateInfo,
+  WelcomeProjectRequest,
+  WelcomeTemplate,
+  WelcomeWorkspace,
 } from "../types";
 import { DEFAULT_SETTINGS, isAlwaysHiddenEntry, isConfigEntry } from "../workspace/state";
 
@@ -500,6 +503,24 @@ export const backend = {
       name,
       destination,
     });
+  },
+
+  async welcomePrepareWorkspace(
+    templates: WelcomeTemplate[],
+  ): Promise<WelcomeWorkspace> {
+    if (!isTauriEnvironment()) {
+      throw new Error("The welcome chat requires the desktop app");
+    }
+    return tauriInvoke<WelcomeWorkspace>("welcome_prepare_workspace", {
+      templates,
+    });
+  },
+
+  async welcomeReadProjectRequest(): Promise<WelcomeProjectRequest | null> {
+    if (!isTauriEnvironment()) return null;
+    return tauriInvoke<WelcomeProjectRequest | null>(
+      "welcome_read_project_request",
+    );
   },
 
   async saveCurrentAsTemplate(folderPath: string, name: string): Promise<TemplateInfo> {

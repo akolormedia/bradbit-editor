@@ -11,6 +11,7 @@ pub mod search;
 pub mod settings;
 pub mod templates;
 pub mod watcher;
+pub mod welcome;
 pub mod workspace_state;
 
 use fs_ops::{FileTreeNode, OpenedFolder};
@@ -91,6 +92,18 @@ fn save_current_as_template(
     name: String,
 ) -> Result<templates::TemplateInfo, String> {
     templates::save_folder_as_template(&folder_path, &name)
+}
+
+#[tauri::command]
+fn welcome_prepare_workspace(
+    templates: Vec<welcome::WelcomeTemplate>,
+) -> Result<welcome::WelcomeWorkspace, String> {
+    welcome::prepare_workspace(&templates)
+}
+
+#[tauri::command]
+fn welcome_read_project_request() -> Result<Option<welcome::WelcomeProjectRequest>, String> {
+    welcome::read_project_request()
 }
 
 #[tauri::command]
@@ -691,6 +704,8 @@ pub fn run() {
             list_templates,
             create_project_from_template,
             save_current_as_template,
+            welcome_prepare_workspace,
+            welcome_read_project_request,
             open_templates_folder,
             start_watching,
             stop_watching,

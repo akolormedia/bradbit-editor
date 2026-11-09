@@ -28,6 +28,7 @@ import {
   RecentProject,
   SearchMatch,
   TemplateInfo,
+  WelcomeTemplate,
 } from "./types";
 import { copyTextToClipboard } from "./workspace/clipboard";
 import { createDocumentHeader } from "./workspace/documentHeader";
@@ -70,6 +71,12 @@ import { projectRelativePath } from "./session/chatPaths";
 import { parseSlashCommand } from "./session/composer";
 import { SessionView, toggleSessionView } from "./session/sessionView";
 import { SettingsPanel } from "./settings/settingsPanel";
+import {
+  WelcomeDraft,
+  validateWelcomeDraft,
+  welcomeDraftFromRequest,
+} from "./welcome/projectDraft";
+import { renderWelcomeDraftCard } from "./welcome/projectDraftCard";
 import type { SettingsCategoryId } from "./settings/catalog";
 import { TerminalPanel } from "./terminal/terminalPanel";
 import { applyColorTheme, resolveColorMode } from "./theme/palettes";
@@ -229,6 +236,17 @@ class BradbitApp {
     },
   };
   private chatPanel: ChatPanel | null = null;
+  private welcomeChatState: ChatState = { ...initialChatState };
+  private welcomeChatPanel: ChatPanel | null = null;
+  private welcomeSessionId: string | null = null;
+  private welcomeWorkspacePath: string | null = null;
+  private welcomeDefaultDestination = "";
+  private welcomeTemplates: WelcomeTemplate[] = [];
+  private welcomeModels: OpenCodeModel[] = [];
+  private welcomeUnlisten: (() => void) | null = null;
+  private welcomeDraft: WelcomeDraft | null = null;
+  private welcomeDraftHost: HTMLElement | null = null;
+  private welcomeGeneration = 0;
   private chatVisible = true;
   private editorVisible = true;
   private sessionWidth = 430;
@@ -300,6 +318,7 @@ class BradbitApp {
       console.error("Could not stop the file watcher", err);
     });
     void this.stopChatSession();
+    this.stopWelcomeChat();
     this.stopTerminalSession();
     this.chatPanel = null;
     this.folder = null;
@@ -328,6 +347,7 @@ class BradbitApp {
   public async openFolderByPath(path: string): Promise<void> {
     try {
       const opened = await backend.openFolder(path, this.settings.showConfigFiles);
+      this.stopWelcomeChat();
       await this.stopChatSession();
       this.stopTerminalSession();
       this.chatPanel = null;
@@ -1148,6 +1168,407 @@ class BradbitApp {
     return flattenFileTree(
       filterTreeNodes(this.folder?.tree ?? [], this.settings.showConfigFiles),
     );
+  }
+
+  private welcomeSessionTabs(): SessionTabInfo[] {
+    if (!this.welcomeSessionId) return [];
+    return [
+      {
+        id: this.welcomeSessionId,
+        title:
+          this.welcomeChatState.title ||
+          t(this.settings.language, "welcomeChatSessionTitle"),
+        streaming: this.welcomeChatState.streaming,
+        error: this.welcomeChatState.status === "error",
+      },
+    ];
+  }
+
+  private ensureWelcomeChatPanel(): ChatPanel {
+    if (!this.welcomeChatPanel) {
+      this.welcomeChatPanel = new ChatPanel({
+        variant: "welcome",
+        language: this.settings.language,
+        projectName: t(this.settings.language, "welcomeChatTitle"),
+        projectRoot: this.welcomeWorkspacePath ?? "",
+        sessions: this.welcomeSessionTabs(),
+        activeSessionId: this.welcomeSessionId,
+        canCreateSession: false,
+        onSend: (text) => void this.sendWelcomeMessage(text),
+        onStop: () => this.stopWelcomeGeneration(),
+        onRetry: () => void this.retryWelcomeChat(),
+        onSelectSession: () => {},
+        onCreateSession: () => {},
+        onCloseSession: () => {},
+        onRenameSession: () => {},
+        onOpenToolFile: () => {},
+        onPermissionReply: (requestId, decision) =>
+          void this.replyWelcomePermission(requestId, decision),
+        onFormReply: (formId, answer) =>
+          void this.replyWelcomeForm(formId, answer),
+        kit: { agents: [], commands: [], skills: [] },
+        models: this.welcomeModels,
+        projectFiles: [],
+        hiddenModels: this.settings.hiddenModels,
+        recentModels: this.settings.recentModels,
+        onAgentChange: (agent) => void this.changeWelcomeAgent(agent),
+        onModelChange: (providerId, modelId, variant) =>
+          void this.changeWelcomeModel(providerId, modelId, variant),
+        onManageModels: () => this.openManageModels(),
+      });
+    }
+    this.updateWelcomeChatPanel();
+    return this.welcomeChatPanel;
+  }
+
+  private updateWelcomeChatPanel(): void {
+    this.welcomeChatPanel?.update(this.welcomeChatState, {
+      language: this.settings.language,
+      projectName: t(this.settings.language, "welcomeChatTitle"),
+      projectRoot: this.welcomeWorkspacePath ?? "",
+      sessions: this.welcomeSessionTabs(),
+      activeSessionId: this.welcomeSessionId,
+      canCreateSession: false,
+      kit: { agents: [], commands: [], skills: [] },
+      models: this.welcomeModels,
+      projectFiles: [],
+      hiddenModels: this.settings.hiddenModels,
+      recentModels: this.settings.recentModels,
+    });
+  }
+
+  private async startWelcomeChat(): Promise<void> {
+    if (this.folder || !isTauriEnvironment()) return;
+    if (
+      this.welcomeChatState.status === "starting" ||
+      this.welcomeChatState.status === "ready"
+    ) {
+      return;
+    }
+    const generation = ++this.welcomeGeneration;
+    this.welcomeChatState = chatStarting(initialChatState);
+    this.updateWelcomeChatPanel();
+    try {
+      const templates = await backend.listTemplates();
+      if (generation !== this.welcomeGeneration || this.folder) return;
+      this.welcomeTemplates = templates.map((template) => ({
+        id: template.id,
+        name: template.name,
+        description: template.description,
+      }));
+      const workspace = await backend.welcomePrepareWorkspace(
+        this.welcomeTemplates,
+      );
+      if (generation !== this.welcomeGeneration || this.folder) return;
+      this.welcomeWorkspacePath = workspace.path;
+      this.welcomeDefaultDestination = workspace.defaultDestination;
+
+      await backend.opencodeStop();
+      if (generation !== this.welcomeGeneration || this.folder) return;
+      await backend.opencodeStart(workspace.path);
+      if (generation !== this.welcomeGeneration || this.folder) return;
+      try {
+        this.welcomeModels = await backend.opencodeListModels();
+      } catch (err) {
+        console.error("Could not list OpenCode models", err);
+        this.welcomeModels = [];
+      }
+      const session = await backend.opencodeCreateSession(
+        t(this.settings.language, "welcomeChatSessionTitle"),
+      );
+      if (generation !== this.welcomeGeneration || this.folder) return;
+      this.welcomeSessionId = session.id;
+      const messages = await backend.opencodeSessionMessages(session.id);
+      const permissions = await backend.opencodePendingPermissions(session.id);
+      const forms = await backend.opencodePendingForms(session.id);
+      if (generation !== this.welcomeGeneration || this.folder) return;
+      this.welcomeChatState = formsLoaded(
+        permissionsLoaded(chatFromHistory(session, messages), permissions),
+        forms,
+      );
+      this.welcomeUnlisten?.();
+      this.welcomeUnlisten = await backend.listenOpenCodeEvents((event) =>
+        this.handleWelcomeOpenCodeEvent(event),
+      );
+      if (generation !== this.welcomeGeneration) return;
+      this.updateWelcomeChatPanel();
+      await this.refreshWelcomeDraft();
+    } catch (err) {
+      if (generation !== this.welcomeGeneration) return;
+      this.welcomeChatState = chatFailed(
+        chatStarting(initialChatState),
+        err instanceof Error ? err.message : String(err),
+      );
+      this.updateWelcomeChatPanel();
+    }
+  }
+
+  private stopWelcomeChat(): void {
+    this.welcomeGeneration += 1;
+    this.welcomeUnlisten?.();
+    this.welcomeUnlisten = null;
+    const sessionId = this.welcomeSessionId;
+    const streaming = this.welcomeChatState.streaming;
+    this.welcomeSessionId = null;
+    this.welcomeWorkspacePath = null;
+    this.welcomeChatState = { ...initialChatState };
+    this.welcomeChatPanel = null;
+    this.welcomeModels = [];
+    this.welcomeDraft = null;
+    this.welcomeDraftHost = null;
+    if (streaming && sessionId) {
+      void backend.opencodeAbort(sessionId).catch(() => {});
+    }
+  }
+
+  private async retryWelcomeChat(): Promise<void> {
+    this.stopWelcomeChat();
+    this.render();
+    await this.startWelcomeChat();
+  }
+
+  private async sendWelcomeMessage(rawText: string): Promise<void> {
+    const sessionId = this.welcomeSessionId;
+    if (
+      !sessionId ||
+      this.welcomeChatState.status !== "ready" ||
+      this.welcomeChatState.streaming
+    ) {
+      return;
+    }
+    const text = rawText.trim();
+    if (!text) return;
+    this.welcomeChatState = appendUserMessage(this.welcomeChatState, text);
+    this.welcomeChatPanel?.clearDraft();
+    this.updateWelcomeChatPanel();
+    try {
+      await backend.opencodeSend(sessionId, text);
+    } catch (err) {
+      this.welcomeChatState = chatSendFailed(
+        this.welcomeChatState,
+        err instanceof Error ? err.message : String(err),
+      );
+      this.updateWelcomeChatPanel();
+    }
+  }
+
+  private stopWelcomeGeneration(): void {
+    const sessionId = this.welcomeSessionId;
+    if (!sessionId) return;
+    this.welcomeChatState = { ...this.welcomeChatState, streaming: false };
+    this.updateWelcomeChatPanel();
+    void backend.opencodeAbort(sessionId).catch(() => {});
+  }
+
+  private handleWelcomeOpenCodeEvent(event: OpenCodeEvent): void {
+    this.welcomeChatState = applyOpenCodeEvent(
+      this.welcomeChatState,
+      event,
+      this.settings.language,
+    );
+    this.updateWelcomeChatPanel();
+    if (
+      event.type === "session.execution.succeeded" ||
+      event.type === "session.execution.interrupted" ||
+      event.type === "session.execution.failed" ||
+      event.type === "session.tool.success"
+    ) {
+      void this.refreshWelcomeDraft();
+    }
+  }
+
+  private async replyWelcomePermission(
+    requestId: string,
+    decision: "once" | "always" | "reject",
+  ): Promise<void> {
+    const sessionId = this.welcomeSessionId;
+    if (!sessionId) return;
+    const replied = chatPermissionReplied(
+      this.welcomeChatState,
+      requestId,
+      decision,
+    );
+    this.welcomeChatState = replied;
+    this.updateWelcomeChatPanel();
+    try {
+      await backend.opencodeReplyPermission(sessionId, requestId, decision);
+    } catch (err) {
+      this.welcomeChatState = chatPermissionFailed(
+        this.welcomeChatState,
+        requestId,
+        err instanceof Error ? err.message : String(err),
+      );
+      this.updateWelcomeChatPanel();
+    }
+  }
+
+  private async replyWelcomeForm(
+    formId: string,
+    answer: Record<string, unknown>,
+  ): Promise<void> {
+    const sessionId = this.welcomeSessionId;
+    if (!sessionId) return;
+    const answered = chatFormAnswered(this.welcomeChatState, formId, answer);
+    this.welcomeChatState = answered;
+    this.updateWelcomeChatPanel();
+    try {
+      await backend.opencodeReplyForm(sessionId, formId, answer);
+    } catch (err) {
+      this.welcomeChatState = chatFormFailed(
+        this.welcomeChatState,
+        formId,
+        err instanceof Error ? err.message : String(err),
+      );
+      this.updateWelcomeChatPanel();
+    }
+  }
+
+  private async changeWelcomeAgent(agent: string | null): Promise<void> {
+    const sessionId = this.welcomeSessionId;
+    if (!sessionId) return;
+    const target = agent || "build";
+    try {
+      await backend.opencodeSwitchAgent(sessionId, target);
+      this.welcomeChatState = { ...this.welcomeChatState, agent: target };
+      this.updateWelcomeChatPanel();
+    } catch (err) {
+      this.welcomeChatState = chatSendFailed(
+        this.welcomeChatState,
+        err instanceof Error ? err.message : String(err),
+      );
+      this.updateWelcomeChatPanel();
+    }
+  }
+
+  private async changeWelcomeModel(
+    providerId: string,
+    modelId: string,
+    variant?: string,
+  ): Promise<void> {
+    const sessionId = this.welcomeSessionId;
+    if (!sessionId) return;
+    try {
+      await backend.opencodeSwitchModel(
+        sessionId,
+        providerId,
+        modelId,
+        variant,
+      );
+      this.welcomeChatState = {
+        ...this.welcomeChatState,
+        model: `${providerId}/${modelId}${variant ? `#${variant}` : ""}`,
+      };
+      this.updateWelcomeChatPanel();
+    } catch (err) {
+      this.welcomeChatState = chatSendFailed(
+        this.welcomeChatState,
+        err instanceof Error ? err.message : String(err),
+      );
+      this.updateWelcomeChatPanel();
+    }
+  }
+
+  private async refreshWelcomeDraft(): Promise<void> {
+    if (
+      this.folder ||
+      !this.welcomeWorkspacePath ||
+      this.welcomeDraft ||
+      !isTauriEnvironment()
+    ) {
+      return;
+    }
+    try {
+      const request = await backend.welcomeReadProjectRequest();
+      if (!request || this.folder || this.welcomeDraft) return;
+      this.welcomeDraft = welcomeDraftFromRequest(
+        request,
+        this.welcomeTemplates,
+        this.welcomeDefaultDestination,
+      );
+      this.updateWelcomeDraftHost();
+    } catch (err) {
+      console.error("Could not read the welcome project request", err);
+    }
+  }
+
+  private updateWelcomeDraftHost(): void {
+    const host = this.welcomeDraftHost;
+    if (!host) return;
+    host.innerHTML = "";
+    if (!this.welcomeDraft) return;
+    host.appendChild(
+      renderWelcomeDraftCard({
+        language: this.settings.language,
+        draft: this.welcomeDraft,
+        templates: this.welcomeTemplates,
+        onChange: (patch) => this.changeWelcomeDraft(patch),
+        onChooseDestination: () => void this.chooseWelcomeDestination(),
+        onCreate: () => void this.createWelcomeProject(),
+      }),
+    );
+  }
+
+  private changeWelcomeDraft(patch: Partial<WelcomeDraft>): void {
+    if (!this.welcomeDraft) return;
+    this.welcomeDraft = { ...this.welcomeDraft, ...patch, error: "" };
+  }
+
+  private async chooseWelcomeDestination(): Promise<void> {
+    if (!this.welcomeDraft) return;
+    try {
+      const picked = await backend.pickFolderDialog();
+      if (picked && this.welcomeDraft) {
+        this.welcomeDraft = { ...this.welcomeDraft, destination: picked };
+        this.updateWelcomeDraftHost();
+      }
+    } catch (err) {
+      this.showStatusNotice(err instanceof Error ? err.message : String(err));
+    }
+  }
+
+  private async createWelcomeProject(): Promise<void> {
+    const draft = this.welcomeDraft;
+    if (!draft || draft.submitting) return;
+    const validation = validateWelcomeDraft(draft);
+    if (validation) {
+      draft.error = t(
+        this.settings.language,
+        this.projectErrorKey(validation),
+      );
+      this.updateWelcomeDraftHost();
+      return;
+    }
+    draft.submitting = true;
+    draft.error = "";
+    this.updateWelcomeDraftHost();
+    try {
+      const created = await backend.createProjectFromTemplate(
+        draft.templateId,
+        draft.name.trim(),
+        draft.destination.trim(),
+      );
+      this.welcomeDraft = null;
+      this.stopWelcomeChat();
+      await this.openFolderByPath(created.path);
+      this.showStatusNotice(
+        t(
+          this.settings.language,
+          created.gitInitialized ? "projectCreated" : "projectCreatedNoGit",
+        ),
+      );
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      if (this.welcomeDraft) {
+        this.welcomeDraft = {
+          ...this.welcomeDraft,
+          submitting: false,
+          error: message,
+        };
+        this.updateWelcomeDraftHost();
+      } else {
+        this.showStatusNotice(message);
+      }
+    }
   }
 
   private persistWorkspaceState(): void {
@@ -2745,17 +3166,49 @@ class BradbitApp {
   private renderWelcomeScreen(lang: AppSettings["language"]): HTMLElement {
     const container = document.createElement("main");
     container.className = "welcome-screen";
+    const layout = document.createElement("div");
+    layout.className = "welcome-layout";
 
-    const card = document.createElement("div");
-    card.className = "welcome-card";
+    const chatCard = document.createElement("section");
+    chatCard.className = "welcome-card welcome-chat-card";
+    const chatHeader = document.createElement("div");
+    chatHeader.className = "welcome-header";
+    const chatTitle = document.createElement("h1");
+    chatTitle.textContent = t(lang, "welcomeChatTitle");
+    const chatSubtitle = document.createElement("p");
+    chatSubtitle.textContent = t(lang, "welcomeChatSubtitle");
+    chatHeader.append(chatTitle, chatSubtitle);
 
-    const header = document.createElement("div");
-    header.className = "welcome-header";
-    const h1 = document.createElement("h1");
-    h1.textContent = t(lang, "welcomeTitle");
-    const p = document.createElement("p");
-    p.textContent = t(lang, "welcomeSubtitle");
-    header.append(h1, p);
+    const chatHost = document.createElement("div");
+    chatHost.className = "welcome-chat-host";
+    if (isTauriEnvironment()) {
+      chatHost.appendChild(this.ensureWelcomeChatPanel().element);
+    } else {
+      const unavailable = document.createElement("p");
+      unavailable.className = "welcome-chat-unavailable";
+      unavailable.textContent = t(lang, "chatNoDesktop");
+      chatHost.appendChild(unavailable);
+    }
+
+    chatCard.append(chatHeader, chatHost);
+    layout.appendChild(chatCard);
+
+    const sideColumn = document.createElement("div");
+    sideColumn.className = "welcome-side-column";
+    this.welcomeDraftHost = document.createElement("div");
+    this.welcomeDraftHost.className = "welcome-draft-host";
+    sideColumn.appendChild(this.welcomeDraftHost);
+
+    const sideCard = document.createElement("section");
+    sideCard.className = "welcome-card welcome-side-card";
+
+    const sideHeader = document.createElement("div");
+    sideHeader.className = "welcome-header";
+    const sideTitle = document.createElement("h2");
+    sideTitle.textContent = t(lang, "welcomeManualTitle");
+    const sideHint = document.createElement("p");
+    sideHint.textContent = t(lang, "welcomeSubtitle");
+    sideHeader.append(sideTitle, sideHint);
 
     const actions = document.createElement("div");
     actions.className = "welcome-actions";
@@ -2821,8 +3274,14 @@ class BradbitApp {
       recentsSec.appendChild(list);
     }
 
-    card.append(header, actions, recentsSec);
-    container.appendChild(card);
+    sideCard.append(sideHeader, actions, recentsSec);
+    sideColumn.appendChild(sideCard);
+    layout.appendChild(sideColumn);
+    container.appendChild(layout);
+    this.updateWelcomeDraftHost();
+    if (!this.folder && isTauriEnvironment()) {
+      void this.startWelcomeChat();
+    }
     return container;
   }
 

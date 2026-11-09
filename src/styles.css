@@ -3267,11 +3267,20 @@ textarea.text-input {
 .welcome-screen {
   flex: 1;
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: center;
-  padding: 32px;
+  padding: 24px 32px 32px;
   background: var(--bg-editor);
   overflow-y: auto;
+}
+
+.welcome-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1.55fr) minmax(300px, 0.85fr);
+  gap: 20px;
+  width: 100%;
+  max-width: 1120px;
+  align-items: start;
 }
 
 .welcome-card {
@@ -3284,6 +3293,120 @@ textarea.text-input {
   display: flex;
   flex-direction: column;
   gap: 20px;
+}
+
+.welcome-chat-card {
+  max-width: none;
+  min-height: 560px;
+  padding: 22px 22px 18px;
+}
+
+.welcome-chat-host {
+  display: flex;
+  min-height: 0;
+  height: min(520px, calc(100vh - 260px));
+}
+
+.welcome-chat-host .chat-panel {
+  flex: 1;
+  min-width: 0;
+}
+
+.welcome-chat-host .chat-panel-welcome .session-tabs {
+  display: none;
+}
+
+.welcome-chat-host .chat-panel-welcome .session-context {
+  display: none;
+}
+
+.welcome-chat-host .chat-panel-welcome .chat-plus-btn {
+  display: none;
+}
+
+.welcome-chat-host .chat-panel-welcome .session-header {
+  display: none;
+}
+
+.welcome-chat-host .chat-panel-welcome .chat-messages {
+  padding-left: 4px;
+  padding-right: 4px;
+}
+
+.welcome-chat-unavailable {
+  margin: auto;
+  max-width: 360px;
+  text-align: center;
+  color: var(--text-muted);
+  line-height: 1.5;
+}
+
+.welcome-side-column {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  min-width: 0;
+}
+
+.welcome-draft-host {
+  display: flex;
+  flex-direction: column;
+}
+
+.welcome-draft-host:empty {
+  display: none;
+}
+
+.welcome-chat-host .chat-panel-welcome .chat-tool {
+  display: none;
+}
+
+.welcome-draft-card {
+  max-width: none;
+  padding: 18px;
+  gap: 14px;
+  border-color: var(--accent);
+  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.12);
+}
+
+.welcome-draft-card .welcome-header h2 {
+  margin: 0 0 4px;
+  font-size: 16px;
+  font-weight: 700;
+}
+
+.welcome-draft-card .welcome-header p {
+  font-size: 12px;
+}
+
+.welcome-draft-footer {
+  justify-content: flex-end;
+  padding-top: 0;
+}
+
+.welcome-side-card {
+  max-width: none;
+  padding: 22px;
+}
+
+.welcome-side-card .welcome-header h2 {
+  margin: 0 0 6px;
+  font-size: 16px;
+  font-weight: 700;
+}
+
+@media (max-width: 900px) {
+  .welcome-layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .welcome-chat-card {
+    min-height: 0;
+  }
+
+  .welcome-chat-host {
+    height: 46vh;
+  }
 }
 
 .welcome-header h1 {

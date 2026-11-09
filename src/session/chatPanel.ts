@@ -34,6 +34,7 @@ function setCheckIcon(element: HTMLElement, active: boolean): void {
 }
 
 export interface ChatPanelOptions {
+  variant?: "session" | "welcome";
   language: Language;
   projectName: string;
   projectRoot: string;
@@ -127,6 +128,9 @@ export class ChatPanel {
     this.draftSessionId = options.activeSessionId;
     this.element = document.createElement("div");
     this.element.className = "chat-panel";
+    if (options.variant === "welcome") {
+      this.element.classList.add("chat-panel-welcome");
+    }
     this.element.dataset.testid = "chat-panel";
 
     this.tabsEl = document.createElement("div");
@@ -411,8 +415,15 @@ export class ChatPanel {
       this.renderModelList();
     }
 
-    this.titleEl.textContent = t(lang, "chatHeaderTitle");
-    this.composer.placeholder = t(lang, "chatComposerPlaceholder");
+    const welcome = this.options.variant === "welcome";
+    this.titleEl.textContent = t(
+      lang,
+      welcome ? "welcomeChatTitle" : "chatHeaderTitle",
+    );
+    this.composer.placeholder = t(
+      lang,
+      welcome ? "welcomeChatPlaceholder" : "chatComposerPlaceholder",
+    );
     this.renderTabs();
 
     const status = this.statusText(state);
@@ -1144,14 +1155,21 @@ export class ChatPanel {
     const shouldStick = this.stickToBottom;
     this.messagesEl.innerHTML = "";
     if (this.state.messages.length === 0) {
+      const welcome = this.options.variant === "welcome";
       const empty = document.createElement("div");
       empty.className = "chat-empty";
       const title = document.createElement("div");
       title.className = "chat-empty-title";
-      title.textContent = t(this.options.language, "chatEmptyTitle");
+      title.textContent = t(
+        this.options.language,
+        welcome ? "welcomeChatEmptyTitle" : "chatEmptyTitle",
+      );
       const hint = document.createElement("div");
       hint.className = "chat-empty-hint";
-      hint.textContent = t(this.options.language, "chatEmptyHint");
+      hint.textContent = t(
+        this.options.language,
+        welcome ? "welcomeChatEmptyHint" : "chatEmptyHint",
+      );
       empty.append(title, hint);
       this.messagesEl.appendChild(empty);
       this.messagesEl.appendChild(this.requestsEl);

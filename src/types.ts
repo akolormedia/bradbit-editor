@@ -324,6 +324,22 @@ export interface OpenCodeForm {
   message?: string | null;
 }
 
+export interface WelcomeTemplate {
+  id: string;
+  name: string;
+  description: string;
+}
+
+export interface WelcomeWorkspace {
+  path: string;
+  defaultDestination: string;
+}
+
+export interface WelcomeProjectRequest {
+  name: string;
+  templateId: string;
+}
+
 export interface WorkspaceLayout {
   sessionWidth: number;
   chatVisible: boolean;
