@@ -101,7 +101,7 @@ const writerHighlightStyle = HighlightStyle.define([
   {
     tag: tags.monospace,
     fontFamily: "var(--font-mono)",
-    color: "var(--cm-dialogue)",
+    color: "var(--text-primary)",
     backgroundColor: "var(--bg-surface)",
   },
   {
