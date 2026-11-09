@@ -4,6 +4,40 @@ All notable changes to Bradbit Editor are documented in this file.
 
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the versioning follows [SemVer](https://semver.org/). `alpha` versions are early tests: behavior may change and there are no compatibility guarantees.
 
+## [0.1.0-alpha.2] - 2026-11-08
+
+Second alpha. This release focuses on the editor and chat polish from Story 2.5. **Only tested on macOS.**
+
+### Added
+
+**Chat**
+- Agent responses are rendered as Markdown (headings, lists, tables, code, quotes and links) instead of plain text.
+- Session rename from the tab: double-click, edit inline and press Enter. The title is persisted in OpenCode.
+- Questions and answers live inside the chat history. Answered cards show the question, its options and the selected answer with a check.
+- Pending questions and permissions stay actionable inside the scroll, not in a fixed area above the composer.
+
+**Editor**
+- Markdown/MDX documents open in preview by default, inside a centered reading card with border, padding and shadow.
+- Markdown/MDX syntax highlighting in edit mode: headings, bold, italics, links, lists, quotes, code fences and markers.
+- Monochrome Markdown preview: hierarchy is kept by size, weight and spacing instead of colored headings.
+- **Fountain on-screen preview:** paginated screenplay pages (US Letter, Courier, page numbers, `(MORE)` / `(CONT'D)`) with an Edit/Preview toggle. Each tab remembers its mode.
+- Color themes in *Settings → Appearance*: Bradbit, Nord, Solarized and Gruvbox, each with light and dark variants. They apply to the app, editor highlighting, previews and terminal.
+
+### Changed
+- The welcome screen no longer shows **Open guionista-kit folder** as a primary action. The kit remains available as a template in **New project**.
+- The file explorer reserves no space for hidden hover actions: file names use the full width at rest, and hover actions no longer push the tree downward.
+
+### Fixed
+- Session rename now accepts `204 No Content` from OpenCode and keeps the optimistic title update.
+- Fountain highlighting classifies the whole document, including blank lines. Character cues are green and dialogue has its own red color instead of looking like action text.
+- Remaining Spanish Rust error messages were translated.
+
+### Known limitations
+- Creating a project by chatting from the welcome screen (`T-2.5.10`) is deferred: the exploratory branch is saved but not included in this alpha. Project creation remains available through **New project**.
+- The app is not signed or notarized. On first launch on macOS, right-click the app and choose **Open**.
+- The chat requires OpenCode to be installed and configured.
+- Only tested on macOS.
+
 ## [0.1.0-alpha.1] - 2026-11-07
 
 First alpha release. It is meant to test the complete workflow: writing, versioning with Git, and working with the OpenCode agent. **Only tested on macOS.**
