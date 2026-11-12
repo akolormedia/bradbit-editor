@@ -1,8 +1,13 @@
 import { t } from "../i18n";
-import { AppSettings, Language } from "../types";
+import { AppSettings, ByokProviderStatus, Language } from "../types";
 import { COLOR_THEMES, ColorThemeId } from "../theme/palettes";
 import { createIcon } from "../ui/icons";
 import { createIconButton } from "../ui/iconButton";
+import {
+  BYOK_PRESETS,
+  byokDraft,
+  ByokDraft,
+} from "./byok";
 import {
   matchingCategoryIds,
   SETTINGS_CATEGORIES,
@@ -24,10 +29,18 @@ export interface SettingsGithubState {
   tokenDraft: string;
 }
 
+export interface SettingsByokState {
+  providers: ByokProviderStatus[];
+  keyDrafts: Record<string, string>;
+  busyId: string | null;
+  error: string;
+}
+
 export interface SettingsPanelOptions {
   language: Language;
   settings: AppSettings;
   github: SettingsGithubState;
+  byok: SettingsByokState;
   initialCategory: SettingsCategoryId;
   initialQuery: string;
   modalError?: string;
@@ -40,6 +53,11 @@ export interface SettingsPanelOptions {
   onDisconnectGithub: () => void;
   onOpenGithubTokenPage: () => void;
   onManageModels: () => void;
+  onByokAdd: (draft: ByokDraft) => void;
+  onByokRemove: (providerId: string) => void;
+  onByokKeyDraft: (providerId: string, value: string) => void;
+  onByokConnect: (providerId: string) => void;
+  onByokDisconnect: (providerId: string) => void;
   onClose: () => void;
 }
 
@@ -668,6 +686,7 @@ export class SettingsPanel {
   }
 
   private renderModels(has: (id: string) => boolean): void {
+    if (has("byok")) this.renderByok();
     if (!has("models")) return;
     const group = document.createElement("div");
     group.className = "settings-control-stack";
@@ -692,6 +711,236 @@ export class SettingsPanel {
         group,
       ),
     );
+  }
+
+  private byokKindLabel(kind: string): string {
+    if (kind === "custom") return t(this.options.language, "settingsByokCustom");
+    return BYOK_PRESETS.find((preset) => preset.kind === kind)?.name ?? kind;
+  }
+
+  private renderByok(): void {
+    const language = this.options.language;
+    const byok = this.options.byok;
+    const group = document.createElement("div");
+    group.className = "settings-control-stack byok-stack";
+    group.dataset.testid = "settings-byok";
+
+    if (byok.error) {
+      const error = document.createElement("div");
+      error.className = "error-banner";
+      error.dataset.testid = "byok-error";
+      error.textContent = byok.error;
+      group.appendChild(error);
+    }
+
+    if (byok.providers.length === 0) {
+      const empty = document.createElement("p");
+      empty.className = "settings-hint";
+      empty.textContent = t(language, "settingsByokEmpty");
+      group.appendChild(empty);
+    }
+
+    for (const provider of byok.providers) {
+      group.appendChild(this.byokProviderCard(provider));
+    }
+    group.appendChild(this.byokAddForm());
+
+    this.contentEl.appendChild(
+      this.row(
+        t(language, "settingsByokTitle"),
+        t(language, "settingsByokHint"),
+        group,
+      ),
+    );
+  }
+
+  private byokProviderCard(provider: ByokProviderStatus): HTMLElement {
+    const language = this.options.language;
+    const busy = this.options.byok.busyId === provider.id;
+    const card = document.createElement("div");
+    card.className = "byok-provider";
+    card.dataset.testid = `byok-provider-${provider.id}`;
+
+    const header = document.createElement("div");
+    header.className = "byok-provider-header";
+    const title = document.createElement("div");
+    title.className = "byok-provider-name";
+    title.textContent = provider.name;
+    const status = document.createElement("span");
+    status.className = `byok-status ${provider.hasKey ? "connected" : "missing"}`;
+    status.textContent = t(
+      language,
+      provider.hasKey ? "settingsByokConnected" : "settingsByokMissingKey",
+    );
+    header.append(title, status);
+
+    const meta = document.createElement("div");
+    meta.className = "byok-provider-meta";
+    const kind = document.createElement("span");
+    kind.textContent = this.byokKindLabel(provider.kind);
+    const env = document.createElement("code");
+    env.textContent = provider.envVar;
+    meta.append(kind, env);
+
+    const keyRow = document.createElement("div");
+    keyRow.className = "byok-key-row";
+    const input = document.createElement("input");
+    input.type = "password";
+    input.className = "text-input";
+    input.dataset.testid = `byok-key-${provider.id}`;
+    input.value = this.options.byok.keyDrafts[provider.id] ?? "";
+    input.placeholder = t(
+      language,
+      provider.hasKey ? "settingsByokKeyReplace" : "settingsByokKeyPlaceholder",
+    );
+    input.disabled = busy;
+    input.autocomplete = "off";
+    input.spellcheck = false;
+    input.oninput = () => {
+      this.options.onByokKeyDraft(provider.id, input.value);
+      updateSaveState();
+    };
+    input.onkeydown = (event) => {
+      if (event.key === "Enter" && input.value.trim() && !busy) {
+        event.preventDefault();
+        this.options.onByokConnect(provider.id);
+      }
+    };
+
+    const save = document.createElement("button");
+    save.type = "button";
+    save.className = "toolbar-btn primary";
+    save.dataset.testid = `byok-connect-${provider.id}`;
+    save.disabled = busy || !input.value.trim();
+    save.textContent = busy
+      ? t(language, "settingsByokWorking")
+      : t(
+          language,
+          provider.hasKey ? "settingsByokSaveKey" : "settingsByokConnect",
+        );
+    save.onclick = () => this.options.onByokConnect(provider.id);
+    const updateSaveState = () => {
+      save.disabled = busy || !input.value.trim();
+    };
+    keyRow.append(input, save);
+
+    if (provider.hasKey) {
+      const disconnect = document.createElement("button");
+      disconnect.type = "button";
+      disconnect.className = "toolbar-btn";
+      disconnect.dataset.testid = `byok-disconnect-${provider.id}`;
+      disconnect.disabled = busy;
+      disconnect.textContent = t(language, "settingsByokDisconnect");
+      disconnect.onclick = () => this.options.onByokDisconnect(provider.id);
+      keyRow.appendChild(disconnect);
+    }
+
+    const remove = document.createElement("button");
+    remove.type = "button";
+    remove.className = "versions-link-btn byok-remove";
+    remove.dataset.testid = `byok-remove-${provider.id}`;
+    remove.disabled = busy;
+    remove.textContent = t(language, "settingsByokRemove");
+    remove.onclick = () => this.options.onByokRemove(provider.id);
+
+    card.append(header, meta, keyRow, remove);
+    return card;
+  }
+
+  private byokAddForm(): HTMLElement {
+    const language = this.options.language;
+    const form = document.createElement("div");
+    form.className = "byok-add";
+    form.dataset.testid = "byok-add";
+
+    const heading = document.createElement("div");
+    heading.className = "byok-add-title";
+    heading.textContent = t(language, "settingsByokAdd");
+
+    const kindLabel = document.createElement("label");
+    kindLabel.className = "form-label";
+    kindLabel.textContent = t(language, "settingsByokKind");
+    const kind = document.createElement("select");
+    kind.className = "select-input";
+    kind.dataset.testid = "byok-add-kind";
+    for (const preset of BYOK_PRESETS) {
+      const option = document.createElement("option");
+      option.value = preset.kind;
+      option.textContent = preset.name;
+      kind.appendChild(option);
+    }
+    const custom = document.createElement("option");
+    custom.value = "custom";
+    custom.textContent = t(language, "settingsByokCustom");
+    kind.appendChild(custom);
+
+    const customFields = document.createElement("div");
+    customFields.className = "byok-custom-fields";
+    customFields.hidden = true;
+    const field = (
+      id: string,
+      labelKey:
+        | "settingsByokId"
+        | "settingsByokName"
+        | "settingsByokBaseUrl"
+        | "settingsByokModel",
+      placeholder: string,
+    ) => {
+      const wrapper = document.createElement("label");
+      wrapper.className = "byok-field";
+      const label = document.createElement("span");
+      label.className = "form-label";
+      label.textContent = t(language, labelKey);
+      const input = document.createElement("input");
+      input.className = "text-input";
+      input.dataset.testid = id;
+      input.placeholder = placeholder;
+      wrapper.append(label, input);
+      customFields.appendChild(wrapper);
+      return input;
+    };
+    const idInput = field("byok-add-id", "settingsByokId", "mi-proveedor");
+    const nameInput = field("byok-add-name", "settingsByokName", "Mi proveedor");
+    const baseUrlInput = field(
+      "byok-add-base-url",
+      "settingsByokBaseUrl",
+      "https://api.example.com/v1",
+    );
+    const modelInput = field(
+      "byok-add-model",
+      "settingsByokModel",
+      "mi-modelo",
+    );
+
+    kind.onchange = () => {
+      customFields.hidden = kind.value !== "custom";
+    };
+
+    const add = document.createElement("button");
+    add.type = "button";
+    add.className = "toolbar-btn primary";
+    add.dataset.testid = "byok-add-submit";
+    add.textContent = t(language, "settingsByokAddAction");
+    add.onclick = () => {
+      const draft = byokDraft(kind.value as ByokDraft["kind"]);
+      if (kind.value === "custom") {
+        draft.id = idInput.value;
+        draft.name = nameInput.value;
+        draft.baseUrl = baseUrlInput.value;
+        draft.model = modelInput.value;
+      }
+      this.options.onByokAdd(draft);
+    };
+
+    const head = document.createElement("div");
+    head.className = "byok-add-row";
+    const kindField = document.createElement("label");
+    kindField.className = "byok-field";
+    kindField.append(kindLabel, kind);
+    head.append(kindField, add);
+
+    form.append(heading, head, customFields);
+    return form;
   }
 
   private row(

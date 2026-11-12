@@ -39,6 +39,7 @@ describe("settings catalog (T-2.4.4)", () => {
       "gitAuthorEmail",
       "githubAccount",
       "githubToken",
+      "byok",
       "models",
     ]) {
       expect(ids).toContain(id);

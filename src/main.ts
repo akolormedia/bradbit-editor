@@ -6,6 +6,7 @@ import { renderFountainPreview } from "./editor/fountainPreview";
 import { t } from "./i18n";
 import {
   AppSettings,
+  ByokProviderStatus,
   FileTreeNode,
   FsChangeEvent,
   GitBranch,
@@ -71,6 +72,12 @@ import { parseSlashCommand } from "./session/composer";
 import { SessionView, toggleSessionView } from "./session/sessionView";
 import { SettingsPanel } from "./settings/settingsPanel";
 import type { SettingsCategoryId } from "./settings/catalog";
+import {
+  byokProviderFromDraft,
+  ByokDraft,
+  ByokValidationError,
+  validateByokDraft,
+} from "./settings/byok";
 import { TerminalPanel } from "./terminal/terminalPanel";
 import { applyColorTheme, resolveColorMode } from "./theme/palettes";
 import { AppMenu } from "./ui/appMenu";
@@ -216,6 +223,10 @@ class BradbitApp {
   private githubPullRequests: GitHubPullRequest[] = [];
   private githubPrLoading = false;
   private chatState: ChatState = { ...initialChatState };
+  private byokStatus: ByokProviderStatus[] = [];
+  private byokKeyDrafts: Record<string, string> = {};
+  private byokBusyId: string | null = null;
+  private byokError = "";
   private chatSessions = new Map<string, ChatState>();
   private chatSessionOrder: string[] = [];
   private activeChatSessionId: string | null = null;
@@ -713,6 +724,132 @@ class BradbitApp {
         this.render();
       }
     });
+    if (isTauriEnvironment()) {
+      void this.refreshByokStatus().then(() => {
+        if (this.modal.kind === "settings") {
+          this.render();
+        }
+      });
+    }
+  }
+
+  private async refreshByokStatus(): Promise<void> {
+    if (!isTauriEnvironment()) {
+      this.byokStatus = [];
+      return;
+    }
+    try {
+      this.byokStatus = await backend.byokStatus();
+      this.byokError = "";
+    } catch (err) {
+      this.byokError = err instanceof Error ? err.message : String(err);
+    }
+  }
+
+  private byokErrorKey(
+    error: ByokValidationError,
+  ):
+    | "settingsByokErrorId"
+    | "settingsByokErrorName"
+    | "settingsByokErrorBaseUrl"
+    | "settingsByokErrorModel"
+    | "settingsByokErrorDuplicate" {
+    switch (error) {
+      case "id":
+        return "settingsByokErrorId";
+      case "name":
+        return "settingsByokErrorName";
+      case "baseUrl":
+        return "settingsByokErrorBaseUrl";
+      case "model":
+        return "settingsByokErrorModel";
+      case "duplicate":
+        return "settingsByokErrorDuplicate";
+    }
+  }
+
+  private async addByokProvider(draft: ByokDraft): Promise<void> {
+    const validation = validateByokDraft(
+      draft,
+      this.settings.byokProviders.map((provider) => provider.id),
+    );
+    if (validation) {
+      this.byokError = t(this.settings.language, this.byokErrorKey(validation));
+      this.render();
+      return;
+    }
+    const provider = byokProviderFromDraft(draft);
+    this.byokError = "";
+    await this.updateSettings({
+      byokProviders: [...this.settings.byokProviders, provider],
+    });
+    await this.refreshByokStatus();
+    this.render();
+  }
+
+  private async saveByokKey(providerId: string): Promise<void> {
+    if (this.byokBusyId) return;
+    const key = (this.byokKeyDrafts[providerId] ?? "").trim();
+    if (!key) return;
+    this.byokBusyId = providerId;
+    this.byokError = "";
+    this.render();
+    try {
+      await backend.byokSetKey(providerId, key);
+      delete this.byokKeyDrafts[providerId];
+      await this.refreshByokStatus();
+      await this.restartChatForByok();
+    } catch (err) {
+      this.byokError = err instanceof Error ? err.message : String(err);
+    } finally {
+      this.byokBusyId = null;
+      this.render();
+    }
+  }
+
+  private async disconnectByok(providerId: string): Promise<void> {
+    if (this.byokBusyId) return;
+    this.byokBusyId = providerId;
+    this.byokError = "";
+    this.render();
+    try {
+      await backend.byokDeleteKey(providerId);
+      delete this.byokKeyDrafts[providerId];
+      await this.refreshByokStatus();
+      await this.restartChatForByok();
+    } catch (err) {
+      this.byokError = err instanceof Error ? err.message : String(err);
+    } finally {
+      this.byokBusyId = null;
+      this.render();
+    }
+  }
+
+  private async removeByokProvider(providerId: string): Promise<void> {
+    if (this.byokBusyId) return;
+    this.byokBusyId = providerId;
+    this.byokError = "";
+    this.render();
+    try {
+      await backend.byokDeleteKey(providerId);
+      delete this.byokKeyDrafts[providerId];
+      const providers = this.settings.byokProviders.filter(
+        (provider) => provider.id !== providerId,
+      );
+      await this.updateSettings({ byokProviders: providers });
+      await this.refreshByokStatus();
+      await this.restartChatForByok();
+    } catch (err) {
+      this.byokError = err instanceof Error ? err.message : String(err);
+    } finally {
+      this.byokBusyId = null;
+      this.render();
+    }
+  }
+
+  private async restartChatForByok(): Promise<void> {
+    if (!this.folder) return;
+    await this.startChatSession(true);
   }
 
   private async ensureGitHubAccount(force = false): Promise<void> {
@@ -4093,6 +4230,12 @@ class BradbitApp {
           error: this.githubAccountError,
           tokenDraft: this.githubTokenDraft,
         },
+        byok: {
+          providers: this.byokStatus,
+          keyDrafts: this.byokKeyDrafts,
+          busyId: this.byokBusyId,
+          error: this.byokError,
+        },
         initialCategory: this.settingsCategory,
         initialQuery: this.settingsQuery,
         modalError: this.modal.error,
@@ -4111,6 +4254,13 @@ class BradbitApp {
         onDisconnectGithub: () => void this.disconnectGitHub(),
         onOpenGithubTokenPage: () => this.openGitHubTokenPage(),
         onManageModels: () => this.openManageModels(true),
+        onByokAdd: (draft) => void this.addByokProvider(draft),
+        onByokRemove: (providerId) => void this.removeByokProvider(providerId),
+        onByokKeyDraft: (providerId, value) => {
+          this.byokKeyDrafts[providerId] = value;
+        },
+        onByokConnect: (providerId) => void this.saveByokKey(providerId),
+        onByokDisconnect: (providerId) => void this.disconnectByok(providerId),
         onClose: () => this.closeModal(),
       });
       dialog.appendChild(panel.element);

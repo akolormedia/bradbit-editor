@@ -7,6 +7,19 @@ const MAX_RECENTS: usize = 10;
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
+pub struct ByokProvider {
+    pub id: String,
+    pub name: String,
+    pub kind: String,
+    #[serde(default)]
+    pub base_url: Option<String>,
+    #[serde(default)]
+    pub model: Option<String>,
+    pub env_var: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
 pub struct AppSettings {
     pub language: String,
     pub theme: String,
@@ -26,6 +39,8 @@ pub struct AppSettings {
     pub recent_models: Vec<String>,
     #[serde(default = "default_terminal_command")]
     pub terminal_command: String,
+    #[serde(default)]
+    pub byok_providers: Vec<ByokProvider>,
 }
 
 fn default_terminal_command() -> String {
@@ -51,6 +66,7 @@ impl Default for AppSettings {
             hidden_models: Vec::new(),
             recent_models: Vec::new(),
             terminal_command: default_terminal_command(),
+            byok_providers: Vec::new(),
         }
     }
 }
@@ -164,6 +180,14 @@ mod tests {
             hidden_models: vec!["openai/gpt-5".to_string()],
             recent_models: vec!["opencode-go/deepseek-v4.1-flash".to_string()],
             terminal_command: "opencode".to_string(),
+            byok_providers: vec![ByokProvider {
+                id: "deepseek".to_string(),
+                name: "DeepSeek".to_string(),
+                kind: "deepseek".to_string(),
+                base_url: None,
+                model: None,
+                env_var: "DEEPSEEK_API_KEY".to_string(),
+            }],
         };
         save_settings(&updated).unwrap();
         assert_eq!(load_settings().unwrap(), updated);
@@ -194,5 +218,6 @@ mod tests {
         assert!(parsed.recent_models.is_empty());
         assert_eq!(parsed.terminal_command, "shell");
         assert_eq!(parsed.color_theme, "bradbit");
+        assert!(parsed.byok_providers.is_empty());
     }
 }

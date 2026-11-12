@@ -56,10 +56,15 @@ pub struct RunningServer {
 }
 
 impl RunningServer {
-    pub fn spawn(root: &str) -> Result<Self, String> {
+    pub fn spawn(
+        root: &str,
+        env: &[(String, String)],
+        config_content: Option<&str>,
+    ) -> Result<Self, String> {
         let binary = find_binary()?;
         let port = free_port()?;
-        let mut child = Command::new(&binary)
+        let mut command = Command::new(&binary);
+        command
             .args([
                 "serve",
                 "--hostname",
@@ -69,7 +74,14 @@ impl RunningServer {
             ])
             .current_dir(root)
             .stdout(Stdio::piped())
-            .stderr(Stdio::piped())
+            .stderr(Stdio::piped());
+        for (key, value) in env {
+            command.env(key, value);
+        }
+        if let Some(content) = config_content {
+            command.env("OPENCODE_CONFIG_CONTENT", content);
+        }
+        let mut child = command
             .spawn()
             .map_err(|error| format!("Could not start the Bradbit agent runtime: {error}"))?;
 
@@ -461,7 +473,8 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         std::fs::write(dir.path().join("notas.md"), "# Notas\n").unwrap();
         let root = dir.path().to_str().unwrap();
-        let server = RunningServer::spawn(root).expect("start the Bradbit agent runtime");
+        let server =
+            RunningServer::spawn(root, &[], None).expect("start the Bradbit agent runtime");
         let session = server
             .client()
             .create_session("Test")
