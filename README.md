@@ -114,7 +114,7 @@ Desktop text editor for creative writing (`.md`, `.mdx`, `.fountain`, `.txt`), a
 ```bash
 npm install
 npm run fetch:bradbit   # downloads the pinned bradbit-cli sidecar
-npm run tauri build
+npm run tauri build -- --config src-tauri/tauri.sidecar.conf.json
 # The installer is written to src-tauri/target/release/bundle/dmg/
 ```
 
@@ -145,6 +145,6 @@ cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets -- -D warnings
 npm run fetch:bradbit
 npm run tauri dev
 
-# Build the macOS installer (fetches the sidecar in the release workflow)
-npm run tauri build
+# Build the macOS installer with the sidecar (fetch it first)
+npm run tauri build -- --config src-tauri/tauri.sidecar.conf.json
 ```

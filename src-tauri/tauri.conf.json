@@ -26,9 +26,6 @@
   "bundle": {
     "active": true,
     "targets": "all",
-    "externalBin": [
-      "binaries/bradbit"
-    ],
     "icon": [
       "icons/icon.png"
     ]
