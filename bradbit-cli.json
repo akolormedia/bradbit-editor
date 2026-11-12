@@ -1,0 +1,8 @@
+{
+  "repository": "akolormedia/bradbit-cli",
+  "version": "v0.1.0-alpha.1",
+  "assets": {
+    "aarch64-apple-darwin": "bradbit-darwin-arm64",
+    "x86_64-apple-darwin": "bradbit-darwin-x64"
+  }
+}

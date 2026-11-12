@@ -250,7 +250,7 @@ fn build_command(command: &str, root: &str) -> Result<(String, CommandBuilder), 
         "" | "shell" => ("shell".to_string(), shell.clone(), Vec::new()),
         "opencode" => {
             let binary = crate::opencode::find_binary()
-                .map_err(|error| format!("OpenCode binary not found: {error}"))?;
+                .map_err(|error| format!("Bradbit agent runtime not found: {error}"))?;
             (
                 "opencode".to_string(),
                 binary.to_string_lossy().to_string(),

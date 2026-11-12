@@ -6,14 +6,14 @@ Desktop text editor for creative writing (`.md`, `.mdx`, `.fountain`, `.txt`), a
 
 ## Features
 
-- **Integrated chat with OpenCode (`T-2.1.1`):**
+- **Integrated chat with the Bradbit agent runtime (`T-2.1.1`):**
   - Layout in the style of `opencode-desktop`: **writing session on the left** and the `EditorWorkspace` on the right, with a resizable divider.
   - The **Chat** and **Editor** icons in the top bar show or hide each panel without losing the CodeMirror state. When one is hidden, the other uses the full window width, with messages and composer centered.
   - **Multiple session tabs** with `+`, switching and closing. Each tab keeps its history, generation state and composer draft.
   - **Per-project persistence:** reopening the app restores open tabs, the active session, the chat width and the panel state.
   - Starts or reuses **`opencode serve`** automatically for the open folder, creates a session if there is none, and streams the response live.
   - Composer with **Enter to send**, **Shift+Enter** for a new line, and a **Stop** button during generation.
-  - **Live tools with permissions (`T-2.1.3`):** compact cards for `read`, `edit`, `write`, `shell`, searches and skills, with running, completed and error status and expandable input and result details. Clicking a file that was read or edited opens it in the editor; if the tool changed it, the button opens its **Diff** directly. When OpenCode asks for permission, a card offers **Allow once**, **Always allow** or **Reject**.
+  - **Live tools with permissions (`T-2.1.3`):** compact cards for `read`, `edit`, `write`, `shell`, searches and skills, with running, completed and error status and expandable input and result details. Clicking a file that was read or edited opens it in the editor; if the tool changed it, the button opens its **Diff** directly. When the runtime asks for permission, a card offers **Allow once**, **Always allow** or **Reject**.
   - **Interactive questions (`T-2.1.4`):** when the agent uses the `question` tool, a card appears with options, free text and multiple fields. After answering, the card shows **Answered** or **Cancelled**, stays in the chat history and no longer occupies a fixed area above the composer.
   - **Project kit (`T-2.2.1`/`T-2.2.2`):** discovers agents, commands and skills from `.opencode/` and `.bradbit/`, and updates automatically when the kit changes. The composer offers command autocomplete with **`/`**, attachments with **`@`** or the **＋** button, and the editor's **↗** button sends the current selection to the active chat.
   - **Composer in the style of `opencode-desktop` (`T-2.2.3`):** a single panel with a helpful placeholder, a **model** picker with search, recents and provider grouping, a separate **effort/variant** picker, the **↑** send button, and a **＋** menu with a context file, command, kit agent and **Manage models**. In *Settings → Manage models* you can search and enable or disable which models appear. Visibility and recents are saved in the settings.
@@ -21,7 +21,7 @@ Desktop text editor for creative writing (`.md`, `.mdx`, `.fountain`, `.txt`), a
   - **Minimal top bar and application menu (`T-2.4.2`):** the project title and the **Chat/Editor** toggles live at the top. File, edit, view and settings actions are grouped in a dropdown menu with shortcuts. The left panel and terminal toggles are in the bottom bar, next to the branch.
   - **Chat and editor surfaces (`T-2.4.3`):** Chat/Terminal and the `EditorWorkspace` are two independent panels with a border, radius and spacing over the app background, in the style of `opencode-desktop`. The tree and the document share the editor surface, and the dividers keep the drag-relative resize.
   - Shows connection status, actionable errors and context/token usage, and keeps the session history while you switch files.
-  - Uses OpenCode's configuration, agents and models. Bradbit does not store model keys.
+  - Uses the project's `.opencode/` kit, agents and models through the bundled `bradbit` sidecar. Bradbit does not store model keys in the project.
 
 - **Native macOS menu (`Story 1.1.1`):** the system menu bar includes **Bradbit Editor, File, Edit, View and Window**:
   - *File:* Open folder (`⌘O`), Open recent, New project (`⇧⌘N`), Save as template, Open templates folder, Quick open (`⌘P`), New file (`⌘N`), Save (`⌘S`), Export PDF (`⌘E`) and Close tab (`⌘W`).
@@ -100,7 +100,7 @@ Desktop text editor for creative writing (`.md`, `.mdx`, `.fountain`, `.txt`), a
 
 **Requirements**
 - macOS. The alpha has only been tested on macOS.
-- [OpenCode](https://opencode.ai) installed to use the chat. Bradbit looks for it on the `PATH` and in `~/.opencode/bin`.
+- **No separate OpenCode install is required** for the chat: the macOS app bundles the `bradbit` runtime as a sidecar. For source builds, download it with `npm run fetch:bradbit`. An `opencode` binary on `PATH` remains as an optional fallback.
 - Git (optional): needed for the Versions panel and GitHub sync.
 - GitHub token (optional): only needed to publish and sync repositories.
 
@@ -113,9 +113,13 @@ Desktop text editor for creative writing (`.md`, `.mdx`, `.fountain`, `.txt`), a
 
 ```bash
 npm install
+npm run fetch:bradbit   # downloads the pinned bradbit-cli sidecar
 npm run tauri build
 # The installer is written to src-tauri/target/release/bundle/dmg/
 ```
+
+The sidecar version and asset names are pinned in `bradbit-cli.json`. The
+downloaded binaries live in `src-tauri/binaries/` and are not committed.
 
 ## Known limitations (alpha)
 
@@ -137,9 +141,10 @@ npm run build
 cargo test --manifest-path src-tauri/Cargo.toml
 cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets -- -D warnings
 
-# Run in native desktop mode (Tauri)
+# Run in native desktop mode (Tauri); fetch the sidecar first on a fresh checkout
+npm run fetch:bradbit
 npm run tauri dev
 
-# Build the macOS installer
+# Build the macOS installer (fetches the sidecar in the release workflow)
 npm run tauri build
 ```

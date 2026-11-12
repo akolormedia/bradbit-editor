@@ -1,8 +1,9 @@
-//! OpenCode session bridge for the native chat panel.
+//! Agent runtime session bridge for the native chat panel.
 //!
-//! One `opencode serve` process runs per open project. Commands talk to it
-//! through the local HTTP API; events are forwarded to the frontend through
-//! [`server::EVENT_NAME`].
+//! The bundled `bradbit` sidecar (or a compatible `opencode` fallback) runs one
+//! `serve` process per open project. Commands talk to it through the local HTTP
+//! API; events are forwarded to the frontend through [`server::EVENT_NAME`].
+//! The public `OpenCode*` names are kept for protocol compatibility.
 
 pub mod chat;
 pub mod client;
@@ -91,7 +92,7 @@ impl OpenCodeState {
             .map_err(|_| "Could not lock the OpenCode state".to_string())?;
         let server = server
             .as_ref()
-            .ok_or_else(|| "OpenCode is not running".to_string())?;
+            .ok_or_else(|| "The Bradbit agent runtime is not running".to_string())?;
         server.client().prompt(session_id, text)
     }
 
@@ -102,7 +103,7 @@ impl OpenCodeState {
             .map_err(|_| "Could not lock the OpenCode state".to_string())?;
         let server = server
             .as_ref()
-            .ok_or_else(|| "OpenCode is not running".to_string())?;
+            .ok_or_else(|| "The Bradbit agent runtime is not running".to_string())?;
         server.client().interrupt(session_id)
     }
 
@@ -113,7 +114,7 @@ impl OpenCodeState {
             .map_err(|_| "Could not lock the OpenCode state".to_string())?;
         let server = server
             .as_ref()
-            .ok_or_else(|| "OpenCode is not running".to_string())?;
+            .ok_or_else(|| "The Bradbit agent runtime is not running".to_string())?;
         let root = server.root.clone();
         let sessions = server.client().list_sessions()?;
         Ok(sessions
@@ -135,7 +136,7 @@ impl OpenCodeState {
             .map_err(|_| "Could not lock the OpenCode state".to_string())?;
         let server = server
             .as_ref()
-            .ok_or_else(|| "OpenCode is not running".to_string())?;
+            .ok_or_else(|| "The Bradbit agent runtime is not running".to_string())?;
         server.client().create_session(title)
     }
 
@@ -146,7 +147,7 @@ impl OpenCodeState {
             .map_err(|_| "Could not lock the OpenCode state".to_string())?;
         let server = server
             .as_ref()
-            .ok_or_else(|| "OpenCode is not running".to_string())?;
+            .ok_or_else(|| "The Bradbit agent runtime is not running".to_string())?;
         server.client().update_session_title(session_id, title)
     }
 
@@ -157,7 +158,7 @@ impl OpenCodeState {
             .map_err(|_| "Could not lock the OpenCode state".to_string())?;
         let server = server
             .as_ref()
-            .ok_or_else(|| "OpenCode is not running".to_string())?;
+            .ok_or_else(|| "The Bradbit agent runtime is not running".to_string())?;
         server.client().session_messages(session_id)
     }
 
@@ -168,7 +169,7 @@ impl OpenCodeState {
             .map_err(|_| "Could not lock the OpenCode state".to_string())?;
         let server = server
             .as_ref()
-            .ok_or_else(|| "OpenCode is not running".to_string())?;
+            .ok_or_else(|| "The Bradbit agent runtime is not running".to_string())?;
         server.client().pending_permissions(session_id)
     }
 
@@ -184,7 +185,7 @@ impl OpenCodeState {
             .map_err(|_| "Could not lock the OpenCode state".to_string())?;
         let server = server
             .as_ref()
-            .ok_or_else(|| "OpenCode is not running".to_string())?;
+            .ok_or_else(|| "The Bradbit agent runtime is not running".to_string())?;
         server
             .client()
             .reply_permission(session_id, request_id, decision)
@@ -197,7 +198,7 @@ impl OpenCodeState {
             .map_err(|_| "Could not lock the OpenCode state".to_string())?;
         let server = server
             .as_ref()
-            .ok_or_else(|| "OpenCode is not running".to_string())?;
+            .ok_or_else(|| "The Bradbit agent runtime is not running".to_string())?;
         server.client().pending_forms(session_id)
     }
 
@@ -213,7 +214,7 @@ impl OpenCodeState {
             .map_err(|_| "Could not lock the OpenCode state".to_string())?;
         let server = server
             .as_ref()
-            .ok_or_else(|| "OpenCode is not running".to_string())?;
+            .ok_or_else(|| "The Bradbit agent runtime is not running".to_string())?;
         server.client().reply_form(session_id, form_id, answer)
     }
 
@@ -224,7 +225,7 @@ impl OpenCodeState {
             .map_err(|_| "Could not lock the OpenCode state".to_string())?;
         let server = server
             .as_ref()
-            .ok_or_else(|| "OpenCode is not running".to_string())?;
+            .ok_or_else(|| "The Bradbit agent runtime is not running".to_string())?;
         server.client().model_catalog()
     }
 
@@ -235,7 +236,7 @@ impl OpenCodeState {
             .map_err(|_| "Could not lock the OpenCode state".to_string())?;
         let server = server
             .as_ref()
-            .ok_or_else(|| "OpenCode is not running".to_string())?;
+            .ok_or_else(|| "The Bradbit agent runtime is not running".to_string())?;
         server.client().switch_agent(session_id, agent)
     }
 
@@ -252,7 +253,7 @@ impl OpenCodeState {
             .map_err(|_| "Could not lock the OpenCode state".to_string())?;
         let server = server
             .as_ref()
-            .ok_or_else(|| "OpenCode is not running".to_string())?;
+            .ok_or_else(|| "The Bradbit agent runtime is not running".to_string())?;
         server
             .client()
             .switch_model(session_id, provider_id, model_id, variant)
@@ -265,7 +266,7 @@ impl OpenCodeState {
             .map_err(|_| "Could not lock the OpenCode state".to_string())?;
         let server = server
             .as_ref()
-            .ok_or_else(|| "OpenCode is not running".to_string())?;
+            .ok_or_else(|| "The Bradbit agent runtime is not running".to_string())?;
         server.client().run_command(session_id, name, text)
     }
 
