@@ -16,6 +16,7 @@ function options(overrides: Partial<ChatPanelOptions> = {}): ChatPanelOptions {
     onSend: vi.fn(),
     onStop: vi.fn(),
     onRetry: vi.fn(),
+    onOpenSettings: vi.fn(),
     onSelectSession: vi.fn(),
     onCreateSession: vi.fn(),
     onCloseSession: vi.fn(),
@@ -194,6 +195,32 @@ describe("chat panel (T-2.1.1)", () => {
     expect(onRetry).toHaveBeenCalledOnce();
   });
 
+  it("offers a direct settings action for missing provider/model errors (T-3.1.8)", () => {
+    const onOpenSettings = vi.fn();
+    const panel = new ChatPanel(options({ onOpenSettings }));
+    panel.update({
+      ...readyState(),
+      status: "error",
+      error: "The Bradbit agent runtime has no models available.",
+      errorAction: "models",
+    });
+
+    const settings = panel.element.querySelector<HTMLButtonElement>(
+      '[data-testid="chat-error-settings"]',
+    )!;
+    expect(settings.hidden).toBe(false);
+    settings.click();
+    expect(onOpenSettings).toHaveBeenCalledOnce();
+
+    panel.update({
+      ...readyState(),
+      status: "error",
+      error: "Unexpected failure",
+      errorAction: null,
+    });
+    expect(settings.hidden).toBe(true);
+  });
+
   it("renders assistant text as Markdown (T-2.5.1)", () => {
     const panel = new ChatPanel(options());
     let state = appendUserMessage(readyState(), "Hola");
@@ -367,7 +394,7 @@ describe("chat panel (T-2.1.1)", () => {
       ],
     });
 
-    expect(panel.element.textContent).toContain("OpenCode solicita permiso");
+    expect(panel.element.textContent).toContain("El agente solicita permiso");
     expect(panel.element.textContent).toContain("edit · notas.md");
     panel.element
       .querySelector<HTMLButtonElement>('[data-testid="permission-always-per_1"]')

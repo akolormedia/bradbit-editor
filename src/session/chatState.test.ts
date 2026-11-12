@@ -32,7 +32,12 @@ describe("chat state (T-2.1.1)", () => {
     expect(connected.sessionId).toBe("ses_test");
     expect(chatFailed(connected, "sin binario").status).toBe("error");
     expect(chatFailed(connected, "sin binario").error).toBe("sin binario");
-    expect(clearChatError(chatFailed(connected, "x")).error).toBe("");
+    expect(chatFailed(connected, "sin modelos", "models").errorAction).toBe(
+      "models",
+    );
+    expect(clearChatError(chatFailed(connected, "x", "models")).errorAction).toBe(
+      null,
+    );
   });
 
   it("hydrates a session from persisted OpenCode history", () => {

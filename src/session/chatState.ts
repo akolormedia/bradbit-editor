@@ -11,6 +11,7 @@ import {
 } from "../types";
 
 export type ChatStatus = "idle" | "starting" | "ready" | "error";
+export type ChatErrorAction = "models" | null;
 
 export interface ChatTokens {
   input: number;
@@ -75,6 +76,7 @@ export interface ChatState {
   messages: ChatMessage[];
   streaming: boolean;
   error: string;
+  errorAction: ChatErrorAction;
   tokens: ChatTokens | null;
   permissions: ChatPermission[];
   forms: ChatForm[];
@@ -89,6 +91,7 @@ export const initialChatState: ChatState = {
   messages: [],
   streaming: false,
   error: "",
+  errorAction: null,
   tokens: null,
   permissions: [],
   forms: [],
@@ -117,6 +120,7 @@ export function chatStarted(
     agent: session.agent ?? state.agent,
     model: session.model ?? state.model,
     error: "",
+    errorAction: null,
   };
 }
 
@@ -309,12 +313,17 @@ export function chatFormFailed(
   };
 }
 
-export function chatFailed(state: ChatState, message: string): ChatState {
+export function chatFailed(
+  state: ChatState,
+  message: string,
+  action: ChatErrorAction = null,
+): ChatState {
   return {
     ...state,
     status: "error",
     streaming: false,
     error: message,
+    errorAction: action,
   };
 }
 
@@ -323,7 +332,7 @@ export function chatStopped(): ChatState {
 }
 
 export function clearChatError(state: ChatState): ChatState {
-  return { ...state, error: "" };
+  return { ...state, error: "", errorAction: null };
 }
 
 export function appendUserMessage(state: ChatState, text: string): ChatState {
@@ -337,6 +346,7 @@ export function appendUserMessage(state: ChatState, text: string): ChatState {
     messages: [...state.messages, message],
     streaming: true,
     error: "",
+    errorAction: null,
   };
 }
 
@@ -345,6 +355,7 @@ export function chatSendFailed(state: ChatState, message: string): ChatState {
     ...state,
     streaming: false,
     error: message,
+    errorAction: null,
   };
 }
 
@@ -758,6 +769,7 @@ export function applyOpenCodeEvent(
         ...state,
         streaming: false,
         error: message,
+        errorAction: null,
         messages: markAllMessagesIdle(state),
       };
     }
@@ -768,6 +780,7 @@ export function applyOpenCodeEvent(
         status: "error",
         streaming: false,
         error: textOf(data.message) || t(language, "chatErrorConnectionLost"),
+        errorAction: null,
         messages: markAllMessagesIdle(state),
       };
 

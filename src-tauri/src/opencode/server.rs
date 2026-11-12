@@ -115,7 +115,7 @@ impl RunningServer {
             let _ = child.kill();
             let _ = child.wait();
             return Err(
-                "The Bradbit agent runtime has no models available. Run `bradbit auth login` or configure a provider."
+                "The Bradbit agent runtime has no models available. Connect a provider in Settings → AI and models."
                     .to_string(),
             );
         }
