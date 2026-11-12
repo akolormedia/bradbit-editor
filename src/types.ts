@@ -3,6 +3,26 @@ import type { ColorThemeId } from "./theme/palettes";
 export type Language = "es" | "en";
 export type ThemeMode = "dark" | "light" | "system";
 
+export type ByokProviderKind =
+  | "deepseek"
+  | "openrouter"
+  | "openai"
+  | "anthropic"
+  | "custom";
+
+export interface ByokProvider {
+  id: string;
+  name: string;
+  kind: ByokProviderKind;
+  baseUrl?: string;
+  model?: string;
+  envVar: string;
+}
+
+export interface ByokProviderStatus extends ByokProvider {
+  hasKey: boolean;
+}
+
 export interface AppSettings {
   language: Language;
   theme: ThemeMode;
@@ -16,6 +36,7 @@ export interface AppSettings {
   hiddenModels: string[];
   recentModels: string[];
   terminalCommand: string;
+  byokProviders: ByokProvider[];
 }
 
 export interface FileTreeNode {

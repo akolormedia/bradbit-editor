@@ -1,5 +1,6 @@
 import {
   AppSettings,
+  ByokProviderStatus,
   CreatedProject,
   FileTreeNode,
   FsChangeEvent,
@@ -807,6 +808,23 @@ export const backend = {
       base,
       body,
     });
+  },
+
+  async byokStatus(): Promise<ByokProviderStatus[]> {
+    if (!isTauriEnvironment()) return [];
+    return tauriInvoke<ByokProviderStatus[]>("byok_status");
+  },
+
+  async byokSetKey(providerId: string, key: string): Promise<void> {
+    if (!isTauriEnvironment()) {
+      throw new Error("BYOK requires the desktop app");
+    }
+    return tauriInvoke<void>("byok_set_key", { providerId, key });
+  },
+
+  async byokDeleteKey(providerId: string): Promise<void> {
+    if (!isTauriEnvironment()) return;
+    return tauriInvoke<void>("byok_delete_key", { providerId });
   },
 
   async opencodeStart(rootPath: string): Promise<void> {

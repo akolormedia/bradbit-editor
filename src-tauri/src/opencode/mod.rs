@@ -56,7 +56,13 @@ pub struct OpenCodeState {
 }
 
 impl OpenCodeState {
-    pub fn start(&self, app: &AppHandle, root: &str) -> Result<(), String> {
+    pub fn start(
+        &self,
+        app: &AppHandle,
+        root: &str,
+        env: &[(String, String)],
+        config_content: Option<&str>,
+    ) -> Result<(), String> {
         let _start_guard = self
             .start_lock
             .lock()
@@ -73,7 +79,7 @@ impl OpenCodeState {
             *server = None;
         }
 
-        let running = RunningServer::spawn(root)?;
+        let running = RunningServer::spawn(root, env, config_content)?;
         running.start_event_stream(app.clone());
         *server = Some(running);
         Ok(())

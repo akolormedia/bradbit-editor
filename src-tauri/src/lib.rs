@@ -1,3 +1,4 @@
+pub mod byok;
 pub mod cancel;
 pub mod fountain;
 pub mod fs_ops;
@@ -383,12 +384,41 @@ fn github_create_pull_request(
 }
 
 #[tauri::command]
+fn byok_status(
+    secrets: tauri::State<byok::ByokSecrets>,
+) -> Result<Vec<byok::ByokProviderStatus>, String> {
+    let settings = settings::load_settings()?;
+    byok::statuses(&settings, &secrets)
+}
+
+#[tauri::command]
+fn byok_set_key(
+    provider_id: String,
+    key: String,
+    secrets: tauri::State<byok::ByokSecrets>,
+) -> Result<(), String> {
+    secrets.set(&provider_id, &key)
+}
+
+#[tauri::command]
+fn byok_delete_key(
+    provider_id: String,
+    secrets: tauri::State<byok::ByokSecrets>,
+) -> Result<(), String> {
+    secrets.delete(&provider_id)
+}
+
+#[tauri::command]
 fn opencode_start(
     app: tauri::AppHandle,
     root: String,
     state: tauri::State<opencode::OpenCodeState>,
+    secrets: tauri::State<byok::ByokSecrets>,
 ) -> Result<(), String> {
-    state.start(&app, &root)
+    let settings = settings::load_settings()?;
+    let env = byok::runtime_env(&settings, &secrets)?;
+    let config_content = byok::config_content(&settings)?;
+    state.start(&app, &root, &env, config_content.as_deref())
 }
 
 #[tauri::command]
@@ -656,6 +686,7 @@ pub fn run() {
         .manage(MenuContext::default())
         .manage(watcher::WatcherState::default())
         .manage(github::secrets::GitHubSecrets::new())
+        .manage(byok::ByokSecrets::new())
         .manage(opencode::OpenCodeState::default())
         .manage(pty::PtyState::default())
         .setup(|app| {
@@ -721,6 +752,9 @@ pub fn run() {
             github_list_branches,
             github_list_pull_requests,
             github_create_pull_request,
+            byok_status,
+            byok_set_key,
+            byok_delete_key,
             opencode_start,
             opencode_stop,
             opencode_send,

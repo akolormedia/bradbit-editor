@@ -147,6 +147,12 @@ export const SETTINGS_ENTRIES: SettingsEntry[] = [
     descriptionKey: "githubTokenHint",
   },
   {
+    id: "byok",
+    category: "models",
+    labelKey: "settingsByokTitle",
+    descriptionKey: "settingsByokHint",
+  },
+  {
     id: "models",
     category: "models",
     labelKey: "chatModelsTitle",

@@ -3633,6 +3633,132 @@ textarea.text-input {
   flex-wrap: wrap;
 }
 
+/* BYOK providers (T-3.1.9) */
+.byok-stack {
+  min-width: 340px;
+  max-width: 440px;
+}
+
+.byok-provider {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 10px;
+  border: 1px solid var(--border-color);
+  border-radius: 7px;
+  background: var(--bg-surface);
+}
+
+.byok-provider-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.byok-provider-name {
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.byok-status {
+  flex-shrink: 0;
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.byok-status.connected {
+  color: var(--success);
+}
+
+.byok-status.missing {
+  color: var(--text-muted);
+}
+
+.byok-provider-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--text-muted);
+  font-size: 11px;
+}
+
+.byok-provider-meta code {
+  padding: 1px 4px;
+  border-radius: 3px;
+  background: var(--bg-input);
+  font-family: var(--font-mono);
+  font-size: 10px;
+}
+
+.byok-key-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.byok-key-row .text-input {
+  flex: 1;
+  min-width: 0;
+}
+
+.byok-key-row .toolbar-btn,
+.byok-add-row .toolbar-btn {
+  align-self: center;
+  flex-shrink: 0;
+}
+
+.byok-remove {
+  align-self: flex-start;
+  color: var(--danger);
+}
+
+.byok-add {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding-top: 8px;
+  border-top: 1px solid var(--border-color);
+}
+
+.byok-add-title {
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.byok-add-row {
+  display: flex;
+  align-items: flex-end;
+  gap: 8px;
+}
+
+.byok-add-row .byok-field {
+  flex: 1;
+}
+
+.byok-custom-fields {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.byok-custom-fields[hidden] {
+  display: none;
+}
+
+.byok-field {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.byok-field .text-input,
+.byok-add-row .select-input {
+  width: 100%;
+}
+
 .settings-control-group .settings-text-input {
   flex: 1;
   min-width: 180px;

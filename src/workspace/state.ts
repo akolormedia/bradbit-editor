@@ -13,6 +13,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   hiddenModels: [],
   recentModels: [],
   terminalCommand: "shell",
+  byokProviders: [],
 };
 
 const CONFIG_NAMES = new Set([

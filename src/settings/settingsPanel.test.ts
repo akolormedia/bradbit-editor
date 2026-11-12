@@ -16,6 +16,12 @@ function options(
       error: "",
       tokenDraft: "",
     },
+    byok: {
+      providers: [],
+      keyDrafts: {},
+      busyId: null,
+      error: "",
+    },
     initialCategory: "general",
     initialQuery: "",
     onCategoryChange: vi.fn(),
@@ -27,6 +33,11 @@ function options(
     onDisconnectGithub: vi.fn(),
     onOpenGithubTokenPage: vi.fn(),
     onManageModels: vi.fn(),
+    onByokAdd: vi.fn(),
+    onByokRemove: vi.fn(),
+    onByokKeyDraft: vi.fn(),
+    onByokConnect: vi.fn(),
+    onByokDisconnect: vi.fn(),
     onClose: vi.fn(),
     ...overrides,
   };
@@ -221,6 +232,101 @@ describe("settings panel (T-2.4.4)", () => {
 
     connect.click();
     expect(onConnectGithub).toHaveBeenCalledOnce();
+  });
+
+  it("manages BYOK providers, keys and custom endpoints (T-3.1.9)", () => {
+    const onByokKeyDraft = vi.fn();
+    const onByokConnect = vi.fn();
+    const onByokDisconnect = vi.fn();
+    const onByokAdd = vi.fn();
+    const panel = mount(
+      options({
+        initialCategory: "models",
+        byok: {
+          providers: [
+            {
+              id: "deepseek",
+              name: "DeepSeek",
+              kind: "deepseek",
+              envVar: "DEEPSEEK_API_KEY",
+              hasKey: true,
+            },
+            {
+              id: "mi-api",
+              name: "Mi API",
+              kind: "custom",
+              baseUrl: "https://api.example.com/v1",
+              model: "mi-modelo",
+              envVar: "BRADBIT_MI_API_API_KEY",
+              hasKey: false,
+            },
+          ],
+          keyDrafts: {},
+          busyId: null,
+          error: "",
+        },
+        onByokKeyDraft,
+        onByokConnect,
+        onByokDisconnect,
+        onByokAdd,
+      }),
+    );
+
+    expect(panel.element.textContent).toContain("Proveedores y claves");
+    expect(panel.element.textContent).toContain("Conectado");
+    expect(panel.element.textContent).toContain("Sin clave");
+    expect(panel.element.textContent).toContain("DEEPSEEK_API_KEY");
+
+    panel.element
+      .querySelector<HTMLButtonElement>('[data-testid="byok-disconnect-deepseek"]')
+      ?.click();
+    expect(onByokDisconnect).toHaveBeenCalledWith("deepseek");
+
+    const key = panel.element.querySelector<HTMLInputElement>(
+      '[data-testid="byok-key-mi-api"]',
+    )!;
+    const connect = panel.element.querySelector<HTMLButtonElement>(
+      '[data-testid="byok-connect-mi-api"]',
+    )!;
+    expect(connect.disabled).toBe(true);
+    key.value = "sk-test";
+    key.dispatchEvent(new Event("input", { bubbles: true }));
+    expect(onByokKeyDraft).toHaveBeenCalledWith("mi-api", "sk-test");
+    expect(connect.disabled).toBe(false);
+    connect.click();
+    expect(onByokConnect).toHaveBeenCalledWith("mi-api");
+
+    const kind = panel.element.querySelector<HTMLSelectElement>(
+      '[data-testid="byok-add-kind"]',
+    )!;
+    kind.value = "custom";
+    kind.dispatchEvent(new Event("change", { bubbles: true }));
+    const id = panel.element.querySelector<HTMLInputElement>(
+      '[data-testid="byok-add-id"]',
+    )!;
+    const name = panel.element.querySelector<HTMLInputElement>(
+      '[data-testid="byok-add-name"]',
+    )!;
+    const baseUrl = panel.element.querySelector<HTMLInputElement>(
+      '[data-testid="byok-add-base-url"]',
+    )!;
+    const model = panel.element.querySelector<HTMLInputElement>(
+      '[data-testid="byok-add-model"]',
+    )!;
+    id.value = "otro";
+    name.value = "Otro";
+    baseUrl.value = "https://api.otro.com/v1";
+    model.value = "otro-modelo";
+    panel.element
+      .querySelector<HTMLButtonElement>('[data-testid="byok-add-submit"]')
+      ?.click();
+    expect(onByokAdd).toHaveBeenCalledWith({
+      kind: "custom",
+      id: "otro",
+      name: "Otro",
+      baseUrl: "https://api.otro.com/v1",
+      model: "otro-modelo",
+    });
   });
 
   it("shows a no-results state and closes from the header", () => {
