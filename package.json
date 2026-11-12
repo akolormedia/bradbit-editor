@@ -11,7 +11,8 @@
     "preview": "vite preview --port 1420 --strictPort",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
-    "tauri": "tauri"
+    "tauri": "tauri",
+    "fetch:bradbit": "node scripts/fetch-bradbit.mjs"
   },
   "dependencies": {
     "@codemirror/commands": "^6.8.0",

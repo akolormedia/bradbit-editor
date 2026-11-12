@@ -1,14 +1,16 @@
-//! Process lifecycle for `opencode serve`.
+//! Process lifecycle for the Bradbit agent runtime (`bradbit serve`).
 //!
-//! One server runs per project folder on a free localhost port. The server
-//! prints a random Basic-auth password on startup; it is captured in memory,
-//! never logged or returned to the frontend. Killing the child closes the SSE
-//! stream, so the event-forwarding thread ends naturally.
+//! The editor bundles `bradbit` as a Tauri sidecar and falls back to `bradbit`
+//! or `opencode` on `PATH` during development. One server runs per project
+//! folder on a free localhost port. The server prints a random Basic-auth
+//! password on startup; it is captured in memory, never logged or returned to
+//! the frontend. Killing the child closes the SSE stream, so the
+//! event-forwarding thread ends naturally.
 
 use std::collections::VecDeque;
 use std::io::{BufRead, BufReader, Read};
 use std::net::TcpListener;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::process::{Child, Command, Stdio};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{mpsc, Arc, Mutex};
@@ -22,8 +24,28 @@ use super::client::OpenCodeClient;
 use crate::git::redact_secrets;
 
 pub const EVENT_NAME: &str = "bradbit-opencode-event";
+pub const RUNTIME_NAME: &str = "bradbit";
 const START_TIMEOUT: Duration = Duration::from_secs(15);
 const LOG_LIMIT: usize = 40;
+
+#[cfg(all(target_os = "macos", target_arch = "aarch64"))]
+const TARGET_TRIPLE: &str = "aarch64-apple-darwin";
+#[cfg(all(target_os = "macos", target_arch = "x86_64"))]
+const TARGET_TRIPLE: &str = "x86_64-apple-darwin";
+#[cfg(not(any(
+    all(target_os = "macos", target_arch = "aarch64"),
+    all(target_os = "macos", target_arch = "x86_64")
+)))]
+const TARGET_TRIPLE: &str = "";
+
+/// Name Tauri expects for the sidecar in `src-tauri/binaries`.
+fn sidecar_filename() -> String {
+    if TARGET_TRIPLE.is_empty() {
+        "bradbit".to_string()
+    } else {
+        format!("bradbit-{TARGET_TRIPLE}")
+    }
+}
 
 pub struct RunningServer {
     pub root: String,
@@ -49,16 +71,16 @@ impl RunningServer {
             .stdout(Stdio::piped())
             .stderr(Stdio::piped())
             .spawn()
-            .map_err(|error| format!("Could not start OpenCode: {error}"))?;
+            .map_err(|error| format!("Could not start the Bradbit agent runtime: {error}"))?;
 
         let stdout = child
             .stdout
             .take()
-            .ok_or_else(|| "OpenCode did not open stdout".to_string())?;
+            .ok_or_else(|| "The Bradbit agent runtime did not open stdout".to_string())?;
         let stderr = child
             .stderr
             .take()
-            .ok_or_else(|| "OpenCode did not open stderr".to_string())?;
+            .ok_or_else(|| "The Bradbit agent runtime did not open stderr".to_string())?;
         let logs = Arc::new(Mutex::new(VecDeque::new()));
         let (tx, rx) = mpsc::channel();
         spawn_log_reader(stdout, tx.clone(), Arc::clone(&logs));
@@ -70,7 +92,7 @@ impl RunningServer {
                 let _ = child.kill();
                 let _ = child.wait();
                 return Err(start_error(
-                    "OpenCode did not announce its session password",
+                    "The Bradbit agent runtime did not announce its session password",
                     &logs,
                 ));
             }
@@ -87,13 +109,13 @@ impl RunningServer {
         let models = client.list_models().map_err(|error| {
             let _ = child.kill();
             let _ = child.wait();
-            format!("{error}. Configure a provider/model in OpenCode.")
+            format!("{error}. Configure a provider/model in Bradbit.")
         })?;
         if models.is_empty() {
             let _ = child.kill();
             let _ = child.wait();
             return Err(
-                "OpenCode no tiene modelos disponibles. Ejecuta `opencode auth login` o configura un proveedor en OpenCode."
+                "The Bradbit agent runtime has no models available. Run `bradbit auth login` or configure a provider."
                     .to_string(),
             );
         }
@@ -184,7 +206,7 @@ fn wait_until_ready(
             Ok(_) => return Ok(()),
             Err(error) if Instant::now() >= deadline => {
                 return Err(start_error(
-                    &format!("OpenCode did not respond: {error}"),
+                    &format!("The Bradbit agent runtime did not respond: {error}"),
                     logs,
                 ));
             }
@@ -212,44 +234,99 @@ fn free_port() -> Result<u16, String> {
         .map_err(|error| format!("Could not read the local port: {error}"))
 }
 
-pub fn find_binary() -> Result<PathBuf, String> {
-    if let Some(configured) = std::env::var_os("BRADBIT_OPENCODE_BIN") {
-        let path = PathBuf::from(configured);
-        if version_works(&path) {
+#[derive(Debug, Default)]
+struct BinaryCandidates {
+    bundled: Vec<PathBuf>,
+    bradbit: Vec<PathBuf>,
+    opencode: Vec<PathBuf>,
+    override_path: Option<PathBuf>,
+}
+
+fn resolve_binary<F>(candidates: BinaryCandidates, works: F) -> Result<PathBuf, String>
+where
+    F: Fn(&Path) -> bool,
+{
+    for candidate in candidates
+        .bundled
+        .into_iter()
+        .chain(candidates.bradbit)
+        .chain(candidates.opencode)
+    {
+        if works(&candidate) {
+            return Ok(candidate);
+        }
+    }
+
+    if let Some(path) = candidates.override_path {
+        if works(&path) {
             return Ok(path);
         }
         return Err(format!(
-            "BRADBIT_OPENCODE_BIN no apunta a un OpenCode ejecutable: {}",
+            "BRADBIT_OPENCODE_BIN does not point to an executable Bradbit runtime: {}",
             path.display()
         ));
     }
 
-    let mut candidates = vec![PathBuf::from("opencode")];
-    if let Some(paths) = std::env::var_os("PATH") {
-        for directory in std::env::split_paths(&paths) {
-            candidates.push(directory.join("opencode"));
-        }
-    }
-    if let Some(home) = std::env::var_os("HOME") {
-        let home = PathBuf::from(home);
-        candidates.push(home.join(".opencode/bin/opencode"));
-        candidates.push(home.join(".local/bin/opencode"));
-    }
-    candidates.push(PathBuf::from("/opt/homebrew/bin/opencode"));
-    candidates.push(PathBuf::from("/usr/local/bin/opencode"));
-
-    for candidate in candidates {
-        if version_works(&candidate) {
-            return Ok(candidate);
-        }
-    }
     Err(
-        "OpenCode is not installed or its executable was not found. Install it from https://opencode.ai and try again."
+        "The Bradbit agent runtime was not found. Reinstall Bradbit or set BRADBIT_OPENCODE_BIN to a bradbit/opencode executable."
             .to_string(),
     )
 }
 
-fn version_works(path: &PathBuf) -> bool {
+fn bundled_candidates() -> Vec<PathBuf> {
+    let mut candidates = Vec::new();
+    if let Ok(executable) = std::env::current_exe() {
+        if let Some(directory) = executable.parent() {
+            candidates.push(directory.join(RUNTIME_NAME));
+            candidates.push(directory.join(sidecar_filename()));
+        }
+    }
+    #[cfg(debug_assertions)]
+    candidates.push(
+        PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("binaries")
+            .join(sidecar_filename()),
+    );
+    candidates
+}
+
+fn path_candidates() -> (Vec<PathBuf>, Vec<PathBuf>) {
+    let mut bradbit = vec![PathBuf::from(RUNTIME_NAME)];
+    let mut opencode = vec![PathBuf::from("opencode")];
+    if let Some(paths) = std::env::var_os("PATH") {
+        for directory in std::env::split_paths(&paths) {
+            bradbit.push(directory.join(RUNTIME_NAME));
+            opencode.push(directory.join("opencode"));
+        }
+    }
+    if let Some(home) = std::env::var_os("HOME") {
+        let home = PathBuf::from(home);
+        bradbit.push(home.join(".bradbit/bin").join(RUNTIME_NAME));
+        bradbit.push(home.join(".local/bin").join(RUNTIME_NAME));
+        opencode.push(home.join(".opencode/bin/opencode"));
+        opencode.push(home.join(".local/bin/opencode"));
+    }
+    bradbit.push(PathBuf::from("/opt/homebrew/bin").join(RUNTIME_NAME));
+    bradbit.push(PathBuf::from("/usr/local/bin").join(RUNTIME_NAME));
+    opencode.push(PathBuf::from("/opt/homebrew/bin/opencode"));
+    opencode.push(PathBuf::from("/usr/local/bin/opencode"));
+    (bradbit, opencode)
+}
+
+pub fn find_binary() -> Result<PathBuf, String> {
+    let (bradbit, opencode) = path_candidates();
+    resolve_binary(
+        BinaryCandidates {
+            bundled: bundled_candidates(),
+            bradbit,
+            opencode,
+            override_path: std::env::var_os("BRADBIT_OPENCODE_BIN").map(PathBuf::from),
+        },
+        version_works,
+    )
+}
+
+fn version_works(path: &Path) -> bool {
     Command::new(path)
         .arg("--version")
         .stdout(Stdio::null())
@@ -262,14 +339,129 @@ fn version_works(path: &PathBuf) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::collections::HashSet;
+
+    fn path(value: &str) -> PathBuf {
+        PathBuf::from(value)
+    }
+
+    fn available(values: &[&str]) -> impl Fn(&Path) -> bool {
+        let values: HashSet<PathBuf> = values.iter().map(PathBuf::from).collect();
+        move |candidate| values.contains(candidate)
+    }
+
+    fn candidates(
+        bundled: &[&str],
+        bradbit: &[&str],
+        opencode: &[&str],
+        override_path: Option<&str>,
+    ) -> BinaryCandidates {
+        BinaryCandidates {
+            bundled: bundled.iter().map(PathBuf::from).collect(),
+            bradbit: bradbit.iter().map(PathBuf::from).collect(),
+            opencode: opencode.iter().map(PathBuf::from).collect(),
+            override_path: override_path.map(PathBuf::from),
+        }
+    }
 
     #[test]
-    #[ignore = "requiere el binario real de OpenCode y un modelo configurado"]
+    fn bundled_sidecar_wins_over_paths_and_override() {
+        let resolved = resolve_binary(
+            candidates(
+                &["/app/bradbit"],
+                &["/usr/local/bin/bradbit"],
+                &["/usr/local/bin/opencode"],
+                Some("/opt/bradbit"),
+            ),
+            available(&[
+                "/app/bradbit",
+                "/usr/local/bin/bradbit",
+                "/usr/local/bin/opencode",
+                "/opt/bradbit",
+            ]),
+        )
+        .unwrap();
+        assert_eq!(resolved, path("/app/bradbit"));
+    }
+
+    #[test]
+    fn bradbit_path_wins_over_opencode_and_override() {
+        let resolved = resolve_binary(
+            candidates(
+                &[],
+                &["/usr/local/bin/bradbit"],
+                &["/usr/local/bin/opencode"],
+                Some("/opt/bradbit"),
+            ),
+            available(&[
+                "/usr/local/bin/bradbit",
+                "/usr/local/bin/opencode",
+                "/opt/bradbit",
+            ]),
+        )
+        .unwrap();
+        assert_eq!(resolved, path("/usr/local/bin/bradbit"));
+    }
+
+    #[test]
+    fn opencode_is_the_optional_fallback_before_the_override() {
+        let resolved = resolve_binary(
+            candidates(
+                &[],
+                &["/usr/local/bin/bradbit"],
+                &["/usr/local/bin/opencode"],
+                Some("/opt/bradbit"),
+            ),
+            available(&["/usr/local/bin/opencode", "/opt/bradbit"]),
+        )
+        .unwrap();
+        assert_eq!(resolved, path("/usr/local/bin/opencode"));
+    }
+
+    #[test]
+    fn override_is_used_when_no_default_is_available() {
+        let resolved = resolve_binary(
+            candidates(&[], &[], &[], Some("/opt/bradbit")),
+            available(&["/opt/bradbit"]),
+        )
+        .unwrap();
+        assert_eq!(resolved, path("/opt/bradbit"));
+    }
+
+    #[test]
+    fn invalid_override_reports_its_path() {
+        let error = resolve_binary(
+            candidates(&[], &[], &[], Some("/missing/bradbit")),
+            available(&[]),
+        )
+        .unwrap_err();
+        assert!(error.contains("BRADBIT_OPENCODE_BIN"));
+        assert!(error.contains("/missing/bradbit"));
+    }
+
+    #[test]
+    fn missing_runtime_returns_an_actionable_error() {
+        let error = resolve_binary(candidates(&[], &[], &[], None), available(&[])).unwrap_err();
+        assert!(error.contains("Reinstall Bradbit"));
+        assert!(error.contains("BRADBIT_OPENCODE_BIN"));
+    }
+
+    #[test]
+    fn sidecar_filename_matches_the_target_triple() {
+        if TARGET_TRIPLE.is_empty() {
+            assert_eq!(sidecar_filename(), "bradbit");
+        } else {
+            assert_eq!(sidecar_filename(), format!("bradbit-{TARGET_TRIPLE}"));
+        }
+    }
+
+    #[test]
+    #[ignore = "requires the real Bradbit/OpenCode binary and a configured model"]
     fn real_server_starts_creates_a_session_and_stops() {
         let dir = tempfile::tempdir().unwrap();
         std::fs::write(dir.path().join("notas.md"), "# Notas\n").unwrap();
         let root = dir.path().to_str().unwrap();
-        let server = RunningServer::spawn(root).expect("start opencode serve");
+        let server = RunningServer::spawn(root).expect("start the Bradbit agent runtime");
         let session = server
             .client()
             .create_session("Test")

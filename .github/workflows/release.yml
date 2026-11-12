@@ -41,8 +41,14 @@ jobs:
         with:
           workspaces: src-tauri
 
+      - name: Fetch Bradbit sidecar
+        run: npm run fetch:bradbit
+
       - name: Build the app bundle
-        run: npm run tauri build
+        run: npm run tauri build -- --config src-tauri/tauri.sidecar.conf.json
+
+      - name: Verify the bundled Bradbit sidecar
+        run: test -x "src-tauri/target/release/bundle/macos/Bradbit Editor.app/Contents/MacOS/bradbit"
 
       - name: Upload installer artifact
         uses: actions/upload-artifact@v4
