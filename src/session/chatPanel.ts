@@ -43,6 +43,7 @@ export interface ChatPanelOptions {
   onSend: (text: string) => void;
   onStop: () => void;
   onRetry: () => void;
+  onOpenSettings: () => void;
   onSelectSession: (id: string) => void;
   onCreateSession: () => void;
   onCloseSession: (id: string) => void;
@@ -110,6 +111,7 @@ export class ChatPanel {
   private stopBtn: HTMLButtonElement;
   private errorEl: HTMLElement;
   private errorText: HTMLElement;
+  private errorSettingsBtn: HTMLButtonElement;
   private statusEl: HTMLElement;
   private statusDot: HTMLElement;
   private contextEl: HTMLElement;
@@ -163,7 +165,16 @@ export class ChatPanel {
     retry.dataset.testid = "chat-retry";
     retry.textContent = t(options.language, "chatRetry");
     retry.onclick = () => this.options.onRetry();
-    this.errorEl.append(this.errorText, retry);
+    this.errorSettingsBtn = document.createElement("button");
+    this.errorSettingsBtn.className = "chat-retry-btn";
+    this.errorSettingsBtn.dataset.testid = "chat-error-settings";
+    this.errorSettingsBtn.textContent = t(
+      options.language,
+      "chatErrorConfigureModels",
+    );
+    this.errorSettingsBtn.onclick = () => this.options.onOpenSettings();
+    this.errorSettingsBtn.hidden = true;
+    this.errorEl.append(this.errorText, this.errorSettingsBtn, retry);
     this.errorEl.hidden = true;
 
     this.messagesEl = document.createElement("div");
@@ -440,9 +451,11 @@ export class ChatPanel {
 
     if (state.error) {
       this.errorText.textContent = `${t(lang, "chatErrorTitle")}: ${state.error}`;
+      this.errorSettingsBtn.hidden = state.errorAction !== "models";
       this.errorEl.hidden = false;
     } else {
       this.errorEl.hidden = true;
+      this.errorSettingsBtn.hidden = true;
     }
 
     this.renderMessages();

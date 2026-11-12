@@ -697,6 +697,11 @@ class BradbitApp {
     });
   }
 
+  private openSettingsAt(category: SettingsCategoryId): void {
+    this.settingsCategory = category;
+    this.openSettingsModal();
+  }
+
   private openSettingsModal(): void {
     this.modal = { kind: "settings" };
     this.settingsQuery = "";
@@ -1103,6 +1108,7 @@ class BradbitApp {
         onSend: (text) => void this.sendChatMessage(text),
         onStop: () => void this.stopChatGeneration(),
         onRetry: () => void this.retryChat(),
+        onOpenSettings: () => this.openSettingsAt("models"),
         onSelectSession: (id) => this.selectChatSession(id),
         onCreateSession: () => void this.createChatSession(),
         onCloseSession: (id) => void this.closeChatSession(id),
@@ -1285,10 +1291,11 @@ class BradbitApp {
       );
       this.persistWorkspaceState();
     } catch (err) {
-      this.chatState = chatFailed(
-        this.chatState,
-        err instanceof Error ? err.message : String(err),
-      );
+      const message = err instanceof Error ? err.message : String(err);
+      const action = /no models|provider|auth login/i.test(message)
+        ? ("models" as const)
+        : null;
+      this.chatState = chatFailed(this.chatState, message, action);
     }
     this.updateChatPanel();
   }
