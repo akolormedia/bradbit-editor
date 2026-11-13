@@ -1,0 +1,18 @@
+{
+  "id": "libro-kit",
+  "name": "Novel",
+  "version": "1.0.0",
+  "description": "Novel and book writing kit with a story bible, structure, manuscript, research, revision and pitch.",
+  "author": "Bradbit",
+  "minimumBradbit": "0.1.0-alpha.2",
+  "contents": [
+    "AGENTS.md",
+    ".bradbit/",
+    "bible/",
+    "structure/",
+    "manuscript/",
+    "research/",
+    "notes/",
+    "pitch/"
+  ]
+}
