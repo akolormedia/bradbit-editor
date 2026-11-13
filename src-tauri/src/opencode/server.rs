@@ -26,6 +26,7 @@ use crate::git::redact_secrets;
 pub const EVENT_NAME: &str = "bradbit-opencode-event";
 pub const RUNTIME_NAME: &str = "bradbit";
 const START_TIMEOUT: Duration = Duration::from_secs(15);
+const MODEL_TIMEOUT: Duration = Duration::from_secs(8);
 const LOG_LIMIT: usize = 40;
 
 #[cfg(all(target_os = "macos", target_arch = "aarch64"))]
@@ -118,19 +119,18 @@ impl RunningServer {
             return Err(error);
         }
 
-        let models = client.list_models().map_err(|error| {
-            let _ = child.kill();
-            let _ = child.wait();
-            format!("{error}. Configure a provider/model in Bradbit.")
-        })?;
-        if models.is_empty() {
-            let _ = child.kill();
-            let _ = child.wait();
-            return Err(
-                "The Bradbit agent runtime has no models available. Connect a provider in Settings → AI and models."
-                    .to_string(),
-            );
-        }
+        let models = match wait_for_models(|| client.list_models(), MODEL_TIMEOUT) {
+            Some(models) => models,
+            None => {
+                let _ = child.kill();
+                let _ = child.wait();
+                return Err(start_error(
+                    "The Bradbit agent runtime has no models available. Connect a provider in Settings → AI and models.",
+                    &logs,
+                ));
+            }
+        };
+        drop(models);
 
         Ok(Self {
             root: root.to_string(),
@@ -206,6 +206,24 @@ fn spawn_log_reader<R: Read + Send + 'static>(
             }
         }
     });
+}
+
+fn wait_for_models<T, F>(mut list: F, timeout: Duration) -> Option<Vec<T>>
+where
+    F: FnMut() -> Result<Vec<T>, String>,
+{
+    let deadline = Instant::now() + timeout;
+    loop {
+        if let Ok(models) = list() {
+            if !models.is_empty() {
+                return Some(models);
+            }
+        }
+        if Instant::now() >= deadline {
+            return None;
+        }
+        thread::sleep(Duration::from_millis(150));
+    }
 }
 
 fn wait_until_ready(
@@ -456,6 +474,30 @@ mod tests {
         let error = resolve_binary(candidates(&[], &[], &[], None), available(&[])).unwrap_err();
         assert!(error.contains("Reinstall Bradbit"));
         assert!(error.contains("BRADBIT_OPENCODE_BIN"));
+    }
+
+    #[test]
+    fn waits_for_models_that_load_after_the_server_is_ready() {
+        let mut calls = 0;
+        let models = wait_for_models(
+            || {
+                calls += 1;
+                if calls < 3 {
+                    Ok(Vec::<String>::new())
+                } else {
+                    Ok(vec!["deepseek-flash".to_string()])
+                }
+            },
+            Duration::from_secs(1),
+        );
+        assert_eq!(models, Some(vec!["deepseek-flash".to_string()]));
+        assert!(calls >= 3);
+    }
+
+    #[test]
+    fn returns_none_when_models_never_appear() {
+        let models = wait_for_models(|| Ok(Vec::<String>::new()), Duration::from_millis(20));
+        assert_eq!(models, None);
     }
 
     #[test]

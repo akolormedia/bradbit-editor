@@ -4,6 +4,40 @@ All notable changes to Bradbit Editor are documented in this file.
 
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the versioning follows [SemVer](https://semver.org/). `alpha` versions are early tests: behavior may change and there are no compatibility guarantees.
 
+## [0.1.0-alpha.3] - 2026-11-13
+
+Third alpha. It bundles the Bradbit agent runtime and adds bring-your-own-key provider settings. **Only tested on macOS.**
+
+### Added
+
+**Agent runtime**
+- The macOS app now bundles **`bradbit`** (Bradbit CLI `v0.1.0-alpha.1`, based on OpenCode `2.2.5`) as a Tauri sidecar. A separate OpenCode install is no longer required for the chat.
+- Binary resolution order: bundled sidecar → `bradbit` on `PATH` → optional `opencode` fallback → `BRADBIT_OPENCODE_BIN`.
+- The terminal's **Bradbit** preset launches the bundled runtime; Claude Code remains optional.
+- Source builds download the pinned sidecar with `npm run fetch:bradbit`; the release workflow verifies it inside the `.app`.
+
+**Settings → AI and models**
+- **BYOK providers:** connect DeepSeek, OpenRouter, OpenAI, Anthropic, OpenCode or a custom OpenAI-compatible endpoint with its own `baseURL` and model.
+- API keys are stored in the **macOS Keychain**; `settings.json` only stores provider metadata.
+- Keys are injected into `bradbit serve` through environment variables. Custom providers receive an inline `OPENCODE_CONFIG_CONTENT`; nothing is written to the project.
+- The model catalog refreshes after saving or removing a key.
+- Missing provider/model errors now show a **Configure models** button that opens Settings directly.
+
+### Changed
+- Chat errors, permission prompts and model copy refer to the **agent**, not OpenCode.
+- The README and build instructions reflect the bundled runtime and BYOK flow.
+- The DMG now includes the agent runtime, so the installer is larger than the previous alpha.
+
+### Fixed
+- The editor now waits for the runtime model catalog to finish loading before reporting that no models are available. This fixes a startup race that appeared when a provider key was injected through the environment.
+
+### Known limitations
+- The app is not signed or notarized. On first launch on macOS, right-click the app and choose **Open**.
+- The bundled runtime is used inside the editor; the standalone `bradbit` CLI is distributed separately from the `bradbit-cli` repository.
+- Creating a project by chatting from the welcome screen (`T-2.5.10`) remains deferred.
+- BYOK currently stores keys in the macOS Keychain only.
+- Only tested on macOS.
+
 ## [0.1.0-alpha.2] - 2026-11-08
 
 Second alpha. This release focuses on the editor and chat polish from Story 2.5. **Only tested on macOS.**

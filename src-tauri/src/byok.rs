@@ -15,7 +15,14 @@ use crate::github::secrets::{CachedSecretStore, OsKeychain, SecretStore};
 use crate::settings::{AppSettings, ByokProvider};
 
 pub const ACCOUNT_PREFIX: &str = "byok:";
-const PROVIDER_KINDS: &[&str] = &["deepseek", "openrouter", "openai", "anthropic", "custom"];
+const PROVIDER_KINDS: &[&str] = &[
+    "deepseek",
+    "openrouter",
+    "openai",
+    "anthropic",
+    "opencode",
+    "custom",
+];
 
 #[derive(Debug, Clone, Serialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
