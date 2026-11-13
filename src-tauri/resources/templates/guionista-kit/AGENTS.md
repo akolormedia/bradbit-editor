@@ -38,7 +38,8 @@ requires.
 ## Versioning
 - At meaningful milestones (premise approved, structure approved, a scene
   or act complete, a revision pass), suggest **Save version**.
-- Use the `git-versioning` skill and the `/save-version` command.
+- Use the general `git-versioning` skill and the `/save-version` command
+  provided by Bradbit (not by this kit).
 - Never run `git commit` without explicit approval. Never commit secrets
   or generated `exports/` files.
 
