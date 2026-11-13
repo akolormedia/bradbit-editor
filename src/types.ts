@@ -8,6 +8,7 @@ export type ByokProviderKind =
   | "openrouter"
   | "openai"
   | "anthropic"
+  | "opencode"
   | "custom";
 
 export interface ByokProvider {

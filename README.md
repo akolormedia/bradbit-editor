@@ -22,7 +22,7 @@ Desktop text editor for creative writing (`.md`, `.mdx`, `.fountain`, `.txt`), a
   - **Chat and editor surfaces (`T-2.4.3`):** Chat/Terminal and the `EditorWorkspace` are two independent panels with a border, radius and spacing over the app background, in the style of `opencode-desktop`. The tree and the document share the editor surface, and the dividers keep the drag-relative resize.
   - Shows connection status, actionable errors and context/token usage, and keeps the session history while you switch files.
   - Uses the project's `.opencode/` kit, agents and models through the bundled `bradbit` sidecar. Bradbit does not store model keys in the project.
-  - **BYOK:** *Settings → AI and models* connects DeepSeek, OpenRouter, OpenAI, Anthropic or a custom OpenAI-compatible endpoint. Keys live in the macOS Keychain and are injected into the sidecar at launch.
+  - **BYOK:** *Settings → AI and models* connects DeepSeek, OpenRouter, OpenAI, Anthropic, OpenCode or a custom OpenAI-compatible endpoint. Keys live in the macOS Keychain and are injected into the sidecar at launch.
 
 - **Native macOS menu (`Story 1.1.1`):** the system menu bar includes **Bradbit Editor, File, Edit, View and Window**:
   - *File:* Open folder (`⌘O`), Open recent, New project (`⇧⌘N`), Save as template, Open templates folder, Quick open (`⌘P`), New file (`⌘N`), Save (`⌘S`), Export PDF (`⌘E`) and Close tab (`⌘W`).

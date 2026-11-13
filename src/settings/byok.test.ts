@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  BYOK_PRESETS,
   byokDraft,
   byokProviderFromDraft,
   byokPreset,
@@ -9,6 +10,13 @@ import {
 
 describe("BYOK provider helpers (T-3.1.9)", () => {
   it("maps presets to their stable provider ids and environment variables", () => {
+    expect(BYOK_PRESETS.map((preset) => [preset.kind, preset.envVar])).toEqual([
+      ["deepseek", "DEEPSEEK_API_KEY"],
+      ["openrouter", "OPENROUTER_API_KEY"],
+      ["openai", "OPENAI_API_KEY"],
+      ["anthropic", "ANTHROPIC_API_KEY"],
+      ["opencode", "OPENCODE_API_KEY"],
+    ]);
     expect(byokPreset("deepseek")).toEqual({
       kind: "deepseek",
       name: "DeepSeek",

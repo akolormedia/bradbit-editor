@@ -26,6 +26,8 @@ export const BYOK_PRESETS: ByokPreset[] = [
   { kind: "openrouter", name: "OpenRouter", envVar: "OPENROUTER_API_KEY" },
   { kind: "openai", name: "OpenAI", envVar: "OPENAI_API_KEY" },
   { kind: "anthropic", name: "Anthropic", envVar: "ANTHROPIC_API_KEY" },
+  // Verified against `bradbit serve` /api/integration. OpenCode Go shares this key.
+  { kind: "opencode", name: "OpenCode", envVar: "OPENCODE_API_KEY" },
 ];
 
 export function byokPreset(kind: ByokProviderKind): ByokPreset | null {

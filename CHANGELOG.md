@@ -17,7 +17,7 @@ Third alpha. It bundles the Bradbit agent runtime and adds bring-your-own-key pr
 - Source builds download the pinned sidecar with `npm run fetch:bradbit`; the release workflow verifies it inside the `.app`.
 
 **Settings → AI and models**
-- **BYOK providers:** connect DeepSeek, OpenRouter, OpenAI, Anthropic or a custom OpenAI-compatible endpoint with its own `baseURL` and model.
+- **BYOK providers:** connect DeepSeek, OpenRouter, OpenAI, Anthropic, OpenCode or a custom OpenAI-compatible endpoint with its own `baseURL` and model.
 - API keys are stored in the **macOS Keychain**; `settings.json` only stores provider metadata.
 - Keys are injected into `bradbit serve` through environment variables. Custom providers receive an inline `OPENCODE_CONFIG_CONTENT`; nothing is written to the project.
 - The model catalog refreshes after saving or removing a key.
@@ -27,6 +27,9 @@ Third alpha. It bundles the Bradbit agent runtime and adds bring-your-own-key pr
 - Chat errors, permission prompts and model copy refer to the **agent**, not OpenCode.
 - The README and build instructions reflect the bundled runtime and BYOK flow.
 - The DMG now includes the agent runtime, so the installer is larger than the previous alpha.
+
+### Fixed
+- The editor now waits for the runtime model catalog to finish loading before reporting that no models are available. This fixes a startup race that appeared when a provider key was injected through the environment.
 
 ### Known limitations
 - The app is not signed or notarized. On first launch on macOS, right-click the app and choose **Open**.
