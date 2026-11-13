@@ -766,6 +766,82 @@ describe("chat panel (T-2.1.1)", () => {
     expect(onManageModels).toHaveBeenCalledOnce();
   });
 
+  it("shows localized agent labels but switches with the canonical id", () => {
+    const onAgentChange = vi.fn();
+    const panel = new ChatPanel(
+      options({
+        kit: {
+          agents: [
+            {
+              id: "screenwriter",
+              name: "Screenwriter",
+              description: "Writes scenes",
+              path: ".bradbit/agents/screenwriter.md",
+              i18n: {
+                es: {
+                  name: "Guionista",
+                  description: "Escribe escenas",
+                },
+              },
+            },
+          ],
+          commands: [],
+          skills: [],
+        },
+        onAgentChange,
+      }),
+    );
+    panel.update(readyState());
+    panel.element
+      .querySelector<HTMLButtonElement>('[data-testid="chat-plus"]')
+      ?.click();
+    expect(panel.element.textContent).toContain("Guionista");
+    panel.element
+      .querySelector<HTMLButtonElement>(
+        '[data-testid="composer-agent-screenwriter"]',
+      )
+      ?.click();
+    expect(onAgentChange).toHaveBeenCalledWith("screenwriter");
+  });
+
+  it("localizes slash command labels and inserts the canonical id", () => {
+    const panel = new ChatPanel(
+      options({
+        kit: {
+          agents: [],
+          commands: [
+            {
+              id: "scene",
+              name: "Scene",
+              description: "Write a scene",
+              agent: "screenwriter",
+              path: ".bradbit/commands/scene.md",
+              i18n: {
+                es: {
+                  name: "Escena",
+                  description: "Escribe una escena",
+                  aliases: ["escena"],
+                },
+              },
+            },
+          ],
+          skills: [],
+        },
+      }),
+    );
+    panel.update(readyState());
+    const input = panel.element.querySelector<HTMLTextAreaElement>(
+      '[data-testid="chat-input"]',
+    )!;
+    input.value = "/esc";
+    input.setSelectionRange(4, 4);
+    input.dispatchEvent(new Event("input"));
+
+    expect(panel.element.textContent).toContain("/Escena");
+    input.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter" }));
+    expect(input.value).toBe("/scene ");
+  });
+
   it("completes slash commands without sending the message (T-2.2.2)", () => {
     const onSend = vi.fn();
     const panel = new ChatPanel(

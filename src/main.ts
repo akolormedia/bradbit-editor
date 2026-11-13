@@ -69,6 +69,7 @@ import {
 import { addSessionTab, removeSessionTab, SessionTabInfo } from "./session/sessionTabs";
 import { projectRelativePath } from "./session/chatPaths";
 import { parseSlashCommand } from "./session/composer";
+import { matchesKitCommand } from "./kit/localize";
 import { SessionView, toggleSessionView } from "./session/sessionView";
 import { SettingsPanel } from "./settings/settingsPanel";
 import type { SettingsCategoryId } from "./settings/catalog";
@@ -1728,14 +1729,14 @@ class BradbitApp {
     try {
       const command = parseSlashCommand(text);
       const kitCommand = command
-        ? this.kitCatalog.commands.find(
-            (candidate) => candidate.name === command.name,
+        ? this.kitCatalog.commands.find((candidate) =>
+            matchesKitCommand(candidate, command.name, this.settings.language),
           )
         : undefined;
       if (command && kitCommand) {
         await backend.opencodeRunCommand(
           sessionId,
-          command.name,
+          kitCommand.id,
           command.args,
         );
       } else {

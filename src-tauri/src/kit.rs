@@ -11,6 +11,17 @@ use std::path::Path;
 
 use serde::{Deserialize, Serialize};
 
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct KitLocalized {
+    #[serde(default)]
+    pub name: Option<String>,
+    #[serde(default)]
+    pub description: Option<String>,
+    #[serde(default)]
+    pub aliases: Vec<String>,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct KitAgent {
@@ -18,6 +29,8 @@ pub struct KitAgent {
     pub name: String,
     pub description: String,
     pub path: String,
+    pub aliases: Vec<String>,
+    pub i18n: BTreeMap<String, KitLocalized>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
@@ -28,6 +41,8 @@ pub struct KitCommand {
     pub description: String,
     pub agent: Option<String>,
     pub path: String,
+    pub aliases: Vec<String>,
+    pub i18n: BTreeMap<String, KitLocalized>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
@@ -37,6 +52,8 @@ pub struct KitSkill {
     pub name: String,
     pub description: String,
     pub path: String,
+    pub aliases: Vec<String>,
+    pub i18n: BTreeMap<String, KitLocalized>,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize)]
@@ -52,6 +69,10 @@ struct FrontMatter {
     name: Option<String>,
     description: Option<String>,
     agent: Option<String>,
+    #[serde(default)]
+    aliases: Vec<String>,
+    #[serde(default)]
+    i18n: BTreeMap<String, KitLocalized>,
 }
 
 /// Discover the kit of a project folder. Missing folders are not an error.
@@ -87,12 +108,11 @@ fn collect_agents(
     for path in markdown_files(&directory)? {
         let raw = read_file(&path)?;
         let (front, _) = parse_document(&raw);
-        let stem = file_stem(&path);
-        let name = trimmed(front.name.as_deref()).unwrap_or_else(|| stem.clone());
-        if name.is_empty() {
+        let id = file_stem(&path);
+        if id.is_empty() {
             continue;
         }
-        let id = slug(&name);
+        let name = trimmed(front.name.as_deref()).unwrap_or_else(|| id.clone());
         agents.insert(
             id.clone(),
             KitAgent {
@@ -100,6 +120,8 @@ fn collect_agents(
                 name,
                 description: front.description.unwrap_or_default().trim().to_string(),
                 path: relative_path(root, &path),
+                aliases: front.aliases,
+                i18n: front.i18n,
             },
         );
     }
@@ -115,12 +137,11 @@ fn collect_commands(
     for path in markdown_files(&directory)? {
         let raw = read_file(&path)?;
         let (front, _) = parse_document(&raw);
-        let stem = file_stem(&path);
-        let name = trimmed(front.name.as_deref()).unwrap_or_else(|| stem.clone());
-        if name.is_empty() {
+        let id = file_stem(&path);
+        if id.is_empty() {
             continue;
         }
-        let id = slug(&name);
+        let name = trimmed(front.name.as_deref()).unwrap_or_else(|| id.clone());
         commands.insert(
             id.clone(),
             KitCommand {
@@ -129,6 +150,8 @@ fn collect_commands(
                 description: front.description.unwrap_or_default().trim().to_string(),
                 agent: front.agent.and_then(|agent| trimmed(Some(&agent))),
                 path: relative_path(root, &path),
+                aliases: front.aliases,
+                i18n: front.i18n,
             },
         );
     }
@@ -161,15 +184,14 @@ fn collect_skills(
         }
         let raw = read_file(&skill_file)?;
         let (front, _) = parse_document(&raw);
-        let folder = path
+        let id = path
             .file_name()
             .map(|name| name.to_string_lossy().to_string())
             .unwrap_or_default();
-        let name = trimmed(front.name.as_deref()).unwrap_or(folder);
-        if name.is_empty() {
+        if id.is_empty() {
             continue;
         }
-        let id = slug(&name);
+        let name = trimmed(front.name.as_deref()).unwrap_or_else(|| id.clone());
         skills.insert(
             id.clone(),
             KitSkill {
@@ -177,6 +199,8 @@ fn collect_skills(
                 name,
                 description: front.description.unwrap_or_default().trim().to_string(),
                 path: relative_path(root, &skill_file),
+                aliases: front.aliases,
+                i18n: front.i18n,
             },
         );
     }
@@ -256,10 +280,6 @@ fn trimmed(value: Option<&str>) -> Option<String> {
         .map(str::to_string)
 }
 
-fn slug(value: &str) -> String {
-    value.trim().to_lowercase().replace(' ', "-")
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -321,6 +341,42 @@ mod tests {
         assert_eq!(catalog.skills.len(), 1);
         assert_eq!(catalog.skills[0].id, "draft");
         assert_eq!(catalog.agents[0].path, ".bradbit/agents/guionista.md");
+    }
+
+    #[test]
+    fn parses_localized_metadata_and_uses_path_ids() {
+        let dir = tempdir().unwrap();
+        let root = dir.path();
+        let agents = root.join(".bradbit/agents");
+        let commands = root.join(".bradbit/commands");
+        fs::create_dir_all(&agents).unwrap();
+        fs::create_dir_all(&commands).unwrap();
+        fs::write(
+            agents.join("screenwriter.md"),
+            "---\nname: Screenwriter\ndescription: Writes scenes\ni18n:\n  es:\n    name: Guionista\n    description: Escribe escenas\n---\n",
+        )
+        .unwrap();
+        fs::write(
+            commands.join("scene.md"),
+            "---\nname: Scene\ndescription: Write a scene\naliases: [write-scene]\ni18n:\n  es:\n    name: Escena\n    description: Escribe una escena\n    aliases: [escena]\n---\n\n",
+        )
+        .unwrap();
+
+        let catalog = discover(root.to_str().unwrap()).unwrap();
+        assert_eq!(catalog.agents[0].id, "screenwriter");
+        assert_eq!(catalog.agents[0].name, "Screenwriter");
+        assert_eq!(
+            catalog.agents[0].i18n["es"].name.as_deref(),
+            Some("Guionista")
+        );
+        assert_eq!(catalog.commands[0].id, "scene");
+        assert_eq!(catalog.commands[0].name, "Scene");
+        assert_eq!(catalog.commands[0].aliases, vec!["write-scene"]);
+        assert_eq!(
+            catalog.commands[0].i18n["es"].name.as_deref(),
+            Some("Escena")
+        );
+        assert_eq!(catalog.commands[0].i18n["es"].aliases, vec!["escena"]);
     }
 
     #[test]

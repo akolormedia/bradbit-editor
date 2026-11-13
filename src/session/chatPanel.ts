@@ -4,6 +4,7 @@ import { KitCatalog, Language, OpenCodeFormField, OpenCodeModel } from "../types
 import { createIcon, IconName } from "../ui/icons";
 import { renderMarkdownPreview } from "../editor/preview";
 import { createIconButton } from "../ui/iconButton";
+import { kitCommandCandidates, localizedKitText } from "../kit/localize";
 import { QuickOpenFile } from "../workspace/quickOpen";
 import {
   ChatForm,
@@ -824,12 +825,13 @@ export class ChatPanel {
 
     addAgent(null, t(lang, "chatAgentDefault"));
     for (const agent of this.options.kit.agents) {
-      addAgent(agent.name, agent.name, agent.description);
+      const localized = localizedKitText(agent, lang);
+      addAgent(agent.id, localized.name, localized.description);
     }
     if (
       this.state.agent &&
       this.state.agent !== "build" &&
-      !this.options.kit.agents.some((agent) => agent.name === this.state.agent)
+      !this.options.kit.agents.some((agent) => agent.id === this.state.agent)
     ) {
       addAgent(this.state.agent, this.state.agent);
     }
@@ -868,13 +870,17 @@ export class ChatPanel {
     }
     const items =
       token.kind === "command"
-        ? filterCommands(this.options.kit.commands, token.query).map(
-            (command) => ({
-              value: command.name,
-              label: `/${command.name}`,
-              description: command.description,
-            }),
-          )
+        ? filterCommands(
+            kitCommandCandidates(this.options.kit.commands, this.options.language),
+            token.query,
+          ).map((command) => {
+            const localized = localizedKitText(command, this.options.language);
+            return {
+              value: command.id,
+              label: `/${localized.name}`,
+              description: localized.description,
+            };
+          })
         : filterProjectFiles(this.options.projectFiles, token.query).map(
             (file) => ({
               value: file.path,
