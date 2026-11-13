@@ -420,7 +420,7 @@ mod tests {
         assert!(files >= 30, "only {files} bundled files");
         assert!(template.get_file("guionista-kit/AGENTS.md").is_some());
         assert!(template
-            .get_file("guionista-kit/.opencode/agents/guionista.md")
+            .get_file("guionista-kit/.bradbit/agents/guionista.md")
             .is_some());
     }
 
@@ -465,9 +465,9 @@ mod tests {
         let project = Path::new(&created.path);
         assert!(project.join("AGENTS.md").is_file());
         assert!(project.join("biblia/premisa.md").is_file());
-        assert!(project.join(".opencode/agents/guionista.md").is_file());
+        assert!(project.join(".bradbit/agents/guionista.md").is_file());
         assert!(project
-            .join(".opencode/skills/escribir-escena/SKILL.md")
+            .join(".bradbit/skills/escribir-escena/SKILL.md")
             .is_file());
         assert!(!project.join("exports").exists());
     }

@@ -43,5 +43,5 @@ investigacion/        notas y fuentes de investigación
 estructura/           método elegido, escaleta, tratamiento
 guion/                archivos .fountain del guion
 notas/                notas de desarrollo, notas del script editor
-.opencode/             skills, agentes y comandos de este kit
+.bradbit/             skills, agentes y comandos de este kit
 ```
