@@ -4,9 +4,9 @@ All notable changes to Bradbit Editor are documented in this file.
 
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the versioning follows [SemVer](https://semver.org/). `alpha` versions are early tests: behavior may change and there are no compatibility guarantees.
 
-## [Unreleased]
+## [0.1.0-alpha.5] - 2026-11-13
 
-Next alpha. Adds the three writing kits, the `.bradbit/` canonical folder, the general Git assistant and the language policy. **Only tested on macOS.**
+Fifth alpha. Adds the three writing kits, the `.bradbit/` canonical folder, the general Git assistant and the language policy. **Only tested on macOS.**
 
 ### Added
 - **Three bundled writing kits** in the new-project selector: **Screenwriting (`guionista-kit`)**, **Novel (`libro-kit`)** and **Advertising campaigns (`campaign-kit`)**. Each kit ships `AGENTS.md`, `.bradbit/` agents/commands/skills, its project structure and a `bradbit-kit.json` manifest.
