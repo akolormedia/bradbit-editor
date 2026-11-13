@@ -1,7 +1,7 @@
 # guionista-kit
 
 Plantilla base para proyectos de guion (largometraje, serie, micro
-drama) trabajados con opencode. Contiene los skills, agentes y
+drama) trabajados con Bradbit. Contiene los skills, agentes y
 comandos comunes a cualquier proyecto, más la estructura de carpetas
 de la "biblia" y el guion.
 
@@ -17,11 +17,11 @@ de la "biblia" y el guion.
    `desarrollo-idea` para construirla con ayuda).
 3. Ve llenando `biblia/personajes/` (un archivo por personaje) y
    `biblia/mundo/` a medida que el proyecto avanza.
-4. Elige un método de estructura en `.opencode/skills/metodos-estructura/`
+4. Elige un método de estructura en `.bradbit/skills/metodos-estructura/`
    y escribe la escaleta en `estructura/`.
 5. Escribe el guion en `guion/*.fountain`.
 
-## Qué hay en `.opencode/`
+## Qué hay en `.bradbit/`
 
 - **skills/** — procesos: desarrollo de idea, investigación, fichas
   de personaje, métodos de estructura narrativa, escaleta, escritura
@@ -44,6 +44,6 @@ de la "biblia" y el guion.
 - **v3:** documentación amigable para que la use más gente del
   equipo, no solo quien lo construyó.
 
-Nota técnica: revisa la documentación actual de opencode antes de
-instalar — la forma exacta de declarar skills/agentes/comandos puede
-cambiar entre versiones.
+Nota técnica: Bradbit lee `.bradbit/` como carpeta canónica. Si abres
+el kit con OpenCode upstream, renombra `.bradbit/` a `.opencode/`; Bradbit
+también sigue leyendo `.opencode/` como compatibilidad legacy.
