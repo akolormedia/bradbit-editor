@@ -1,6 +1,6 @@
 [package]
 name = "bradbit-editor"
-version = "0.1.0-alpha.4"
+version = "0.1.0-alpha.5"
 description = "Bradbit Editor — Agnostic creative writing desktop editor"
 authors = ["Bradbit"]
 license = "MIT"
