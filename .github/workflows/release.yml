@@ -47,8 +47,16 @@ jobs:
       - name: Build the app bundle
         run: npm run tauri build -- --config src-tauri/tauri.sidecar.conf.json
 
-      - name: Verify the bundled Bradbit sidecar
-        run: test -x "src-tauri/target/release/bundle/macos/Bradbit Editor.app/Contents/MacOS/bradbit"
+      - name: Verify the bundled app and its signature
+        run: |
+          APP="src-tauri/target/release/bundle/macos/Bradbit Editor.app"
+          test -x "$APP/Contents/MacOS/bradbit"
+          "$APP/Contents/MacOS/bradbit" --version
+          codesign --verify --deep --strict --verbose=2 "$APP"
+          if codesign -dv --verbose=4 "$APP" 2>&1 | grep -q "linker-signed"; then
+            echo "The app bundle still has the linker ad-hoc signature; macOS reports it as damaged." >&2
+            exit 1
+          fi
 
       - name: Upload installer artifact
         uses: actions/upload-artifact@v4
