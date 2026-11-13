@@ -15,13 +15,13 @@ Desktop text editor for creative writing (`.md`, `.mdx`, `.fountain`, `.txt`), a
   - Composer with **Enter to send**, **Shift+Enter** for a new line, and a **Stop** button during generation.
   - **Live tools with permissions (`T-2.1.3`):** compact cards for `read`, `edit`, `write`, `shell`, searches and skills, with running, completed and error status and expandable input and result details. Clicking a file that was read or edited opens it in the editor; if the tool changed it, the button opens its **Diff** directly. When the runtime asks for permission, a card offers **Allow once**, **Always allow** or **Reject**.
   - **Interactive questions (`T-2.1.4`):** when the agent uses the `question` tool, a card appears with options, free text and multiple fields. After answering, the card shows **Answered** or **Cancelled**, stays in the chat history and no longer occupies a fixed area above the composer.
-  - **Project kit (`T-2.2.1`/`T-2.2.2`):** discovers agents, commands and skills from `.opencode/` and `.bradbit/`, and updates automatically when the kit changes. The composer offers command autocomplete with **`/`**, attachments with **`@`** or the **＋** button, and the editor's **↗** button sends the current selection to the active chat.
+  - **Project kit (`T-2.2.1`/`T-2.2.2`):** discovers agents, commands and skills from `.bradbit/` (and legacy `.opencode/`), and updates automatically when the kit changes. The composer offers command autocomplete with **`/`**, attachments with **`@`** or the **＋** button, and the editor's **↗** button sends the current selection to the active chat.
   - **Composer in the style of `opencode-desktop` (`T-2.2.3`):** a single panel with a helpful placeholder, a **model** picker with search, recents and provider grouping, a separate **effort/variant** picker, the **↑** send button, and a **＋** menu with a context file, command, kit agent and **Manage models**. In *Settings → Manage models* you can search and enable or disable which models appear. Visibility and recents are saved in the settings.
   - **Integrated terminal (`T-2.3.1`):** the **`>_`** button in the bottom bar switches between **Chat / Terminal** in the left column, without losing the editor or the buffer. Native PTY in Rust with a **Shell / opencode / claude / custom command** picker, automatic resize, restart and clear. The session closes when the folder closes.
   - **Minimal top bar and application menu (`T-2.4.2`):** the project title and the **Chat/Editor** toggles live at the top. File, edit, view and settings actions are grouped in a dropdown menu with shortcuts. The left panel and terminal toggles are in the bottom bar, next to the branch.
   - **Chat and editor surfaces (`T-2.4.3`):** Chat/Terminal and the `EditorWorkspace` are two independent panels with a border, radius and spacing over the app background, in the style of `opencode-desktop`. The tree and the document share the editor surface, and the dividers keep the drag-relative resize.
   - Shows connection status, actionable errors and context/token usage, and keeps the session history while you switch files.
-  - Uses the project's `.opencode/` kit, agents and models through the bundled `bradbit` sidecar. Bradbit does not store model keys in the project.
+  - Uses the project's `.bradbit/` kit, agents and models through the bundled `bradbit` sidecar. Bradbit does not store model keys in the project.
   - **BYOK:** *Settings → AI and models* connects DeepSeek, OpenRouter, OpenAI, Anthropic, OpenCode or a custom OpenAI-compatible endpoint. Keys live in the macOS Keychain and are injected into the sidecar at launch.
 
 - **Native macOS menu (`Story 1.1.1`):** the system menu bar includes **Bradbit Editor, File, Edit, View and Window**:
@@ -32,9 +32,10 @@ Desktop text editor for creative writing (`.md`, `.mdx`, `.fountain`, `.txt`), a
   - Items are enabled, disabled and checked according to the real state, and labels change with the language.
 - **Any folder is a project:** open any folder on disk without proprietary configuration files (`project.yaml`).
 - **Welcome screen and recent projects:** open folders from disk or reopen any recent project in one click.
+- **Writing kits and language (`T-3.4.x`):** three kits bundled: **Screenwriting**, **Novel** and **Advertising campaigns**. Instructions are in English; the agent replies and writes in the language configured in the app, with Spanish command aliases (`/escena`, `/capitulo`, `/cliente`, ...). The general Git assistant provides `/save-version` and `/history` in every project, with explicit approval before committing.
 - **New project and templates (`T-1.3.2`):**
   - **New project (`⇧⌘N`)** from the welcome screen, the top bar or the *File* menu: choose a template, a name and a destination folder.
-  - Built-in templates: **Audiovisual script (`guionista-kit`)**, with bible, structure, script, research, agents, commands and skills; and **Blank project**.
+  - Built-in templates: **Screenwriting (`guionista-kit`)**, with bible, structure, script, research, agents, commands and skills; **Novel (`libro-kit`)**; **Advertising campaigns (`campaign-kit`)**; and **Blank project**. Each kit carries a `bradbit-kit.json` manifest.
   - **User templates:** any folder in `~/Library/Application Support/Bradbit/templates/` appears automatically in the template picker.
   - When the project is created, **`git init`** runs if Git is available, and the app opens the resulting folder.
   - **Save current project as template…** and **Open templates folder**, from the modal and the *File* menu.
@@ -126,7 +127,7 @@ downloaded binaries live in `src-tauri/binaries/` and are not committed.
 
 The full list is in [`CHANGELOG.md`](CHANGELOG.md#known-limitations). Summary:
 - Creating a project by chatting with the agent from the welcome screen is still planned (`T-2.5.10`).
-- Only the Guionista kit is bundled. Additional kits and extensions are planned for Phase 4.
+- Three writing kits are bundled: screenwriting (`guionista-kit`), novel (`libro-kit`) and advertising campaigns (`campaign-kit`). Additional kits and extensions are planned for Phase 4.
 - The app is ad-hoc signed but not notarized, and only macOS has been tested.
 
 ## Development and tests

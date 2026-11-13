@@ -4,6 +4,30 @@ All notable changes to Bradbit Editor are documented in this file.
 
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the versioning follows [SemVer](https://semver.org/). `alpha` versions are early tests: behavior may change and there are no compatibility guarantees.
 
+## [Unreleased]
+
+Next alpha. Adds the three writing kits, the `.bradbit/` canonical folder, the general Git assistant and the language policy. **Only tested on macOS.**
+
+### Added
+- **Three bundled writing kits** in the new-project selector: **Screenwriting (`guionista-kit`)**, **Novel (`libro-kit`)** and **Advertising campaigns (`campaign-kit`)**. Each kit ships `AGENTS.md`, `.bradbit/` agents/commands/skills, its project structure and a `bradbit-kit.json` manifest.
+- **`bradbit init --kit <id>`** in the CLI (default `guionista-kit`).
+- **Language policy:** kit instructions are English; the editor writes `agent-language.md` and injects it through `OPENCODE_CONFIG_CONTENT.instructions`, so the agent replies and writes in the app language. Kits add `i18n.es` names, descriptions and aliases; Spanish users can type `/escena`, `/capitulo`, `/cliente`, etc.
+- **General Git assistant:** `git-versioning` skill plus `/save-version` and `/history` commands, available in every project with or without a kit. Commits require explicit approval.
+- **Kit manifests:** `bradbit-kit.json` with id, name, version, description, author, minimum Bradbit and contents.
+
+### Changed
+- **`.bradbit/` is the canonical kit folder.** `.opencode/` remains as legacy compatibility; `.bradbit` entries win when both define the same agent, command or skill.
+- `guionista-kit` was rewritten in English with English IDs and Spanish examples/aliases; the `bible/`, `structure/`, `script/`, `research/` and `notes/` folders are in English.
+- Kit project templates are copied without generated `exports/`.
+
+### Fixed
+- Git versioning no longer lives inside each kit; the general assistant avoids duplicated instructions and inconsistent behavior between kits.
+
+### Known limitations
+- The app is ad-hoc signed but not notarized. On first launch, allow it in **System Settings → Privacy & Security → Open Anyway**.
+- Markdown decks and manuscripts can be printed/exported to PDF; there is no slide editor or DOCX export yet.
+- Spanish command/agent IDs from previous test projects are not preserved; all existing projects are test projects.
+
 ## [0.1.0-alpha.4] - 2026-11-13
 
 Fourth alpha. Fixes the downloaded macOS installer from `alpha.3`. **Only tested on macOS.**
