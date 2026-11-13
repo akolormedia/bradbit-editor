@@ -2,7 +2,7 @@
 
 Desktop text editor for creative writing (`.md`, `.mdx`, `.fountain`, `.txt`), agnostic by design, built with **Tauri v2**, **CodeMirror 6** and **Rust**.
 
-> **Alpha version `0.1.0-alpha.2`** · macOS only · early testing. Change history in [`CHANGELOG.md`](CHANGELOG.md).
+> **Alpha version `0.1.0-alpha.3`** · macOS only · early testing. Change history in [`CHANGELOG.md`](CHANGELOG.md).
 
 ## Features
 
@@ -106,7 +106,7 @@ Desktop text editor for creative writing (`.md`, `.mdx`, `.fountain`, `.txt`), a
 - GitHub token (optional): only needed to publish and sync repositories.
 
 **Option A: installer**
-1. Download `Bradbit Editor_0.1.0-alpha.2_<architecture>.dmg` from the releases page.
+1. Download `Bradbit Editor_0.1.0-alpha.3_<architecture>.dmg` from the releases page.
 2. Drag the app into *Applications*.
 3. The alpha is not signed. On first launch, right-click the app, choose **Open** and confirm.
 

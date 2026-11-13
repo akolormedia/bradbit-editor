@@ -1,7 +1,7 @@
 {
   "name": "bradbit-editor",
   "private": true,
-  "version": "0.1.0-alpha.2",
+  "version": "0.1.0-alpha.3",
   "description": "Bradbit Editor — Agnostic creative writing text editor powered by Tauri v2, CodeMirror 6 and Rust",
   "license": "MIT",
   "type": "module",
