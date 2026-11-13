@@ -138,15 +138,22 @@ pub fn runtime_env(
 pub fn config_content(
     settings: &AppSettings,
     language_policy: Option<&Path>,
+    general_skills: Option<&Path>,
 ) -> Result<Option<String>, String> {
     let existing = std::env::var("OPENCODE_CONFIG_CONTENT").ok();
-    config_content_with(settings, existing.as_deref(), language_policy)
+    config_content_with(
+        settings,
+        existing.as_deref(),
+        language_policy,
+        general_skills,
+    )
 }
 
 fn config_content_with(
     settings: &AppSettings,
     existing: Option<&str>,
     language_policy: Option<&Path>,
+    general_skills: Option<&Path>,
 ) -> Result<Option<String>, String> {
     validate_providers(&settings.byok_providers)?;
     let custom: Vec<&ByokProvider> = settings
@@ -154,7 +161,7 @@ fn config_content_with(
         .iter()
         .filter(|provider| provider.kind == "custom")
         .collect();
-    if custom.is_empty() && language_policy.is_none() {
+    if custom.is_empty() && language_policy.is_none() && general_skills.is_none() {
         return Ok(None);
     }
 
@@ -218,6 +225,34 @@ fn config_content_with(
             .any(|item| item.as_str().map(|item| item == value).unwrap_or(false))
         {
             array.push(Value::String(value));
+        }
+    }
+
+    if let Some(path) = general_skills {
+        let skills = object
+            .entry("skills")
+            .or_insert_with(|| Value::Array(Vec::new()));
+        let array = skills
+            .as_array_mut()
+            .ok_or_else(|| "OPENCODE_CONFIG_CONTENT skills must be an array".to_string())?;
+        let value = path.to_string_lossy().to_string();
+        if !array
+            .iter()
+            .any(|item| item.as_str().map(|item| item == value).unwrap_or(false))
+        {
+            array.push(Value::String(value));
+        }
+
+        let commands = object
+            .entry("commands")
+            .or_insert_with(|| Value::Object(Map::new()));
+        let map = commands
+            .as_object_mut()
+            .ok_or_else(|| "OPENCODE_CONFIG_CONTENT commands must be an object".to_string())?;
+        if let Some(definitions) = crate::git_assistant::commands().as_object() {
+            for (name, definition) in definitions {
+                map.insert(name.clone(), definition.clone());
+            }
         }
     }
 
@@ -399,7 +434,9 @@ mod tests {
             byok_providers: vec![custom()],
             ..Default::default()
         };
-        let content = config_content_with(&settings, None, None).unwrap().unwrap();
+        let content = config_content_with(&settings, None, None, None)
+            .unwrap()
+            .unwrap();
         assert!(content.contains("https://api.example.com/v1"));
         assert!(content.contains("BRADBIT_MI_API_API_KEY"));
         assert!(content.contains("mi-modelo"));
@@ -414,7 +451,7 @@ mod tests {
         };
         let existing =
             r#"{"model":"deepseek/deepseek-chat","providers":{"other":{"name":"Other"}}}"#;
-        let content = config_content_with(&settings, Some(existing), None)
+        let content = config_content_with(&settings, Some(existing), None, None)
             .unwrap()
             .unwrap();
         let parsed: Value = serde_json::from_str(&content).unwrap();
@@ -429,10 +466,14 @@ mod tests {
     #[test]
     fn adds_the_language_policy_without_custom_providers() {
         let settings = AppSettings::default();
-        let content =
-            config_content_with(&settings, None, Some(Path::new("/tmp/agent-language.md")))
-                .unwrap()
-                .unwrap();
+        let content = config_content_with(
+            &settings,
+            None,
+            Some(Path::new("/tmp/agent-language.md")),
+            None,
+        )
+        .unwrap()
+        .unwrap();
         let parsed: Value = serde_json::from_str(&content).unwrap();
         assert_eq!(parsed["instructions"][0], "/tmp/agent-language.md");
         assert!(parsed.get("providers").is_none());
@@ -449,6 +490,7 @@ mod tests {
             &settings,
             Some(existing),
             Some(Path::new("/tmp/agent-language.md")),
+            None,
         )
         .unwrap()
         .unwrap();
@@ -465,9 +507,34 @@ mod tests {
 
     #[test]
     fn skips_config_content_when_nothing_is_added() {
-        assert!(config_content_with(&AppSettings::default(), None, None)
+        assert!(
+            config_content_with(&AppSettings::default(), None, None, None)
+                .unwrap()
+                .is_none()
+        );
+    }
+
+    #[test]
+    fn merges_general_skills_and_commands() {
+        let settings = AppSettings::default();
+        let content = config_content_with(
+            &settings,
+            None,
+            None,
+            Some(Path::new("/tmp/bradbit-skills")),
+        )
+        .unwrap()
+        .unwrap();
+        let parsed: Value = serde_json::from_str(&content).unwrap();
+        assert_eq!(parsed["skills"][0], "/tmp/bradbit-skills");
+        assert!(parsed["commands"]["save-version"]["template"]
+            .as_str()
             .unwrap()
-            .is_none());
+            .contains("git-versioning"));
+        assert_eq!(
+            parsed["commands"]["history"]["description"],
+            "Summarizes the recent saved versions of the project."
+        );
     }
 
     #[test]

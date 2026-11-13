@@ -70,6 +70,7 @@ import { addSessionTab, removeSessionTab, SessionTabInfo } from "./session/sessi
 import { projectRelativePath } from "./session/chatPaths";
 import { parseSlashCommand } from "./session/composer";
 import { matchesKitCommand } from "./kit/localize";
+import { GENERAL_COMMANDS, mergeGeneralCommands } from "./kit/generalCommands";
 import { SessionView, toggleSessionView } from "./session/sessionView";
 import { SettingsPanel } from "./settings/settingsPanel";
 import type { SettingsCategoryId } from "./settings/catalog";
@@ -193,7 +194,7 @@ class BradbitApp {
   private sidebarTab: SidebarTab = "files";
   private sidebarWidth = 260;
   private fileFilter = "";
-  private kitCatalog: KitCatalog = { agents: [], commands: [], skills: [] };
+  private kitCatalog: KitCatalog = { agents: [], commands: GENERAL_COMMANDS, skills: [] };
   private chatModels: OpenCodeModel[] = [];
   private sessionView: SessionView = "chat";
   private terminalPanel: TerminalPanel | null = null;
@@ -315,7 +316,7 @@ class BradbitApp {
     this.stopTerminalSession();
     this.chatPanel = null;
     this.folder = null;
-    this.kitCatalog = { agents: [], commands: [], skills: [] };
+    this.kitCatalog = { agents: [], commands: GENERAL_COMMANDS, skills: [] };
     this.chatModels = [];
     this.tabState = { tabs: [], activeTabPath: null };
     this.untitledSequence = 0;
@@ -344,7 +345,7 @@ class BradbitApp {
       this.stopTerminalSession();
       this.chatPanel = null;
       this.folder = opened;
-      this.kitCatalog = { agents: [], commands: [], skills: [] };
+      this.kitCatalog = { agents: [], commands: GENERAL_COMMANDS, skills: [] };
       try {
         this.workspaceState = await backend.loadWorkspaceState(opened.rootPath);
         this.applyWorkspaceLayout(this.workspaceState.layout);
@@ -2278,14 +2279,16 @@ class BradbitApp {
 
   private async refreshKitCatalog(): Promise<void> {
     if (!this.folder) {
-      this.kitCatalog = { agents: [], commands: [], skills: [] };
+      this.kitCatalog = { agents: [], commands: GENERAL_COMMANDS, skills: [] };
       return;
     }
     try {
-      this.kitCatalog = await backend.discoverKit(this.folder.rootPath);
+      this.kitCatalog = mergeGeneralCommands(
+        await backend.discoverKit(this.folder.rootPath),
+      );
     } catch (err) {
       console.error("Could not discover the project kit", err);
-      this.kitCatalog = { agents: [], commands: [], skills: [] };
+      this.kitCatalog = { agents: [], commands: GENERAL_COMMANDS, skills: [] };
     }
   }
 

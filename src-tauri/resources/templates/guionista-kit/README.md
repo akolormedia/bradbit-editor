@@ -25,24 +25,25 @@ plus the folder structure for the story bible and the script.
 
 - **skills/** — processes: idea development, research, character sheets,
   narrative structure methods, outline, scene writing, Fountain format,
-  micro drama, script editing, and Git versioning.
+  micro drama and script editing.
 - **agents/** — roles with different permissions: `screenwriter`
   (writes), `editor` (gives notes, does not modify), `researcher`
   (researches and records sources), `character` (chats in the voice of a
   character from the bible, to test dialogue).
 - **commands/** — shortcuts: `/idea`, `/research`, `/character`,
-  `/structure`, `/scene`, `/review`, `/voice`, `/save-version`,
-  `/history`. Spanish aliases are available when Bradbit runs in Spanish:
-  `/investigar`, `/personaje`, `/estructura`, `/escena`, `/revisar`,
-  `/voz`, `/guardar-version`, `/historial`.
+  `/structure`, `/scene`, `/review`, `/voice`. Spanish aliases are
+  available when Bradbit runs in Spanish: `/investigar`, `/personaje`,
+  `/estructura`, `/escena`, `/revisar`, `/voz`.
+- **Git commands** — `/save-version` and `/history` are provided by
+  Bradbit as general commands, not by this kit.
 
 ## Versioning workflow
 
-- `/save-version` inspects the working tree, summarizes the changes in
-  human language, proposes a version name and asks for approval. It only
-  commits after the user approves.
-- `/history` summarizes recent versions.
-- Never commit secrets or generated `exports/`.
+The Git assistant is a **general Bradbit capability**, not part of this
+kit. `/save-version` inspects the working tree, summarizes the changes in
+human language, proposes a version name and asks for approval. It only
+commits after the user approves. `/history` summarizes recent versions.
+Never commit secrets or generated `exports/`.
 
 ## Roadmap
 

@@ -3,6 +3,7 @@ pub mod cancel;
 pub mod fountain;
 pub mod fs_ops;
 pub mod git;
+pub mod git_assistant;
 pub mod github;
 pub mod kit;
 pub mod language;
@@ -420,7 +421,8 @@ fn opencode_start(
     let settings = settings::load_settings()?;
     let env = byok::runtime_env(&settings, &secrets)?;
     let policy = language::write_policy(&settings.language)?;
-    let config_content = byok::config_content(&settings, Some(&policy))?;
+    let general_skills = git_assistant::write_skill()?;
+    let config_content = byok::config_content(&settings, Some(&policy), Some(&general_skills))?;
     state.start(&app, &root, &env, config_content.as_deref())
 }
 
