@@ -1,0 +1,17 @@
+{
+  "id": "guionista-kit",
+  "name": "Screenwriting",
+  "version": "1.0.0",
+  "description": "Film, series and microdrama screenwriting kit with agents, commands, skills and a story bible.",
+  "author": "Bradbit",
+  "minimumBradbit": "0.1.0-alpha.2",
+  "contents": [
+    "AGENTS.md",
+    ".bradbit/",
+    "bible/",
+    "structure/",
+    "script/",
+    "research/",
+    "notes/"
+  ]
+}

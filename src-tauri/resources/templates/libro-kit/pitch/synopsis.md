@@ -1,0 +1,13 @@
+# Synopsis
+
+## Logline
+...
+
+## One-page synopsis
+...
+
+## Themes
+...
+
+## Comparable titles
+...

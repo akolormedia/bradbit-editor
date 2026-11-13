@@ -475,14 +475,27 @@ export const backend = {
     return [
       {
         id: "guionista-kit",
-        name: "Guion Audiovisual (guionista-kit)",
-        description: "Biblia, estructura, guion, investigación y agentes de guionista-kit.",
+        name: "Screenwriting (guionista-kit)",
+        description: "Film, series and microdrama writing with a story bible.",
+        source: "bundled",
+      },
+      {
+        id: "campaign-kit",
+        name: "Advertising campaigns (campaign-kit)",
+        description: "Client folders, briefs, strategy, creative and approvals.",
+        source: "bundled",
+      },
+      {
+        id: "libro-kit",
+        name: "Novel (libro-kit)",
+        description:
+          "Novel writing with bible, structure, manuscript, research, revision and pitch.",
         source: "bundled",
       },
       {
         id: "blank",
-        name: "Proyecto en blanco",
-        description: "Carpeta limpia para escribir libremente.",
+        name: "Blank project",
+        description: "A clean folder to write freely.",
         source: "blank",
       },
     ];

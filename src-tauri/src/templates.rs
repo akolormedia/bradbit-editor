@@ -8,8 +8,28 @@ use std::time::{SystemTime, UNIX_EPOCH};
 static BUILTIN_TEMPLATES: Dir<'_> = include_dir!("$CARGO_MANIFEST_DIR/resources/templates");
 
 const SCREENWRITER_KIT_ID: &str = "guionista-kit";
+const CAMPAIGN_KIT_ID: &str = "campaign-kit";
+const LIBRO_KIT_ID: &str = "libro-kit";
 const BLANK_ID: &str = "blank";
-const RESERVED_TEMPLATE_NAMES: &[&str] = &[SCREENWRITER_KIT_ID, BLANK_ID];
+const BUILTIN_KITS: &[(&str, &str, &str)] = &[
+    (
+        SCREENWRITER_KIT_ID,
+        "Screenwriting (guionista-kit)",
+        "Film, series and microdrama writing with a story bible.",
+    ),
+    (
+        CAMPAIGN_KIT_ID,
+        "Advertising campaigns (campaign-kit)",
+        "Client folders, briefs, strategy, creative and approvals.",
+    ),
+    (
+        LIBRO_KIT_ID,
+        "Novel (libro-kit)",
+        "Novel writing with bible, structure, manuscript, research, revision and pitch.",
+    ),
+];
+const RESERVED_TEMPLATE_NAMES: &[&str] =
+    &[SCREENWRITER_KIT_ID, CAMPAIGN_KIT_ID, LIBRO_KIT_ID, BLANK_ID];
 const SKIPPED_NAMES: &[&str] = &[".git", ".DS_Store", "node_modules", "target", "exports"];
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -38,7 +58,7 @@ struct TemplateMeta {
     description: Option<String>,
 }
 
-/// Built-in `guionista-kit` plus user templates found under
+/// Built-in writing kits plus user templates found under
 /// `~/Library/Application Support/Bradbit/templates/`.
 pub fn list_templates() -> Result<Vec<TemplateInfo>, String> {
     let user_dir = user_templates_dir()?;
@@ -46,22 +66,23 @@ pub fn list_templates() -> Result<Vec<TemplateInfo>, String> {
 }
 
 pub fn list_templates_in(user_dir: &Path) -> Result<Vec<TemplateInfo>, String> {
-    let mut templates = vec![
-        TemplateInfo {
-            id: SCREENWRITER_KIT_ID.to_string(),
-            name: "Guion Audiovisual (guionista-kit)".to_string(),
-            description: "Bible, structure, script, research and guionista-kit agents.".to_string(),
+    let mut templates = BUILTIN_KITS
+        .iter()
+        .map(|(id, name, description)| TemplateInfo {
+            id: (*id).to_string(),
+            name: (*name).to_string(),
+            description: (*description).to_string(),
             source: "bundled".to_string(),
             path: None,
-        },
-        TemplateInfo {
-            id: BLANK_ID.to_string(),
-            name: "Proyecto en blanco".to_string(),
-            description: "Carpeta limpia para escribir libremente.".to_string(),
-            source: "blank".to_string(),
-            path: None,
-        },
-    ];
+        })
+        .collect::<Vec<_>>();
+    templates.push(TemplateInfo {
+        id: BLANK_ID.to_string(),
+        name: "Blank project".to_string(),
+        description: "A clean folder to write freely.".to_string(),
+        source: "blank".to_string(),
+        path: None,
+    });
 
     if user_dir.exists() {
         let mut user_templates = Vec::new();
@@ -128,12 +149,10 @@ pub fn create_project_from_template_in(
                 fs::create_dir_all(&temp)
                     .map_err(|e| format!("Could not create the project: {}", e))?;
             }
-            SCREENWRITER_KIT_ID => {
-                let template = BUILTIN_TEMPLATES
-                    .get_dir(SCREENWRITER_KIT_ID)
-                    .ok_or_else(|| {
-                        "The guionista-kit template is not available in this build".to_string()
-                    })?;
+            other if BUILTIN_KITS.iter().any(|(id, _, _)| *id == other) => {
+                let template = BUILTIN_TEMPLATES.get_dir(other).ok_or_else(|| {
+                    format!("The {other} template is not available in this build")
+                })?;
                 copy_embedded_dir(template, &temp)?;
             }
             other => {
@@ -392,8 +411,12 @@ mod tests {
         let templates = list_templates_in(&user_dir).unwrap();
         assert_eq!(templates[0].id, SCREENWRITER_KIT_ID);
         assert_eq!(templates[0].source, "bundled");
-        assert_eq!(templates[1].id, BLANK_ID);
-        assert_eq!(templates[1].source, "blank");
+        assert_eq!(templates[1].id, CAMPAIGN_KIT_ID);
+        assert_eq!(templates[1].source, "bundled");
+        assert_eq!(templates[2].id, LIBRO_KIT_ID);
+        assert_eq!(templates[2].source, "bundled");
+        assert_eq!(templates[3].id, BLANK_ID);
+        assert_eq!(templates[3].source, "blank");
         assert!(templates.iter().any(|item| item.id == "mi-plantilla"
             && item.name == "mi-plantilla"
             && item.description == "Mi plantilla"));
@@ -415,12 +438,29 @@ mod tests {
                 .sum()
         }
 
-        let template = BUILTIN_TEMPLATES.get_dir(SCREENWRITER_KIT_ID).unwrap();
-        let files = count_files(template);
-        assert!(files >= 30, "only {files} bundled files");
-        assert!(template.get_file("guionista-kit/AGENTS.md").is_some());
-        assert!(template
+        for (id, _, _) in BUILTIN_KITS {
+            let template = BUILTIN_TEMPLATES.get_dir(id).unwrap();
+            let files = count_files(template);
+            assert!(files >= 30, "only {files} bundled files in {id}");
+            assert!(
+                template.get_file(format!("{id}/AGENTS.md")).is_some(),
+                "{id} has no AGENTS.md"
+            );
+            assert!(
+                template
+                    .get_file(format!("{id}/bradbit-kit.json"))
+                    .is_some(),
+                "{id} has no bradbit-kit.json"
+            );
+        }
+        assert!(BUILTIN_TEMPLATES
             .get_file("guionista-kit/.bradbit/agents/screenwriter.md")
+            .is_some());
+        assert!(BUILTIN_TEMPLATES
+            .get_file("campaign-kit/.bradbit/agents/strategist.md")
+            .is_some());
+        assert!(BUILTIN_TEMPLATES
+            .get_file("libro-kit/.bradbit/agents/novelist.md")
             .is_some());
     }
 
@@ -469,6 +509,49 @@ mod tests {
         assert!(project
             .join(".bradbit/skills/write-scene/SKILL.md")
             .is_file());
+        assert!(!project.join("exports").exists());
+    }
+
+    #[test]
+    fn creates_a_campaign_kit_project_with_the_expected_files() {
+        let dir = tempdir().unwrap();
+        let destination = dir.path().join("projects");
+        fs::create_dir_all(&destination).unwrap();
+        let created = create_project_from_template_in(
+            CAMPAIGN_KIT_ID,
+            "Campaña Nueva",
+            destination.to_str().unwrap(),
+            &dir.path().join("templates"),
+        )
+        .unwrap();
+        let project = Path::new(&created.path);
+        assert!(project.join("AGENTS.md").is_file());
+        assert!(project.join(".bradbit/agents/strategist.md").is_file());
+        assert!(project.join("clients/_template/client.md").is_file());
+        assert!(project.join("campaigns/_template/brief.md").is_file());
+        assert!(project.join("library/channel-specs/social.md").is_file());
+        assert!(!project.join("exports").exists());
+    }
+
+    #[test]
+    fn creates_a_libro_kit_project_with_the_expected_files() {
+        let dir = tempdir().unwrap();
+        let destination = dir.path().join("projects");
+        fs::create_dir_all(&destination).unwrap();
+        let created = create_project_from_template_in(
+            LIBRO_KIT_ID,
+            "Novela Nueva",
+            destination.to_str().unwrap(),
+            &dir.path().join("templates"),
+        )
+        .unwrap();
+        let project = Path::new(&created.path);
+        assert!(project.join("AGENTS.md").is_file());
+        assert!(project.join(".bradbit/agents/novelist.md").is_file());
+        assert!(project.join("bible/premise.md").is_file());
+        assert!(project.join("structure/outline.md").is_file());
+        assert!(project.join("manuscript/title-page.md").is_file());
+        assert!(project.join("pitch/synopsis.md").is_file());
         assert!(!project.join("exports").exists());
     }
 
