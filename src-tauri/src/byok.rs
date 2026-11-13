@@ -7,6 +7,7 @@
 //! model. Keys never touch project files, settings, logs or argv.
 
 use std::collections::HashSet;
+use std::path::Path;
 
 use serde::Serialize;
 use serde_json::{json, Map, Value};
@@ -131,16 +132,21 @@ pub fn runtime_env(
     Ok(env)
 }
 
-/// Inline OpenCode config for custom providers, merged with any existing
-/// `OPENCODE_CONFIG_CONTENT`. Returns `None` when no custom provider is set.
-pub fn config_content(settings: &AppSettings) -> Result<Option<String>, String> {
+/// Inline OpenCode config for custom providers and ambient instructions,
+/// merged with any existing `OPENCODE_CONFIG_CONTENT`. Returns `None` when
+/// there is nothing to add.
+pub fn config_content(
+    settings: &AppSettings,
+    language_policy: Option<&Path>,
+) -> Result<Option<String>, String> {
     let existing = std::env::var("OPENCODE_CONFIG_CONTENT").ok();
-    config_content_with(settings, existing.as_deref())
+    config_content_with(settings, existing.as_deref(), language_policy)
 }
 
 fn config_content_with(
     settings: &AppSettings,
     existing: Option<&str>,
+    language_policy: Option<&Path>,
 ) -> Result<Option<String>, String> {
     validate_providers(&settings.byok_providers)?;
     let custom: Vec<&ByokProvider> = settings
@@ -148,7 +154,7 @@ fn config_content_with(
         .iter()
         .filter(|provider| provider.kind == "custom")
         .collect();
-    if custom.is_empty() {
+    if custom.is_empty() && language_policy.is_none() {
         return Ok(None);
     }
 
@@ -161,39 +167,58 @@ fn config_content_with(
         return Err("OPENCODE_CONFIG_CONTENT must be a JSON object".to_string());
     }
     let object = root.as_object_mut().expect("validated object");
-    let providers = object
-        .entry("providers")
-        .or_insert_with(|| Value::Object(Map::new()));
-    if !providers.is_object() {
-        return Err("OPENCODE_CONFIG_CONTENT providers must be an object".to_string());
-    }
-    let providers = providers.as_object_mut().expect("validated providers");
 
-    for provider in custom {
-        let base_url = provider
-            .base_url
-            .as_deref()
-            .ok_or_else(|| format!("Custom provider '{}' needs a base URL", provider.name))?;
-        let model = provider
-            .model
-            .as_deref()
-            .ok_or_else(|| format!("Custom provider '{}' needs a model", provider.name))?;
-        providers.insert(
-            provider.id.clone(),
-            json!({
-                "name": provider.name,
-                "package": "@opencode/ai/providers/openai-compatible",
-                "env": [provider.env_var],
-                "settings": { "baseURL": base_url },
-                "models": {
-                    model: {
-                        "name": model,
-                        "modelID": model,
-                        "type": "chat"
+    if !custom.is_empty() {
+        let providers = object
+            .entry("providers")
+            .or_insert_with(|| Value::Object(Map::new()));
+        if !providers.is_object() {
+            return Err("OPENCODE_CONFIG_CONTENT providers must be an object".to_string());
+        }
+        let providers = providers.as_object_mut().expect("validated providers");
+
+        for provider in custom {
+            let base_url = provider
+                .base_url
+                .as_deref()
+                .ok_or_else(|| format!("Custom provider '{}' needs a base URL", provider.name))?;
+            let model = provider
+                .model
+                .as_deref()
+                .ok_or_else(|| format!("Custom provider '{}' needs a model", provider.name))?;
+            providers.insert(
+                provider.id.clone(),
+                json!({
+                    "name": provider.name,
+                    "package": "@opencode/ai/providers/openai-compatible",
+                    "env": [provider.env_var],
+                    "settings": { "baseURL": base_url },
+                    "models": {
+                        model: {
+                            "name": model,
+                            "modelID": model,
+                            "type": "chat"
+                        }
                     }
-                }
-            }),
-        );
+                }),
+            );
+        }
+    }
+
+    if let Some(path) = language_policy {
+        let instructions = object
+            .entry("instructions")
+            .or_insert_with(|| Value::Array(Vec::new()));
+        let array = instructions
+            .as_array_mut()
+            .ok_or_else(|| "OPENCODE_CONFIG_CONTENT instructions must be an array".to_string())?;
+        let value = path.to_string_lossy().to_string();
+        if !array
+            .iter()
+            .any(|item| item.as_str().map(|item| item == value).unwrap_or(false))
+        {
+            array.push(Value::String(value));
+        }
     }
 
     serde_json::to_string(&root)
@@ -374,7 +399,7 @@ mod tests {
             byok_providers: vec![custom()],
             ..Default::default()
         };
-        let content = config_content_with(&settings, None).unwrap().unwrap();
+        let content = config_content_with(&settings, None, None).unwrap().unwrap();
         assert!(content.contains("https://api.example.com/v1"));
         assert!(content.contains("BRADBIT_MI_API_API_KEY"));
         assert!(content.contains("mi-modelo"));
@@ -389,7 +414,7 @@ mod tests {
         };
         let existing =
             r#"{"model":"deepseek/deepseek-chat","providers":{"other":{"name":"Other"}}}"#;
-        let content = config_content_with(&settings, Some(existing))
+        let content = config_content_with(&settings, Some(existing), None)
             .unwrap()
             .unwrap();
         let parsed: Value = serde_json::from_str(&content).unwrap();
@@ -399,6 +424,50 @@ mod tests {
             parsed["providers"]["mi-api"]["env"][0],
             "BRADBIT_MI_API_API_KEY"
         );
+    }
+
+    #[test]
+    fn adds_the_language_policy_without_custom_providers() {
+        let settings = AppSettings::default();
+        let content =
+            config_content_with(&settings, None, Some(Path::new("/tmp/agent-language.md")))
+                .unwrap()
+                .unwrap();
+        let parsed: Value = serde_json::from_str(&content).unwrap();
+        assert_eq!(parsed["instructions"][0], "/tmp/agent-language.md");
+        assert!(parsed.get("providers").is_none());
+    }
+
+    #[test]
+    fn merges_the_language_policy_with_existing_instructions() {
+        let settings = AppSettings {
+            byok_providers: vec![custom()],
+            ..Default::default()
+        };
+        let existing = r#"{"instructions":["/tmp/existing.md"]}"#;
+        let content = config_content_with(
+            &settings,
+            Some(existing),
+            Some(Path::new("/tmp/agent-language.md")),
+        )
+        .unwrap()
+        .unwrap();
+        let parsed: Value = serde_json::from_str(&content).unwrap();
+        assert_eq!(
+            parsed["instructions"],
+            json!(["/tmp/existing.md", "/tmp/agent-language.md"])
+        );
+        assert_eq!(
+            parsed["providers"]["mi-api"]["env"][0],
+            "BRADBIT_MI_API_API_KEY"
+        );
+    }
+
+    #[test]
+    fn skips_config_content_when_nothing_is_added() {
+        assert!(config_content_with(&AppSettings::default(), None, None)
+            .unwrap()
+            .is_none());
     }
 
     #[test]

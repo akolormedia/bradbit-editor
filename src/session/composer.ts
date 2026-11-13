@@ -10,6 +10,7 @@ export interface CompletionToken {
 export interface CommandCandidate {
   name: string;
   description?: string;
+  aliases?: string[];
 }
 
 export interface FileCandidate {
@@ -50,9 +51,14 @@ export function filterCommands<T extends CommandCandidate>(
   for (const command of commands) {
     const name = command.name.toLowerCase();
     const description = (command.description ?? "").toLowerCase();
+    const aliases = (command.aliases ?? []).map((alias) =>
+      alias.toLowerCase(),
+    );
     let score: number | null = null;
     if (name.startsWith(needle)) score = 0;
+    else if (aliases.some((alias) => alias.startsWith(needle))) score = 0;
     else if (name.includes(needle)) score = 1;
+    else if (aliases.some((alias) => alias.includes(needle))) score = 1;
     else if (description.includes(needle)) score = 2;
     if (score !== null) scored.push({ command, score });
   }

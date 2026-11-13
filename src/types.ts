@@ -202,11 +202,19 @@ export interface GitHubPullRequest {
   baseRef: string;
 }
 
+export interface KitLocalized {
+  name?: string | null;
+  description?: string | null;
+  aliases?: string[];
+}
+
 export interface KitAgent {
   id: string;
   name: string;
   description: string;
   path: string;
+  aliases?: string[];
+  i18n?: Record<string, KitLocalized>;
 }
 
 export interface KitCommand {
@@ -215,6 +223,8 @@ export interface KitCommand {
   description: string;
   agent: string | null;
   path: string;
+  aliases?: string[];
+  i18n?: Record<string, KitLocalized>;
 }
 
 export interface KitSkill {
@@ -222,6 +232,8 @@ export interface KitSkill {
   name: string;
   description: string;
   path: string;
+  aliases?: string[];
+  i18n?: Record<string, KitLocalized>;
 }
 
 export interface KitCatalog {

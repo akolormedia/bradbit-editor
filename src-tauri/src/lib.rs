@@ -5,6 +5,7 @@ pub mod fs_ops;
 pub mod git;
 pub mod github;
 pub mod kit;
+pub mod language;
 pub mod menu;
 pub mod opencode;
 pub mod pty;
@@ -28,6 +29,7 @@ fn load_settings() -> Result<AppSettings, String> {
 #[tauri::command]
 fn save_settings(settings: AppSettings) -> Result<AppSettings, String> {
     settings::save_settings(&settings)?;
+    language::write_policy(&settings.language)?;
     Ok(settings)
 }
 
@@ -417,7 +419,8 @@ fn opencode_start(
 ) -> Result<(), String> {
     let settings = settings::load_settings()?;
     let env = byok::runtime_env(&settings, &secrets)?;
-    let config_content = byok::config_content(&settings)?;
+    let policy = language::write_policy(&settings.language)?;
+    let config_content = byok::config_content(&settings, Some(&policy))?;
     state.start(&app, &root, &env, config_content.as_deref())
 }
 

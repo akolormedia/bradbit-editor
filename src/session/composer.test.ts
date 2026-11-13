@@ -55,6 +55,19 @@ describe("composer completions (T-2.2.2)", () => {
     ).toEqual(["revisar"]);
   });
 
+  it("filters commands by localized aliases", () => {
+    const commands = [
+      { name: "scene", description: "Write a scene", aliases: ["escena"] },
+      { name: "review", description: "Review a scene", aliases: ["revisar"] },
+    ];
+    expect(filterCommands(commands, "esc").map((command) => command.name)).toEqual([
+      "scene",
+    ]);
+    expect(
+      filterCommands(commands, "revis").map((command) => command.name),
+    ).toEqual(["review"]);
+  });
+
   it("filters project files by name and path", () => {
     const files = [
       { path: "biblia/personajes/ana.md", name: "ana.md" },
