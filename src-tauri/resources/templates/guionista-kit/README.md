@@ -1,49 +1,58 @@
 # guionista-kit
 
-Plantilla base para proyectos de guion (largometraje, serie, micro
-drama) trabajados con Bradbit. Contiene los skills, agentes y
-comandos comunes a cualquier proyecto, más la estructura de carpetas
-de la "biblia" y el guion.
+Base project template for screenwriting (feature film, series, micro
+drama) with Bradbit. It contains the shared skills, agents and commands,
+plus the folder structure for the story bible and the script.
 
-## Cómo usarla
+## How to use it
 
-1. Copia esta carpeta completa como el repo de tu nuevo proyecto:
+1. Copy this folder as the repository for your new project:
    ```bash
-   cp -r guionista-kit mi-proyecto-nuevo
-   cd mi-proyecto-nuevo
+   cp -r guionista-kit my-new-project
+   cd my-new-project
    git init
    ```
-2. Llena `biblia/premisa.md` con la idea inicial (o usa el skill
-   `desarrollo-idea` para construirla con ayuda).
-3. Ve llenando `biblia/personajes/` (un archivo por personaje) y
-   `biblia/mundo/` a medida que el proyecto avanza.
-4. Elige un método de estructura en `.bradbit/skills/metodos-estructura/`
-   y escribe la escaleta en `estructura/`.
-5. Escribe el guion en `guion/*.fountain`.
+2. Fill `bible/premise.md` with the initial idea (or use the
+   `idea-development` skill to build it with help).
+3. Fill `bible/characters/` (one file per character) and
+   `bible/world/` as the project grows.
+4. Choose a structure method in
+   `.bradbit/skills/story-structure/methods/` and write the outline in
+   `structure/`.
+5. Write the script in `script/*.fountain`.
 
-## Qué hay en `.bradbit/`
+## What is in `.bradbit/`
 
-- **skills/** — procesos: desarrollo de idea, investigación, fichas
-  de personaje, métodos de estructura narrativa, escaleta, escritura
-  de escenas, formato Fountain, micro drama, script editor.
-- **agents/** — roles con permisos distintos: `guionista` (escribe),
-  `editor` (solo da notas, no modifica), `investigador` (solo
-  investiga y anota fuentes), `personaje` (chatea en la voz de un
-  personaje de la biblia, para probar diálogos).
-- **commands/** — atajos: `/idea`, `/investigar`, `/personaje`,
-  `/estructura`, `/escena`, `/revisar`, `/voz`.
+- **skills/** — processes: idea development, research, character sheets,
+  narrative structure methods, outline, scene writing, Fountain format,
+  micro drama, script editing, and Git versioning.
+- **agents/** — roles with different permissions: `screenwriter`
+  (writes), `editor` (gives notes, does not modify), `researcher`
+  (researches and records sources), `character` (chats in the voice of a
+  character from the bible, to test dialogue).
+- **commands/** — shortcuts: `/idea`, `/research`, `/character`,
+  `/structure`, `/scene`, `/review`, `/voice`, `/save-version`,
+  `/history`. Spanish aliases are available when Bradbit runs in Spanish:
+  `/investigar`, `/personaje`, `/estructura`, `/escena`, `/revisar`,
+  `/voz`, `/guardar-version`, `/historial`.
 
-## Roadmap de este kit (para ir mejorándolo)
+## Versioning workflow
 
-- **v0 (actual):** idea, personajes, estructura (2-3 métodos),
-  escaleta, agente editor.
-- **v1:** escribir-escena más pulido, `/voz` para probar diálogos,
-  validador de formato Fountain.
-- **v2:** investigación web con fuentes anotadas, micro drama,
-  más métodos de estructura, exportación a PDF/Celtx.
-- **v3:** documentación amigable para que la use más gente del
-  equipo, no solo quien lo construyó.
+- `/save-version` inspects the working tree, summarizes the changes in
+  human language, proposes a version name and asks for approval. It only
+  commits after the user approves.
+- `/history` summarizes recent versions.
+- Never commit secrets or generated `exports/`.
 
-Nota técnica: Bradbit lee `.bradbit/` como carpeta canónica. Si abres
-el kit con OpenCode upstream, renombra `.bradbit/` a `.opencode/`; Bradbit
-también sigue leyendo `.opencode/` como compatibilidad legacy.
+## Roadmap
+
+- **v0:** idea, characters, structure, outline, scene drafts, editor.
+- **v1 (current):** English kit, Spanish examples and aliases, Git
+  versioning workflow, `bible/` folders in English.
+- **v2:** web research with annotated sources, more structure methods,
+  PDF/Celtx export.
+- **v3:** author-facing documentation for the whole team.
+
+Technical note: Bradbit reads `.bradbit/` as the canonical kit folder. If
+you open the kit with OpenCode upstream, rename `.bradbit/` to
+`.opencode/`; Bradbit still reads `.opencode/` as legacy compatibility.

@@ -1,47 +1,54 @@
-# Instrucciones base del proyecto
+# Project instructions
 
-Este archivo lo lee opencode al iniciar. Es el contrato general para
-cualquier skill o agente que trabaje en este repositorio.
+This file is read by Bradbit when the project opens. It is the general
+contract for every skill and agent working in this repository.
 
-## Idioma
-Escribe siempre en español (salvo que se indique lo contrario para un
-proyecto específico). Registro: el que corresponda al proyecto —
-revisa `biblia/premisa.md` para tono y voz.
+## Language
+- Instructions in this kit are written in English.
+- Always follow the app language policy: reply and write creative content
+  in the language configured in Bradbit.
+- Check `bible/premise.md` for the project's tone and voice.
 
-## Reglas de consistencia
-- Antes de escribir o modificar cualquier escena, personaje o beat de
-  estructura, lee `biblia/` completa (premisa, personajes, mundo,
-  cronología). La biblia es la fuente de verdad del universo narrativo.
-- Si vas a introducir un hecho nuevo (un lugar, una regla del mundo,
-  un rasgo de personaje) que no está en la biblia, primero pregúntale
-  al usuario si lo agregas a la biblia, o hazlo y avísale.
-- Nunca contradigas la biblia sin señalarlo explícitamente como una
-  propuesta de cambio.
+## Consistency rules
+- Before writing or changing any scene, character or structure beat, read
+  the whole `bible/` (premise, characters, world, chronology). The bible
+  is the source of truth for the story world.
+- If you need to introduce a new fact (a place, a world rule, a character
+  trait) that is not in the bible, ask the user first, or add it and tell
+  them.
+- Never contradict the bible without explicitly flagging it as a proposed
+  change.
 
-## Formato de guion
-El formato de entrega es Fountain (ver skill `formato-fountain`).
-Los archivos de guion viven en `guion/`, un archivo por acto,
-episodio o bloque según convenga al proyecto.
+## Script format
+The delivery format is Fountain (see the `fountain-format` skill). Script
+files live in `script/`, one file per act, episode or block as the project
+requires.
 
-## Modo de trabajo
-- Por defecto, propone y pregunta antes de escribir grandes bloques
-  (una escena completa, un acto entero). Los pasos pequeños
-  (una idea, una lista, una ficha de personaje) puedes resolverlos
-  directamente.
-- El usuario puede pedir "modo autónomo" para una tarea puntual; en
-  ese caso, avanza sin pedir aprobación en cada paso, pero resume al
-  final qué se hizo y qué decisiones tomaste.
-- Cuando actúes como editor/script editor (skill `editor-guion`), no
-  reescribas: da notas. Reescribir es tarea del agente `guionista`,
-  no del `editor`.
+## Working mode
+- By default, propose and ask before writing large blocks (a full scene,
+  an entire act). Small steps (an idea, a list, a character sheet) can be
+  handled directly.
+- The user may ask for "autonomous mode" for a specific task; in that
+  case, move forward without asking at every step, but summarize what you
+  did and which decisions you made at the end.
+- When acting as editor/script editor (the `script-editor` skill), do not
+  rewrite: give notes. Rewriting is the `screenwriter` agent's job, not
+  the `editor`'s.
 
-## Estructura del repo
+## Versioning
+- At meaningful milestones (premise approved, structure approved, a scene
+  or act complete, a revision pass), suggest **Save version**.
+- Use the `git-versioning` skill and the `/save-version` command.
+- Never run `git commit` without explicit approval. Never commit secrets
+  or generated `exports/` files.
+
+## Repository structure
 ```
-AGENTS.md            este archivo
-biblia/               personajes, mundo, premisa, cronología — la "fuente de verdad"
-investigacion/        notas y fuentes de investigación
-estructura/           método elegido, escaleta, tratamiento
-guion/                archivos .fountain del guion
-notas/                notas de desarrollo, notas del script editor
-.bradbit/             skills, agentes y comandos de este kit
+AGENTS.md            this file
+bible/               premise, characters, world, chronology — the source of truth
+research/            research notes and sources
+structure/           chosen method, outline, treatment
+script/              .fountain script files
+notes/               development notes and script-editor notes
+.bradbit/            skills, agents and commands for this kit
 ```

@@ -1,8 +1,13 @@
 ---
-name: idea
-description: Arranca o retoma el desarrollo de la premisa del proyecto.
-agent: guionista
+name: Idea
+description: Starts or resumes the development of the project premise.
+agent: screenwriter
+i18n:
+  es:
+    name: Idea
+    description: Arranca o retoma el desarrollo de la premisa del proyecto.
+    aliases: [idea]
 ---
-Usa el skill `desarrollo-idea` para trabajar la premisa del proyecto
-actual. Si `biblia/premisa.md` ya existe, léela primero y pregunta si
-se retoma o se ajusta.
+Use the `idea-development` skill to work on the current project premise.
+If `bible/premise.md` already has content, read it first and ask whether
+to resume or adjust it.

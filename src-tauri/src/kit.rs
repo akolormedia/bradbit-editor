@@ -397,7 +397,29 @@ mod tests {
         }
         let catalog = discover(kit.to_str().unwrap()).unwrap();
         assert_eq!(catalog.agents.len(), 4);
-        assert_eq!(catalog.commands.len(), 7);
-        assert_eq!(catalog.skills.len(), 9);
+        assert_eq!(catalog.commands.len(), 9);
+        assert_eq!(catalog.skills.len(), 10);
+        let screenwriter = catalog
+            .agents
+            .iter()
+            .find(|agent| agent.id == "screenwriter")
+            .unwrap();
+        assert_eq!(screenwriter.name, "Screenwriter");
+        assert_eq!(screenwriter.i18n["es"].name.as_deref(), Some("Guionista"));
+        let scene = catalog
+            .commands
+            .iter()
+            .find(|command| command.id == "scene")
+            .unwrap();
+        assert_eq!(scene.i18n["es"].name.as_deref(), Some("Escena"));
+        assert_eq!(scene.i18n["es"].aliases, vec!["escena"]);
+        assert!(catalog
+            .commands
+            .iter()
+            .any(|command| command.id == "save-version"));
+        assert!(catalog
+            .skills
+            .iter()
+            .any(|skill| skill.id == "git-versioning"));
     }
 }

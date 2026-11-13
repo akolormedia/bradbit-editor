@@ -420,7 +420,7 @@ mod tests {
         assert!(files >= 30, "only {files} bundled files");
         assert!(template.get_file("guionista-kit/AGENTS.md").is_some());
         assert!(template
-            .get_file("guionista-kit/.bradbit/agents/guionista.md")
+            .get_file("guionista-kit/.bradbit/agents/screenwriter.md")
             .is_some());
     }
 
@@ -464,10 +464,10 @@ mod tests {
         .unwrap();
         let project = Path::new(&created.path);
         assert!(project.join("AGENTS.md").is_file());
-        assert!(project.join("biblia/premisa.md").is_file());
-        assert!(project.join(".bradbit/agents/guionista.md").is_file());
+        assert!(project.join("bible/premise.md").is_file());
+        assert!(project.join(".bradbit/agents/screenwriter.md").is_file());
         assert!(project
-            .join(".bradbit/skills/escribir-escena/SKILL.md")
+            .join(".bradbit/skills/write-scene/SKILL.md")
             .is_file());
         assert!(!project.join("exports").exists());
     }
@@ -478,7 +478,7 @@ mod tests {
         let user_dir = dir.path().join("templates");
         let source = user_dir.join("mi-plantilla");
         write(&source.join("README.md"), "# Mi plantilla\n");
-        write(&source.join("biblia/premisa.md"), "# Premisa\n");
+        write(&source.join("bible/premise.md"), "# Premisa\n");
         write(&source.join(".git/from-template"), "no copiar\n");
         write(&source.join("exports/test.pdf"), "no copiar\n");
         let destination = dir.path().join("projects");
@@ -493,7 +493,7 @@ mod tests {
         .unwrap();
         let project = Path::new(&created.path);
         assert!(project.join("README.md").is_file());
-        assert!(project.join("biblia/premisa.md").is_file());
+        assert!(project.join("bible/premise.md").is_file());
         assert!(!project.join("exports").exists());
         assert!(!project.join(".git/from-template").exists());
     }
@@ -503,7 +503,7 @@ mod tests {
         let dir = tempdir().unwrap();
         let user_dir = dir.path().join("templates");
         let source = dir.path().join("proyecto");
-        write(&source.join("biblia/premisa.md"), "# Premisa\n");
+        write(&source.join("bible/premise.md"), "# Premisa\n");
         write(&source.join(".git/config"), "no copiar\n");
         write(&source.join("exports/out.pdf"), "no copiar\n");
 
@@ -512,7 +512,7 @@ mod tests {
         assert_eq!(saved.name, "Mi plantilla");
         assert_eq!(saved.source, "user");
         let template = user_dir.join("Mi plantilla");
-        assert!(template.join("biblia/premisa.md").is_file());
+        assert!(template.join("bible/premise.md").is_file());
         assert!(!template.join(".git").exists());
         assert!(!template.join("exports").exists());
         let meta: serde_json::Value =
