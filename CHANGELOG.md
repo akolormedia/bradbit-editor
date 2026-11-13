@@ -4,7 +4,21 @@ All notable changes to Bradbit Editor are documented in this file.
 
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the versioning follows [SemVer](https://semver.org/). `alpha` versions are early tests: behavior may change and there are no compatibility guarantees.
 
+## [0.1.0-alpha.4] - 2026-11-13
+
+Fourth alpha. Fixes the downloaded macOS installer from `alpha.3`. **Only tested on macOS.**
+
+### Fixed
+- The `.app` bundle is now ad-hoc signed **after** the agent sidecar is embedded. `alpha.3` shipped the linker's ad-hoc signature, which became invalid when the sidecar and other resources were added, so macOS reported the app as **damaged** and refused to open it.
+- The release workflow now verifies the bundle signature (`codesign --verify --deep --strict`) and fails if the app still carries the linker signature.
+
+### Known limitations
+- The app is ad-hoc signed but not notarized. On first launch, allow it in **System Settings → Privacy & Security → Open Anyway**.
+- Only tested on macOS.
+
 ## [0.1.0-alpha.3] - 2026-11-13
+
+> **Broken installer:** macOS reports the `alpha.3` app as damaged. Use `alpha.4`.
 
 Third alpha. It bundles the Bradbit agent runtime and adds bring-your-own-key provider settings. **Only tested on macOS.**
 
@@ -32,7 +46,7 @@ Third alpha. It bundles the Bradbit agent runtime and adds bring-your-own-key pr
 - The editor now waits for the runtime model catalog to finish loading before reporting that no models are available. This fixes a startup race that appeared when a provider key was injected through the environment.
 
 ### Known limitations
-- The app is not signed or notarized. On first launch on macOS, right-click the app and choose **Open**.
+- The app is ad-hoc signed but not notarized.
 - The bundled runtime is used inside the editor; the standalone `bradbit` CLI is distributed separately from the `bradbit-cli` repository.
 - Creating a project by chatting from the welcome screen (`T-2.5.10`) remains deferred.
 - BYOK currently stores keys in the macOS Keychain only.

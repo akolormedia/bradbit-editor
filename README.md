@@ -2,7 +2,7 @@
 
 Desktop text editor for creative writing (`.md`, `.mdx`, `.fountain`, `.txt`), agnostic by design, built with **Tauri v2**, **CodeMirror 6** and **Rust**.
 
-> **Alpha version `0.1.0-alpha.3`** · macOS only · early testing. Change history in [`CHANGELOG.md`](CHANGELOG.md).
+> **Alpha version `0.1.0-alpha.4`** · macOS only · early testing. Change history in [`CHANGELOG.md`](CHANGELOG.md).
 
 ## Features
 
@@ -106,9 +106,9 @@ Desktop text editor for creative writing (`.md`, `.mdx`, `.fountain`, `.txt`), a
 - GitHub token (optional): only needed to publish and sync repositories.
 
 **Option A: installer**
-1. Download `Bradbit Editor_0.1.0-alpha.3_<architecture>.dmg` from the releases page.
+1. Download `Bradbit.Editor_0.1.0-alpha.4_<architecture>.dmg` from the releases page.
 2. Drag the app into *Applications*.
-3. The alpha is not signed. On first launch, right-click the app, choose **Open** and confirm.
+3. The alpha is **ad-hoc signed but not notarized**. On first launch macOS blocks it with *“Apple could not verify…”*; open **System Settings → Privacy & Security**, scroll down and click **Open Anyway** (on older macOS versions you can also right-click the app and choose **Open**). If macOS says the app is *damaged*, re-download the latest alpha: that message means the bundle signature is invalid.
 
 **Option B: build from source**
 
@@ -127,7 +127,7 @@ downloaded binaries live in `src-tauri/binaries/` and are not committed.
 The full list is in [`CHANGELOG.md`](CHANGELOG.md#known-limitations). Summary:
 - Creating a project by chatting with the agent from the welcome screen is still planned (`T-2.5.10`).
 - Only the Guionista kit is bundled. Additional kits and extensions are planned for Phase 4.
-- The app is not signed or notarized, and only macOS has been tested.
+- The app is ad-hoc signed but not notarized, and only macOS has been tested.
 
 ## Development and tests
 
