@@ -70,6 +70,7 @@ import { addSessionTab, removeSessionTab, SessionTabInfo } from "./session/sessi
 import { projectRelativePath } from "./session/chatPaths";
 import { parseSlashCommand } from "./session/composer";
 import { matchesKitCommand } from "./kit/localize";
+import { configFilesVisible, effectiveGitAuthor } from "./settings/developer";
 import { GENERAL_COMMANDS, mergeGeneralCommands } from "./kit/generalCommands";
 import { SessionView, toggleSessionView } from "./session/sessionView";
 import { SettingsPanel } from "./settings/settingsPanel";
@@ -340,7 +341,7 @@ class BradbitApp {
 
   public async openFolderByPath(path: string): Promise<void> {
     try {
-      const opened = await backend.openFolder(path, this.settings.showConfigFiles);
+      const opened = await backend.openFolder(path, configFilesVisible(this.settings));
       await this.stopChatSession();
       this.stopTerminalSession();
       this.chatPanel = null;
@@ -401,7 +402,7 @@ class BradbitApp {
     if (!this.folder) return;
     const tree = await backend.listDirectoryTree(
       this.folder.rootPath,
-      this.settings.showConfigFiles,
+      configFilesVisible(this.settings),
     );
     this.folder = {
       ...this.folder,
@@ -495,13 +496,7 @@ class BradbitApp {
 
   private async saveVersion(): Promise<void> {
     if (!this.folder || this.gitBusy) return;
-    const name = this.settings.gitAuthorName.trim();
-    const email = this.settings.gitAuthorEmail.trim();
-    if (!isValidGitAuthor(name, email)) {
-      this.statusNotice = t(this.settings.language, "versionsAuthorMissing");
-      this.openSettingsModal();
-      return;
-    }
+    const { name, email } = effectiveGitAuthor(this.settings);
 
     const message =
       this.gitCommitMessage.trim() ||
@@ -1291,7 +1286,7 @@ class BradbitApp {
 
   private projectFiles() {
     return flattenFileTree(
-      filterTreeNodes(this.folder?.tree ?? [], this.settings.showConfigFiles),
+      filterTreeNodes(this.folder?.tree ?? [], configFilesVisible(this.settings)),
     );
   }
 
@@ -1803,6 +1798,7 @@ class BradbitApp {
   }
 
   private toggleTerminalView(): void {
+    if (!this.settings.showDeveloperOptions) return;
     if (!this.chatVisible) {
       this.sessionView = "terminal";
       this.chatVisible = true;
@@ -2085,7 +2081,8 @@ class BradbitApp {
   }
 
   private async updateSettings(patch: Partial<AppSettings>): Promise<void> {
-    const prevShowConfig = this.settings.showConfigFiles;
+    const prevShowConfig = configFilesVisible(this.settings);
+    const prevDeveloperOptions = this.settings.showDeveloperOptions;
     if (this.modal.kind === "settings" && this.modal.error) {
       this.modal = { kind: "settings" };
     }
@@ -2094,7 +2091,10 @@ class BradbitApp {
       ...patch,
     });
     this.applyThemeAttribute();
-    if (this.folder && prevShowConfig !== this.settings.showConfigFiles) {
+    if (prevDeveloperOptions && !this.settings.showDeveloperOptions) {
+      this.stopTerminalSession();
+    }
+    if (this.folder && prevShowConfig !== configFilesVisible(this.settings)) {
       await this.refreshTree();
     }
     this.editor?.applySettings(this.settings);
@@ -3506,7 +3506,11 @@ class BradbitApp {
     column.className = "session-column";
     column.classList.toggle("full", layout.sessionFull);
     column.style.width = layout.sessionWidth;
-    if (this.sessionView === "terminal" && this.folder) {
+    if (
+      this.settings.showDeveloperOptions &&
+      this.sessionView === "terminal" &&
+      this.folder
+    ) {
       const terminal = this.ensureTerminalPanel(lang);
       column.appendChild(terminal.element);
       terminal.focus();
@@ -3774,14 +3778,16 @@ class BradbitApp {
       left.appendChild(sections);
       left.appendChild(this.renderStatusbarDivider());
 
-      const terminalToggle = createIconButton({
-        icon: "terminal",
-        label: t(lang, "chatToggleTerminal"),
-        testId: "toggle-terminal-btn",
-        active: this.sessionView === "terminal",
-        onClick: () => this.toggleTerminalView(),
-      });
-      left.appendChild(terminalToggle);
+      if (this.settings.showDeveloperOptions) {
+        const terminalToggle = createIconButton({
+          icon: "terminal",
+          label: t(lang, "chatToggleTerminal"),
+          testId: "toggle-terminal-btn",
+          active: this.sessionView === "terminal",
+          onClick: () => this.toggleTerminalView(),
+        });
+        left.appendChild(terminalToggle);
+      }
 
       if (this.gitStatus?.isRepository) {
         left.appendChild(this.renderStatusbarDivider());
@@ -4275,7 +4281,7 @@ class BradbitApp {
       dialog.classList.add("search-palette-dialog");
 
       const files = this.folder
-        ? flattenFileTree(filterTreeNodes(this.folder.tree, this.settings.showConfigFiles))
+        ? flattenFileTree(filterTreeNodes(this.folder.tree, configFilesVisible(this.settings)))
         : [];
       const palette =
         this.modal.kind === "quick-open"
@@ -4295,7 +4301,7 @@ class BradbitApp {
                       this.folder.rootPath,
                       query,
                       200,
-                      this.settings.showConfigFiles,
+                      configFilesVisible(this.settings),
                     )
                   : Promise.resolve([]),
               onOpenMatch: (match) => this.openSearchMatch(match),

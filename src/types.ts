@@ -32,6 +32,7 @@ export interface AppSettings {
   wordWrap: boolean;
   lineNumbers: boolean;
   showConfigFiles: boolean;
+  showDeveloperOptions: boolean;
   gitAuthorName: string;
   gitAuthorEmail: string;
   hiddenModels: string[];
@@ -90,6 +91,7 @@ export interface MenuUiState {
   sidebarVisible: boolean;
   wordWrap: boolean;
   lineNumbers: boolean;
+  showDeveloperOptions: boolean;
 }
 
 export interface MenuCommand {

@@ -127,6 +127,7 @@ describe("workspace tab state (Story 1.1)", () => {
       sidebarVisible: false,
       wordWrap: true,
       lineNumbers: true,
+      showDeveloperOptions: false,
     });
   });
 

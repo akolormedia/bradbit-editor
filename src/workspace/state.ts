@@ -8,6 +8,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   wordWrap: true,
   lineNumbers: false,
   showConfigFiles: false,
+  showDeveloperOptions: false,
   gitAuthorName: "",
   gitAuthorEmail: "",
   hiddenModels: [],
@@ -292,6 +293,7 @@ export function buildMenuUiState(params: {
     sidebarVisible: params.sidebarVisible,
     wordWrap: params.settings.wordWrap,
     lineNumbers: params.settings.lineNumbers,
+    showDeveloperOptions: params.settings.showDeveloperOptions,
   };
 }
 

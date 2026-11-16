@@ -58,7 +58,7 @@ describe("settings panel (T-2.4.4)", () => {
     const panel = mount(options());
     expect(
       panel.element.querySelectorAll(".settings-nav-item"),
-    ).toHaveLength(8);
+    ).toHaveLength(5);
     expect(
       panel.element.querySelector('[data-testid="settings-language"]'),
     ).not.toBeNull();
@@ -139,11 +139,54 @@ describe("settings panel (T-2.4.4)", () => {
     expect(onUpdateSettings).toHaveBeenCalledWith({ wordWrap: false });
   });
 
+  it("hides developer settings by default and reveals them with the toggle", () => {
+    const onUpdateSettings = vi.fn();
+    const panel = mount(options({ onUpdateSettings }));
+
+    expect(
+      panel.element.querySelector('[data-testid="settings-nav-terminal"]'),
+    ).toBeNull();
+    expect(
+      panel.element.querySelector('[data-testid="settings-nav-git"]'),
+    ).toBeNull();
+    expect(
+      panel.element.querySelector('[data-testid="settings-nav-files"]'),
+    ).toBeNull();
+
+    const toggle = panel.element.querySelector<HTMLInputElement>(
+      '[data-testid="settings-developer-options"]',
+    )!;
+    toggle.checked = true;
+    toggle.dispatchEvent(new Event("change", { bubbles: true }));
+    expect(onUpdateSettings).toHaveBeenCalledWith({
+      showDeveloperOptions: true,
+    });
+
+    const visible = mount(
+      options({
+        settings: { ...DEFAULT_SETTINGS, showDeveloperOptions: true },
+      }),
+    );
+    expect(
+      visible.element.querySelectorAll(".settings-nav-item"),
+    ).toHaveLength(8);
+    expect(
+      visible.element.querySelector('[data-testid="settings-nav-terminal"]'),
+    ).not.toBeNull();
+    expect(
+      visible.element.querySelector('[data-testid="settings-nav-git"]'),
+    ).not.toBeNull();
+  });
+
   it("supports custom terminal commands", () => {
     const onUpdateSettings = vi.fn();
     const panel = mount(
       options({
-        settings: { ...DEFAULT_SETTINGS, terminalCommand: "shell" },
+        settings: {
+          ...DEFAULT_SETTINGS,
+          showDeveloperOptions: true,
+          terminalCommand: "shell",
+        },
         initialCategory: "terminal",
         onUpdateSettings,
       }),
@@ -173,7 +216,13 @@ describe("settings panel (T-2.4.4)", () => {
   it("saves the Git author and opens model management", () => {
     const onSaveGitAuthor = vi.fn();
     const onManageModels = vi.fn();
-    const panel = mount(options({ onSaveGitAuthor, onManageModels }));
+    const panel = mount(
+      options({
+        settings: { ...DEFAULT_SETTINGS, showDeveloperOptions: true },
+        onSaveGitAuthor,
+        onManageModels,
+      }),
+    );
 
     panel.element
       .querySelector<HTMLButtonElement>('[data-testid="settings-nav-git"]')!

@@ -59,6 +59,9 @@ export const translations = {
     settingsCategoryGithub: "GitHub",
     settingsCategoryModels: "IA y modelos",
     settingsLanguageHint: "Idioma de la interfaz.",
+    showDeveloperOptions: "Mostrar opciones de desarrollador",
+    settingsShowDeveloperOptionsHint:
+      "Muestra la terminal, los archivos de configuración y los ajustes avanzados de Git.",
     settingsThemeHint: "Tema visual de la aplicación.",
     colorTheme: "Tema de color",
     colorThemeHint: "Familia de colores de la aplicación y del editor.",
@@ -482,6 +485,9 @@ export const translations = {
     settingsCategoryGithub: "GitHub",
     settingsCategoryModels: "AI & Models",
     settingsLanguageHint: "Interface language.",
+    showDeveloperOptions: "Show developer options",
+    settingsShowDeveloperOptionsHint:
+      "Shows the terminal, configuration files and advanced Git settings.",
     settingsThemeHint: "Visual theme for the application.",
     colorTheme: "Color theme",
     colorThemeHint: "Color family for the app and editor.",

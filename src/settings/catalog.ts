@@ -82,6 +82,12 @@ export const SETTINGS_ENTRIES: SettingsEntry[] = [
     descriptionKey: "settingsLanguageHint",
   },
   {
+    id: "showDeveloperOptions",
+    category: "general",
+    labelKey: "showDeveloperOptions",
+    descriptionKey: "settingsShowDeveloperOptionsHint",
+  },
+  {
     id: "theme",
     category: "appearance",
     labelKey: "theme",

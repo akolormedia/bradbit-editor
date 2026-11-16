@@ -14,6 +14,7 @@ function state(overrides: Partial<MenuUiState> = {}): MenuUiState {
     sidebarVisible: true,
     wordWrap: true,
     lineNumbers: false,
+    showDeveloperOptions: false,
     ...overrides,
   };
 }
@@ -73,7 +74,6 @@ describe("application menu model (T-2.4.2)", () => {
       "view.togglePreview",
       "view.wordWrap",
       "view.lineNumbers",
-      "view.toggleTerminal",
       "app.settings",
     ]);
   });
@@ -91,7 +91,15 @@ describe("application menu model (T-2.4.2)", () => {
     const ready = buildAppMenu(state());
     expect(commandItem(ready, "file.newFile").enabled).toBe(true);
     expect(commandItem(ready, "view.togglePreview").enabled).toBe(true);
-    expect(commandItem(ready, "view.toggleTerminal").enabled).toBe(true);
+  });
+
+  it("shows the terminal command only with developer options", () => {
+    expect(commandIds()).not.toContain("view.toggleTerminal");
+    const withDeveloper = buildAppMenu(state({ showDeveloperOptions: true }));
+    expect(
+      withDeveloper
+        .flatMap((group) => group.items.map((item) => item.command.id)),
+    ).toContain("view.toggleTerminal");
   });
 
   it("exposes shortcuts and checked toggles for the view menu", () => {
