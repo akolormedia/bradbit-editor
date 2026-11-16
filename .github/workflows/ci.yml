@@ -89,5 +89,6 @@ jobs:
       # Run the Git tests with an empty PATH to catch accidental shell-outs.
       - name: Verify Git tests run without system Git
         run: |
-          BIN=$(find src-tauri/target/debug/deps -maxdepth 1 -type f -perm -111 -name 'bradbit_editor_lib-*' | head -1)
+          BIN=$(find src-tauri/target/debug/deps -maxdepth 1 -type f -perm -111 -name 'bradbit_editor_lib-*' -print0 | xargs -0 stat -f '%m %N' | sort -nr | head -1 | cut -d' ' -f2-)
+          test -n "$BIN"
           env -i PATH=/nonexistent HOME="$HOME" TMPDIR="$TMPDIR" "$BIN" git::
