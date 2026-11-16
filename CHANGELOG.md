@@ -4,6 +4,23 @@ All notable changes to Bradbit Editor are documented in this file.
 
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the versioning follows [SemVer](https://semver.org/). `alpha` versions are early tests: behavior may change and there are no compatibility guarantees.
 
+## [Unreleased]
+
+### Changed
+- **Git no longer requires a system installation.** The Git module now uses the bundled **libgit2** engine (`git2`) for status, diffs, history, commits, restore/discard, branches, remotes, fetch, push and fast-forward pull. A clean Mac without Git or Command Line Tools can use Versions and GitHub sync.
+- **HTTPS on macOS** uses the system SecureTransport backend; tokens travel through an in-memory credential callback, never argv, `.git/config` or logs.
+- New projects start on `main` for deterministic behavior across machines.
+- **Developer options** are hidden by default; the terminal, configuration files and advanced Git author fields appear only after enabling them in Settings.
+- **Saving a version** falls back to `Bradbit Writer <writer@bradbit.local>` when no author is configured.
+
+### Added
+- **libgit2 notices** (`THIRD_PARTY_NOTICES.md` and `licenses/libgit2-COPYING`).
+- Tests for libgit2 status/log/commit/diff/restore/branches/merge/clone, `.gitignore`, binary diffs, safe checkout and `file://` remotes.
+
+### Known limitations
+- libgit2 does not run Git hooks and does not support Git LFS; SSH remotes are not enabled in this beta (GitHub uses HTTPS + token).
+- The app is ad-hoc signed but not notarized. On first launch, allow it in **System Settings → Privacy & Security → Open Anyway**.
+
 ## [0.1.0-alpha.5] - 2026-11-13
 
 Fifth alpha. Adds the three writing kits, the `.bradbit/` canonical folder, the general Git assistant and the language policy. **Only tested on macOS.**

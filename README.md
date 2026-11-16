@@ -37,7 +37,7 @@ Desktop text editor for creative writing (`.md`, `.mdx`, `.fountain`, `.txt`), a
   - **New project (`⇧⌘N`)** from the welcome screen, the top bar or the *File* menu: choose a template, a name and a destination folder.
   - Built-in templates: **Screenwriting (`guionista-kit`)**, with bible, structure, script, research, agents, commands and skills; **Novel (`libro-kit`)**; **Advertising campaigns (`campaign-kit`)**; and **Blank project**. Each kit carries a `bradbit-kit.json` manifest.
   - **User templates:** any folder in `~/Library/Application Support/Bradbit/templates/` appears automatically in the template picker.
-  - When the project is created, **`git init`** runs if Git is available, and the app opens the resulting folder.
+  - When the project is created, **history (Git)** is initialized automatically with the bundled engine, and the app opens the resulting folder.
   - **Save current project as template…** and **Open templates folder**, from the modal and the *File* menu.
 - **Resizable and collapsible side explorer (`⌘⇧E`):**
   - Compact **Files / Outline / Versions** icon selector at the left end of the bottom bar. Only the active section is shown, and the tree gets more height because it no longer needs a tab row.
@@ -73,7 +73,7 @@ Desktop text editor for creative writing (`.md`, `.mdx`, `.fountain`, `.txt`), a
   - Also works with unsaved changes: the Diff shows the live text of the tab, and discarding removes both the draft and the changes on disk.
 - **Versions panel (`T-1.4.4`):**
   - **Versions** section of the side selector, also available with **`⌘⌥G`**.
-  - **Save version:** summarizes pending changes, lets you write the summary, and signs the commit with the name and email configured in *Settings → Version author*.
+  - **Save version:** summarizes pending changes, lets you write the summary, and signs the commit with the configured version author; if none is set, it uses `Bradbit Writer <writer@bradbit.local>`.
   - **Current changes:** a readable list of *Edited*, *New*, *Deleted*, *Renamed* or *Conflict* files. Each row opens its Diff and offers discard or restore.
   - **Version history:** a timeline of commits with date and author. Expanding a version lets you inspect its files and restore any of them without leaving the editor.
   - **Parallel drafts:** a list of Git branches, creation of a new draft from the current version, and switching drafts with a safe reload of open tabs.
@@ -82,7 +82,7 @@ Desktop text editor for creative writing (`.md`, `.mdx`, `.fountain`, `.txt`), a
 - **GitHub sync (`T-1.5.4`):**
   - **GitHub account in Settings:** the token is stored only in the **macOS Keychain**, never in `settings.json` or the project. Includes account verification, sign-out and a link to create a Personal Access Token.
   - **Publish to GitHub:** creates the remote repository (private or public) and uploads the current version. If a non-GitHub remote already existed, it adds a `github` remote without touching `origin`.
-  - **Push and pull changes:** `push` and `pull --ff-only`, with the token in the Git process environment and not embedded in the remote URL. Pulling reloads open tabs safely.
+  - **Push and pull changes:** `push` and `pull --ff-only`, with the token passed through an in-memory credential callback — never embedded in the remote URL, `.git/config` or logs. Pulling reloads open tabs safely.
   - **Propose changes to the team:** pushes the current draft and opens a Pull Request with title, description and base branch. The panel lists open Pull Requests and opens them in GitHub.
 - **Professional editing with CodeMirror 6:**
   - Undo and redo per tab, find and replace in the file (`⌘F`), word wrap, optional line numbers, a native spellchecker, and colored syntax for Markdown/MDX and Fountain.
@@ -103,7 +103,7 @@ Desktop text editor for creative writing (`.md`, `.mdx`, `.fountain`, `.txt`), a
 **Requirements**
 - macOS. The alpha has only been tested on macOS.
 - **No separate OpenCode install is required** for the chat: the macOS app bundles the `bradbit` runtime as a sidecar. For source builds, download it with `npm run fetch:bradbit`. An `opencode` binary on `PATH` remains as an optional fallback.
-- Git (optional): needed for the Versions panel and GitHub sync.
+- Git is **not required**: history, diffs, branches and GitHub sync use the bundled libgit2 engine. Command Line Tools are not needed to run the app.
 - GitHub token (optional): only needed to publish and sync repositories.
 
 **Option A: installer**

@@ -1,7 +1,7 @@
-use super::{DiffScope, GitError, OpOptions, Repository, WorktreeStatus};
+use super::{detect, DiffScope, GitError, MergeOutcome, OpOptions, Repository, WorktreeStatus};
+use git2::{IndexAddOption, Repository as GitRepository, Signature};
 use std::fs;
 use std::path::Path;
-use std::process::Command;
 use tempfile::tempdir;
 
 fn options() -> OpOptions {
@@ -14,35 +14,61 @@ fn initialized_repo() -> (tempfile::TempDir, Repository) {
     (dir, repo)
 }
 
-fn git(dir: &Path, args: &[&str]) {
-    let output = Command::new("git")
-        .args(args)
-        .current_dir(dir)
-        .output()
-        .expect("run git");
-    assert!(
-        output.status.success(),
-        "git {:?} failed: {}",
-        args,
-        String::from_utf8_lossy(&output.stderr)
-    );
+fn file_url(path: &Path) -> String {
+    format!("file://{}", path.display())
 }
 
 fn init_bare_remote(dir: &Path) {
-    git(dir, &["init", "--bare"]);
-    git(dir, &["symbolic-ref", "HEAD", "refs/heads/main"]);
+    let mut options = git2::RepositoryInitOptions::new();
+    options.bare(true).initial_head("main");
+    GitRepository::init_opts(dir, &options).expect("init bare remote");
 }
 
-fn clone_repo(remote: &str, dest: &Path) {
-    let output = Command::new("git")
-        .args(["clone", remote, dest.to_str().unwrap()])
-        .output()
-        .expect("clone remote");
-    assert!(
-        output.status.success(),
-        "git clone failed: {}",
-        String::from_utf8_lossy(&output.stderr)
-    );
+fn clone_repo(remote: &Path, dest: &Path) {
+    GitRepository::clone(&file_url(remote), dest).expect("clone remote");
+}
+
+fn set_user(dir: &Path, name: &str, email: &str) {
+    let repo = GitRepository::open(dir).expect("open repo");
+    let mut config = repo.config().expect("config");
+    config.set_str("user.name", name).expect("name");
+    config.set_str("user.email", email).expect("email");
+}
+
+fn commit_all(dir: &Path, message: &str) {
+    let repo = GitRepository::open(dir).expect("open repo");
+    let mut index = repo.index().expect("index");
+    index
+        .add_all(["*"].iter(), IndexAddOption::DEFAULT, None)
+        .expect("add all");
+    index.update_all(["*"].iter(), None).expect("update all");
+    index.write().expect("write index");
+    let tree_id = index.write_tree().expect("write tree");
+    let tree = repo.find_tree(tree_id).expect("tree");
+    let signature = Signature::now("Otra", "otra@example.com").expect("signature");
+    let parent = repo
+        .head()
+        .ok()
+        .and_then(|head| head.target())
+        .and_then(|oid| repo.find_commit(oid).ok());
+    let parents: Vec<&git2::Commit> = parent.iter().collect();
+    repo.commit(
+        Some("HEAD"),
+        &signature,
+        &signature,
+        message,
+        &tree,
+        &parents,
+    )
+    .expect("commit");
+}
+
+fn push_main(dir: &Path) {
+    let repo = GitRepository::open(dir).expect("open repo");
+    let mut remote = repo.find_remote("origin").expect("origin");
+    remote
+        .push(&["refs/heads/main:refs/heads/main"], None)
+        .expect("push");
 }
 
 #[test]
@@ -121,6 +147,7 @@ fn api_status_and_init_handle_plain_folders() {
 
     let after = super::api::init(root).unwrap();
     assert!(after.is_repository);
+    assert_eq!(after.branch.as_deref(), Some("main"));
     assert!(dir.path().join(".git").is_dir());
 }
 
@@ -260,7 +287,7 @@ fn remotes_push_pull_and_token_hygiene_with_a_local_bare_remote() {
     repo.push("origin", "main", options()).unwrap();
 
     // Token-authenticated push against a local remote: the token must never
-    // reach argv or `.git/config`.
+    // reach `.git/config`, logs or an error message.
     repo.push_with_token("origin", "main", "ghp_local_token", options())
         .unwrap();
     let config = fs::read_to_string(dir.path().join(".git/config")).unwrap();
@@ -268,15 +295,26 @@ fn remotes_push_pull_and_token_hygiene_with_a_local_bare_remote() {
     assert!(!config.contains("BRADBIT_GITHUB_TOKEN"), "{config}");
 
     let clone = tempdir().unwrap();
-    clone_repo(remote_path, clone.path());
-    git(clone.path(), &["config", "user.name", "Otra"]);
-    git(clone.path(), &["config", "user.email", "otra@example.com"]);
+    clone_repo(remote.path(), clone.path());
+    set_user(clone.path(), "Otra", "otra@example.com");
     fs::write(clone.path().join("b.md"), "desde el clon").unwrap();
-    git(clone.path(), &["add", "-A"]);
-    git(clone.path(), &["commit", "-m", "desde el clon"]);
-    git(clone.path(), &["push", "origin", "main"]);
+    commit_all(clone.path(), "desde el clon");
+    push_main(clone.path());
 
     repo.fetch("origin", options()).unwrap();
+    {
+        let handle = GitRepository::open(dir.path()).expect("open repo");
+        let mut branch = handle
+            .find_branch("main", git2::BranchType::Local)
+            .expect("main branch");
+        branch
+            .set_upstream(Some("origin/main"))
+            .expect("set upstream");
+    }
+    let (branch, _) = repo.status(options()).unwrap();
+    let branch = branch.expect("branch info");
+    assert_eq!((branch.ahead, branch.behind), (0, 1));
+
     repo.pull_with_token("origin", "main", "ghp_local_token", options())
         .unwrap();
     assert_eq!(
@@ -285,9 +323,8 @@ fn remotes_push_pull_and_token_hygiene_with_a_local_bare_remote() {
     );
 
     fs::write(clone.path().join("c.md"), "segunda traída").unwrap();
-    git(clone.path(), &["add", "-A"]);
-    git(clone.path(), &["commit", "-m", "segunda"]);
-    git(clone.path(), &["push", "origin", "main"]);
+    commit_all(clone.path(), "segunda");
+    push_main(clone.path());
     repo.pull("origin", "main", options()).unwrap();
     assert_eq!(
         fs::read_to_string(dir.path().join("c.md")).unwrap(),
@@ -307,15 +344,10 @@ fn add_remote_rejects_credentials_and_remotes_are_redacted() {
         .unwrap_err();
     assert!(matches!(error, GitError::InvalidInput(_)), "{error:?}");
 
-    git(
-        dir.path(),
-        &[
-            "remote",
-            "add",
-            "creds",
-            "https://user:secret@example.com/repo.git",
-        ],
-    );
+    GitRepository::open(dir.path())
+        .expect("open repo")
+        .remote("creds", "https://user:secret@example.com/repo.git")
+        .expect("add credential remote");
     let url = repo
         .remotes(options())
         .unwrap()
@@ -332,20 +364,16 @@ fn remotes_report_the_configured_url_not_the_insteadof_expansion() {
     let (dir, repo) = initialized_repo();
     let bare = tempdir().unwrap();
     init_bare_remote(bare.path());
-    git(
-        dir.path(),
-        &[
-            "remote",
-            "add",
-            "origin",
-            "https://github.com/rafael/demo.git",
-        ],
-    );
+    let repo_handle = GitRepository::open(dir.path()).expect("open repo");
+    repo_handle
+        .remote("origin", "https://github.com/rafael/demo.git")
+        .expect("add origin");
     let key = format!("url.{}.insteadOf", bare.path().display());
-    git(
-        dir.path(),
-        &["config", &key, "https://github.com/rafael/demo.git"],
-    );
+    repo_handle
+        .config()
+        .expect("config")
+        .set_str(&key, "https://github.com/rafael/demo.git")
+        .expect("set insteadOf");
 
     let remotes = repo.remotes(options()).unwrap();
     assert_eq!(
@@ -375,13 +403,11 @@ fn api_remotes_push_and_pull_with_a_local_bare_remote() {
     assert_eq!(pushed.branch.as_deref(), Some("main"));
 
     let clone = tempdir().unwrap();
-    clone_repo(remote_path, clone.path());
-    git(clone.path(), &["config", "user.name", "Otra"]);
-    git(clone.path(), &["config", "user.email", "otra@example.com"]);
+    clone_repo(remote.path(), clone.path());
+    set_user(clone.path(), "Otra", "otra@example.com");
     fs::write(clone.path().join("b.md"), "remoto").unwrap();
-    git(clone.path(), &["add", "-A"]);
-    git(clone.path(), &["commit", "-m", "remoto"]);
-    git(clone.path(), &["push", "origin", "main"]);
+    commit_all(clone.path(), "remoto");
+    push_main(clone.path());
 
     let fetched = super::api::fetch(root, "origin").unwrap();
     assert!(fetched.is_repository);
@@ -392,4 +418,199 @@ fn api_remotes_push_and_pull_with_a_local_bare_remote() {
         "remoto"
     );
     assert_eq!(super::api::remotes(root).unwrap().len(), 1);
+}
+
+#[test]
+fn stage_unstage_and_diff_stats_roundtrip() {
+    let (dir, repo) = initialized_repo();
+    fs::write(dir.path().join("a.md"), "uno\ndos\n").unwrap();
+    repo.stage(&["a.md"], options()).unwrap();
+    let (_, entries) = repo.status(options()).unwrap();
+    assert_eq!(entries[0].index, WorktreeStatus::Added);
+
+    repo.unstage_path("a.md", options()).unwrap();
+    let (_, entries) = repo.status(options()).unwrap();
+    assert_eq!(entries[0].index, WorktreeStatus::Untracked);
+
+    repo.stage_all(options()).unwrap();
+    repo.commit("base", "Ana", "ana@example.com", options())
+        .unwrap();
+
+    fs::write(dir.path().join("a.md"), "uno\ntres\ncuatro\n").unwrap();
+    let stats = repo
+        .diff_stats(DiffScope::WorktreeVsHead, options())
+        .unwrap();
+    let change = stats
+        .iter()
+        .find(|change| change.path == "a.md")
+        .expect("a.md in stats");
+    assert_eq!((change.added, change.removed), (2, 1));
+
+    repo.stage(&["a.md"], options()).unwrap();
+    let (_, entries) = repo.status(options()).unwrap();
+    assert_eq!(entries[0].index, WorktreeStatus::Modified);
+    repo.unstage_all(options()).unwrap();
+    let (_, entries) = repo.status(options()).unwrap();
+    assert_eq!(entries[0].index, WorktreeStatus::Unmodified);
+    assert_eq!(entries[0].worktree, WorktreeStatus::Modified);
+}
+
+#[test]
+fn delete_branch_refuses_the_current_or_unmerged_branch() {
+    let (dir, repo) = initialized_repo();
+    fs::write(dir.path().join("a.md"), "base").unwrap();
+    repo.stage_all(options()).unwrap();
+    repo.commit("base", "Ana", "ana@example.com", options())
+        .unwrap();
+
+    repo.create_branch("merged", options()).unwrap();
+    let error = repo.delete_branch("main", options()).unwrap_err();
+    assert!(
+        error.to_string().contains("currently checked out"),
+        "{error}"
+    );
+    repo.delete_branch("merged", options()).unwrap();
+
+    repo.checkout_new("unmerged", options()).unwrap();
+    fs::write(dir.path().join("b.md"), "otra").unwrap();
+    repo.stage_all(options()).unwrap();
+    repo.commit("unmerged", "Ana", "ana@example.com", options())
+        .unwrap();
+    repo.checkout("main", options()).unwrap();
+
+    let error = repo.delete_branch("unmerged", options()).unwrap_err();
+    assert!(error.to_string().contains("not fully merged"), "{error}");
+    assert!(repo
+        .branches(options())
+        .unwrap()
+        .iter()
+        .any(|branch| branch.name == "unmerged"));
+}
+
+#[test]
+fn merge_fast_forwards_creates_commits_and_aborts_conflicts() {
+    let (dir, repo) = initialized_repo();
+    fs::write(dir.path().join("a.md"), "base\n").unwrap();
+    repo.stage_all(options()).unwrap();
+    repo.commit("base", "Ana", "ana@example.com", options())
+        .unwrap();
+
+    repo.checkout_new("feature", options()).unwrap();
+    fs::write(dir.path().join("b.md"), "feature\n").unwrap();
+    repo.stage_all(options()).unwrap();
+    repo.commit("feature", "Ana", "ana@example.com", options())
+        .unwrap();
+    repo.checkout("main", options()).unwrap();
+    assert_eq!(
+        repo.merge("feature", options()).unwrap(),
+        MergeOutcome::FastForward
+    );
+    assert_eq!(
+        fs::read_to_string(dir.path().join("b.md")).unwrap(),
+        "feature\n"
+    );
+
+    // A real merge commit for divergent, non-conflicting changes.
+    repo.checkout_new("normal", options()).unwrap();
+    fs::write(dir.path().join("c.md"), "rama\n").unwrap();
+    repo.stage_all(options()).unwrap();
+    repo.commit("rama", "Ana", "ana@example.com", options())
+        .unwrap();
+    repo.checkout("main", options()).unwrap();
+    fs::write(dir.path().join("d.md"), "main\n").unwrap();
+    repo.stage_all(options()).unwrap();
+    repo.commit("main", "Ana", "ana@example.com", options())
+        .unwrap();
+    let outcome = repo.merge("normal", options()).unwrap();
+    assert!(
+        matches!(outcome, MergeOutcome::Merged { .. }),
+        "{outcome:?}"
+    );
+    assert!(!repo.is_merging(options()).unwrap());
+    let head = repo.log(1, options()).unwrap().remove(0);
+    assert_eq!(head.subject, "Merge branch 'normal'");
+
+    // Conflicting changes stay unresolved until abort.
+    repo.checkout_new("conflict", options()).unwrap();
+    fs::write(dir.path().join("a.md"), "rama\n").unwrap();
+    repo.stage_all(options()).unwrap();
+    repo.commit("conflicto", "Ana", "ana@example.com", options())
+        .unwrap();
+    repo.checkout("main", options()).unwrap();
+    fs::write(dir.path().join("a.md"), "main\n").unwrap();
+    repo.stage_all(options()).unwrap();
+    repo.commit("main cambia", "Ana", "ana@example.com", options())
+        .unwrap();
+    let outcome = repo.merge("conflict", options()).unwrap();
+    let MergeOutcome::Conflicts { files } = outcome else {
+        panic!("expected conflicts, got {outcome:?}");
+    };
+    assert_eq!(files, vec!["a.md".to_string()]);
+    assert!(repo.is_merging(options()).unwrap());
+    repo.abort_merge(options()).unwrap();
+    assert!(!repo.is_merging(options()).unwrap());
+    assert_eq!(
+        fs::read_to_string(dir.path().join("a.md")).unwrap(),
+        "main\n"
+    );
+}
+
+#[test]
+fn clone_and_detect_use_the_bundled_engine() {
+    let (dir, repo) = initialized_repo();
+    fs::write(dir.path().join("a.md"), "clon\n").unwrap();
+    repo.stage_all(options()).unwrap();
+    repo.commit("base", "Ana", "ana@example.com", options())
+        .unwrap();
+
+    let remote = tempdir().unwrap();
+    init_bare_remote(remote.path());
+    repo.add_remote("origin", remote.path().to_str().unwrap(), options())
+        .unwrap();
+    repo.push("origin", "main", options()).unwrap();
+
+    let destination = tempdir().unwrap();
+    let target = destination.path().join("clon");
+    let cloned = super::clone(&file_url(remote.path()), &target, options()).unwrap();
+    assert_eq!(cloned.root(), target);
+    assert_eq!(fs::read_to_string(target.join("a.md")).unwrap(), "clon\n");
+
+    let version = detect(options()).unwrap();
+    assert!(version.is_supported());
+    assert!(version.raw.starts_with("libgit2 "), "{}", version.raw);
+}
+
+#[test]
+fn a_cancelled_token_stops_before_touching_the_repository() {
+    let (_dir, repo) = initialized_repo();
+    let token = super::CancellationToken::new();
+    token.cancel();
+    let error = repo
+        .status(options().cancel(token))
+        .expect_err("cancelled status");
+    assert!(matches!(error, GitError::Cancelled { .. }), "{error:?}");
+}
+
+#[test]
+fn stage_all_respects_gitignore_and_binary_diffs_stay_summarized() {
+    let (dir, repo) = initialized_repo();
+    fs::write(dir.path().join(".gitignore"), "ignored.md\n").unwrap();
+    fs::write(dir.path().join("ignored.md"), "no debe entrar").unwrap();
+    fs::write(dir.path().join("visible.md"), "sí debe entrar").unwrap();
+    repo.stage_all(options()).unwrap();
+    repo.commit("base", "Ana", "ana@example.com", options())
+        .unwrap();
+
+    let tracked = repo
+        .show_file("HEAD", "visible.md", options())
+        .expect("visible file");
+    assert_eq!(tracked, "sí debe entrar");
+    assert!(repo.show_file("HEAD", "ignored.md", options()).is_err());
+
+    fs::write(dir.path().join("imagen.bin"), [0u8, 1, 2, 3, 255]).unwrap();
+    fs::write(dir.path().join("visible.md"), "cambiado").unwrap();
+    repo.stage(&["imagen.bin"], options()).unwrap();
+    let diff = repo.diff(DiffScope::WorktreeVsHead, options()).unwrap();
+    assert!(diff.contains("Binary files"), "{diff}");
+    assert!(diff.contains("cambiado"), "{diff}");
 }
