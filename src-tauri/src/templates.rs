@@ -2,7 +2,6 @@ use include_dir::{include_dir, Dir, DirEntry};
 use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::{Path, PathBuf};
-use std::process::{Command, Stdio};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 static BUILTIN_TEMPLATES: Dir<'_> = include_dir!("$CARGO_MANIFEST_DIR/resources/templates");
@@ -329,14 +328,7 @@ fn copy_directory(source: &Path, destination: &Path) -> Result<(), String> {
 }
 
 fn try_git_init(path: &Path) -> bool {
-    Command::new("git")
-        .arg("init")
-        .current_dir(path)
-        .stdout(Stdio::null())
-        .stderr(Stdio::null())
-        .status()
-        .map(|status| status.success())
-        .unwrap_or(false)
+    crate::git::Repository::init(path, crate::git::OpOptions::default()).is_ok()
 }
 
 fn canonical_directory(path: &str) -> Result<PathBuf, String> {
@@ -465,7 +457,7 @@ mod tests {
     }
 
     #[test]
-    fn creates_a_blank_project_and_initializes_git_when_available() {
+    fn creates_a_blank_project_and_initializes_history() {
         let dir = tempdir().unwrap();
         let user_dir = dir.path().join("templates");
         let destination = dir.path().join("projects");
@@ -481,13 +473,8 @@ mod tests {
         let project = Path::new(&created.path);
         assert!(project.is_dir());
         assert_eq!(created.name, "Mi Proyecto");
-        assert_eq!(
-            created.git_initialized,
-            Command::new("git").arg("--version").output().is_ok()
-        );
-        if created.git_initialized {
-            assert!(project.join(".git").is_dir());
-        }
+        assert!(created.git_initialized);
+        assert!(project.join(".git").is_dir());
     }
 
     #[test]

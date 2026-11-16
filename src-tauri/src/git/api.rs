@@ -332,8 +332,9 @@ pub fn fetch(root: &str, remote: &str) -> Result<GitStatus, String> {
     status(root)
 }
 
-/// Push `branch` to `remote`. When a token is present it travels only in the
-/// child environment; it is never written to `.git/config` or argv.
+/// Push `branch` to `remote`. When a token is present it travels only through
+/// an in-memory libgit2 credential callback; it is never written to
+/// `.git/config`, argv or logs.
 pub fn push(
     root: &str,
     remote: &str,

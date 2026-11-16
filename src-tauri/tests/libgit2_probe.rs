@@ -1,12 +1,8 @@
-//! Spike `T-3.5.2`: libgit2 proof of concept for the operations the editor
-//! needs. This test is **not** part of the production build; enable it with
-//! `cargo test --features git2-probe --test libgit2_probe`.
+//! libgit2 integration coverage for the operations the editor needs.
 //!
 //! It exercises local status/log/commit/diff/restore/branches and a local
-//! `file://` remote (push/fetch/fast-forward pull) so the migration plan can
-//! be validated without touching the current system-Git implementation.
-
-#![cfg(feature = "git2-probe")]
+//! `file://` remote (push/fetch/fast-forward pull), plus an ignored HTTPS
+//! smoke test. The wrapper-level tests live in `src/git/tests.rs`.
 
 use std::fs;
 use std::path::Path;
@@ -469,7 +465,7 @@ fn local_remote_push_fetch_and_fast_forward_pull_work() {
 }
 
 /// Manual HTTPS smoke test (network). Run with:
-/// `cargo test --features git2-probe --test libgit2_probe -- --ignored`.
+/// `cargo test --test libgit2_probe -- --ignored`.
 #[test]
 #[ignore = "network"]
 fn https_clone_smoke() {
