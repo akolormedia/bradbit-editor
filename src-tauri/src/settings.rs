@@ -30,6 +30,8 @@ pub struct AppSettings {
     pub line_numbers: bool,
     pub show_config_files: bool,
     #[serde(default)]
+    pub show_developer_options: bool,
+    #[serde(default)]
     pub git_author_name: String,
     #[serde(default)]
     pub git_author_email: String,
@@ -61,6 +63,7 @@ impl Default for AppSettings {
             word_wrap: true,
             line_numbers: false,
             show_config_files: false,
+            show_developer_options: false,
             git_author_name: String::new(),
             git_author_email: String::new(),
             hidden_models: Vec::new(),
@@ -175,6 +178,7 @@ mod tests {
             word_wrap: false,
             line_numbers: true,
             show_config_files: true,
+            show_developer_options: true,
             git_author_name: "Ada".to_string(),
             git_author_email: "ada@example.com".to_string(),
             hidden_models: vec!["openai/gpt-5".to_string()],

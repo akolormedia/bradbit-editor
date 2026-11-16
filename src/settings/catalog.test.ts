@@ -28,6 +28,7 @@ describe("settings catalog (T-2.4.4)", () => {
     expect(new Set(ids).size).toBe(ids.length);
     for (const id of [
       "language",
+      "showDeveloperOptions",
       "theme",
       "colorTheme",
       "fontSize",
@@ -54,7 +55,7 @@ describe("settings catalog (T-2.4.4)", () => {
   it("filters categories by labels, descriptions and accents", () => {
     expect(matchingCategoryIds("es", "tema")).toEqual(["appearance"]);
     expect(matchingCategoryIds("es", "tamano")).toEqual(["appearance"]);
-    expect(matchingCategoryIds("es", "terminal")).toEqual(["terminal"]);
+    expect(matchingCategoryIds("es", "terminal")).toEqual(["general", "terminal"]);
     expect(matchingCategoryIds("es", "autor")).toEqual(["git"]);
     expect(matchingCategoryIds("es", "token")).toEqual(["github"]);
     expect(matchingCategoryIds("es", "modelo")).toEqual(["models"]);

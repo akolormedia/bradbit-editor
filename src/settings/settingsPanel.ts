@@ -14,6 +14,7 @@ import {
   SettingsCategoryId,
   visibleEntriesForCategory,
 } from "./catalog";
+import { isSettingsCategoryVisible } from "./developer";
 
 const TERMINAL_PRESETS = ["shell", "opencode", "claude"] as const;
 
@@ -164,17 +165,16 @@ export class SettingsPanel {
     this.refresh();
   }
 
-  private refresh(): void {
-    const matches = matchingCategoryIds(
-      this.options.language,
-      this.query,
+  private visibleMatches(): SettingsCategoryId[] {
+    return matchingCategoryIds(this.options.language, this.query).filter(
+      (category) => isSettingsCategoryVisible(category, this.options.settings),
     );
-    if (
-      this.query.trim() &&
-      matches.length > 0 &&
-      !matches.includes(this.activeCategory)
-    ) {
-      this.activeCategory = matches[0];
+  }
+
+  private refresh(): void {
+    const matches = this.visibleMatches();
+    if (!matches.includes(this.activeCategory)) {
+      this.activeCategory = matches[0] ?? "general";
       this.options.onCategoryChange(this.activeCategory);
     }
 
@@ -225,7 +225,7 @@ export class SettingsPanel {
       this.contentEl.appendChild(error);
     }
 
-    const matches = matchingCategoryIds(this.options.language, this.query);
+    const matches = this.visibleMatches();
     if (matches.length === 0) {
       this.contentEl.appendChild(
         this.emptyMessage(t(this.options.language, "settingsNoResults")),
@@ -286,24 +286,41 @@ export class SettingsPanel {
   }
 
   private renderGeneral(has: (id: string) => boolean): void {
-    if (!has("language")) return;
-    const select = this.selectControl(
-      "settings-language",
-      [
-        { value: "es", label: "Español" },
-        { value: "en", label: "English" },
-      ],
-      this.options.settings.language,
-      (value) =>
-        this.options.onUpdateSettings({ language: value as Language }),
-    );
-    this.contentEl.appendChild(
-      this.row(
-        t(this.options.language, "language"),
-        t(this.options.language, "settingsLanguageHint"),
-        select,
-      ),
-    );
+    if (has("language")) {
+      const select = this.selectControl(
+        "settings-language",
+        [
+          { value: "es", label: "Español" },
+          { value: "en", label: "English" },
+        ],
+        this.options.settings.language,
+        (value) =>
+          this.options.onUpdateSettings({ language: value as Language }),
+      );
+      this.contentEl.appendChild(
+        this.row(
+          t(this.options.language, "language"),
+          t(this.options.language, "settingsLanguageHint"),
+          select,
+        ),
+      );
+    }
+
+    if (has("showDeveloperOptions")) {
+      this.contentEl.appendChild(
+        this.row(
+          t(this.options.language, "showDeveloperOptions"),
+          t(this.options.language, "settingsShowDeveloperOptionsHint"),
+          this.switchControl(
+            "settings-developer-options",
+            this.options.settings.showDeveloperOptions,
+            (checked) =>
+              this.options.onUpdateSettings({ showDeveloperOptions: checked }),
+            t(this.options.language, "showDeveloperOptions"),
+          ),
+        ),
+      );
+    }
   }
 
   private renderAppearance(has: (id: string) => boolean): void {

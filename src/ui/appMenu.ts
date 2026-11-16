@@ -135,12 +135,16 @@ export function buildAppMenu(state: MenuUiState): AppMenuGroup[] {
           enabled: true,
           checked: state.lineNumbers,
         },
-        {
-          command: { id: "view.toggleTerminal" },
-          label: t(lang, "terminalTitle"),
-          enabled: hasFolder,
-          separatorBefore: true,
-        },
+        ...(state.showDeveloperOptions
+          ? [
+              {
+                command: { id: "view.toggleTerminal" as const },
+                label: t(lang, "terminalTitle"),
+                enabled: hasFolder,
+                separatorBefore: true,
+              },
+            ]
+          : []),
       ],
     },
     {
