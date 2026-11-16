@@ -31,7 +31,7 @@ Desktop text editor for creative writing (`.md`, `.mdx`, `.fountain`, `.txt`), a
   - *Window:* Minimize, Zoom and Bring all to front.
   - Items are enabled, disabled and checked according to the real state, and labels change with the language.
 - **Any folder is a project:** open any folder on disk without proprietary configuration files (`project.yaml`).
-- **Welcome screen and recent projects:** open folders from disk or reopen any recent project in one click.
+- **Welcome screen and recent projects:** open folders from disk or reopen any recent project in one click. A non-blocking **Getting started** card checks the Bradbit engine, the bundled libgit2 version, the configured AI provider/model and the available templates, with direct access to Settings and to new projects. Writing never waits for an AI provider.
 - **Writing kits and language (`T-3.4.x`):** three kits bundled: **Screenwriting**, **Novel** and **Advertising campaigns**. Instructions are in English; the agent replies and writes in the language configured in the app, with Spanish command aliases (`/escena`, `/capitulo`, `/cliente`, ...). The general Git assistant provides `/save-version` and `/history` in every project, with explicit approval before committing.
 - **New project and templates (`T-1.3.2`):**
   - **New project (`⇧⌘N`)** from the welcome screen, the top bar or the *File* menu: choose a template, a name and a destination folder.

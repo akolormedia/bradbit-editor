@@ -8,6 +8,7 @@ import {
   GitCommit,
   GitCommitFile,
   GitDiscardResult,
+  GitEngineStatus,
   GitRemote,
   GitStatus,
   GitHubBranch,
@@ -551,6 +552,13 @@ export const backend = {
     return listen<FsChangeEvent>("bradbit-fs-change", (event) =>
       handler(event.payload),
     );
+  },
+
+  async gitEngineStatus(): Promise<GitEngineStatus> {
+    if (!isTauriEnvironment()) {
+      return { major: 0, minor: 0, patch: 0, raw: "", supported: false };
+    }
+    return tauriInvoke<GitEngineStatus>("git_engine_status");
   },
 
   async gitStatus(rootPath: string): Promise<GitStatus> {

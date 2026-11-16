@@ -124,6 +124,14 @@ export interface FsChangeEvent {
   paths: string[];
 }
 
+export interface GitEngineStatus {
+  major: number;
+  minor: number;
+  patch: number;
+  raw: string;
+  supported: boolean;
+}
+
 export interface GitStatusEntry {
   path: string;
   index: string;

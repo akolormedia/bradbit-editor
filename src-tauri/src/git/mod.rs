@@ -29,6 +29,7 @@ use git2::{
     Repository as GitRepository, RepositoryInitOptions, RepositoryState, ResetType, Signature,
     Sort, Status, StatusOptions, Tree,
 };
+use serde::Serialize;
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 use thiserror::Error;
@@ -61,6 +62,30 @@ pub fn detect(_options: OpOptions) -> Result<GitVersion, GitError> {
         minor,
         patch,
         raw: format!("libgit2 {major}.{minor}.{patch}"),
+    })
+}
+
+/// Serializable health information for the bundled Git engine.
+#[derive(Debug, Clone, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct GitEngineStatus {
+    pub major: u32,
+    pub minor: u32,
+    pub patch: u32,
+    pub raw: String,
+    pub supported: bool,
+}
+
+/// Health snapshot used by the first-run screen.
+pub fn engine_status() -> Result<GitEngineStatus, GitError> {
+    let version = detect(OpOptions::default())?;
+    let supported = version.is_supported();
+    Ok(GitEngineStatus {
+        major: version.major,
+        minor: version.minor,
+        patch: version.patch,
+        raw: version.raw,
+        supported,
     })
 }
 
