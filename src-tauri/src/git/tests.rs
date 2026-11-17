@@ -578,6 +578,13 @@ fn clone_and_detect_use_the_bundled_engine() {
     let version = detect(options()).unwrap();
     assert!(version.is_supported());
     assert!(version.raw.starts_with("libgit2 "), "{}", version.raw);
+
+    let status = super::engine_status().unwrap();
+    assert!(status.supported);
+    assert_eq!(
+        (status.major, status.minor, status.patch),
+        (version.major, version.minor, version.patch)
+    );
 }
 
 #[test]

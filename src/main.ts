@@ -83,6 +83,8 @@ import {
 } from "./settings/byok";
 import { TerminalPanel } from "./terminal/terminalPanel";
 import { applyColorTheme, resolveColorMode } from "./theme/palettes";
+import { buildHealthReport, HealthReport } from "./health/health";
+import { createHealthPanel } from "./health/healthPanel";
 import { AppMenu } from "./ui/appMenu";
 import { createIcon } from "./ui/icons";
 import { createIconButton } from "./ui/iconButton";
@@ -227,6 +229,8 @@ class BradbitApp {
   private githubPrLoading = false;
   private chatState: ChatState = { ...initialChatState };
   private byokStatus: ByokProviderStatus[] = [];
+  private healthReport: HealthReport | null = null;
+  private healthLoading = false;
   private byokKeyDrafts: Record<string, string> = {};
   private byokBusyId: string | null = null;
   private byokError = "";
@@ -285,7 +289,48 @@ class BradbitApp {
       console.error("Could not listen for file changes", err);
     }
     this.applyThemeAttribute();
+    this.healthLoading = isTauriEnvironment();
     this.render();
+    if (isTauriEnvironment()) {
+      void this.refreshHealth();
+    }
+  }
+
+  /**
+   * Non-blocking first-run check. It never prevents opening a folder or
+   * writing; a missing AI provider is reported as optional with a shortcut to
+   * Settings.
+   */
+  private async refreshHealth(): Promise<void> {
+    if (!isTauriEnvironment()) return;
+    this.healthLoading = true;
+    if (!this.folder) this.render();
+
+    try {
+      const [runtime, git, templates] = await Promise.allSettled([
+        backend.opencodeStatus(),
+        backend.gitEngineStatus(),
+        backend.listTemplates(),
+      ]);
+      this.healthReport = buildHealthReport({
+        runtime:
+          runtime.status === "fulfilled" ? runtime.value.binaryFound : null,
+        git: git.status === "fulfilled" ? git.value : null,
+        providers: this.settings.byokProviders,
+        templates:
+          templates.status === "fulfilled" ? templates.value : null,
+      });
+    } catch {
+      this.healthReport = buildHealthReport({
+        runtime: null,
+        git: null,
+        providers: this.settings.byokProviders,
+        templates: null,
+      });
+    } finally {
+      this.healthLoading = false;
+      if (!this.folder) this.render();
+    }
   }
 
   private applyThemeAttribute(): void {
@@ -337,6 +382,7 @@ class BradbitApp {
     this.editor?.destroy();
     this.editor = null;
     this.render();
+    void this.refreshHealth();
   }
 
   public async openFolderByPath(path: string): Promise<void> {
@@ -2083,6 +2129,7 @@ class BradbitApp {
   private async updateSettings(patch: Partial<AppSettings>): Promise<void> {
     const prevShowConfig = configFilesVisible(this.settings);
     const prevDeveloperOptions = this.settings.showDeveloperOptions;
+    const prevProviders = JSON.stringify(this.settings.byokProviders);
     if (this.modal.kind === "settings" && this.modal.error) {
       this.modal = { kind: "settings" };
     }
@@ -2099,6 +2146,12 @@ class BradbitApp {
     }
     this.editor?.applySettings(this.settings);
     this.render();
+    if (
+      !this.folder &&
+      prevProviders !== JSON.stringify(this.settings.byokProviders)
+    ) {
+      void this.refreshHealth();
+    }
   }
 
   private currentMenuState(): MenuUiState {
@@ -2969,7 +3022,26 @@ class BradbitApp {
       recentsSec.appendChild(list);
     }
 
-    card.append(header, actions, recentsSec);
+    card.append(header, actions);
+    if (isTauriEnvironment()) {
+      card.appendChild(
+        createHealthPanel({
+          language: lang,
+          report: this.healthReport,
+          loading: this.healthLoading,
+          onAction: (action) => {
+            if (action === "models") {
+              this.openSettingsAt("models");
+            } else if (action === "new-project") {
+              void this.openNewProjectModal();
+            } else {
+              void this.refreshHealth();
+            }
+          },
+        }),
+      );
+    }
+    card.appendChild(recentsSec);
     container.appendChild(card);
     return container;
   }

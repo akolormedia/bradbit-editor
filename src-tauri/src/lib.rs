@@ -139,6 +139,11 @@ fn git_status(root: String) -> Result<git::api::GitStatus, String> {
 }
 
 #[tauri::command]
+fn git_engine_status() -> Result<git::GitEngineStatus, String> {
+    git::engine_status().map_err(|error| error.to_string())
+}
+
+#[tauri::command]
 fn git_init(root: String) -> Result<git::api::GitStatus, String> {
     git::api::init(&root)
 }
@@ -731,6 +736,7 @@ pub fn run() {
             start_watching,
             stop_watching,
             git_status,
+            git_engine_status,
             git_init,
             git_diff_file,
             git_restore_file,
