@@ -177,6 +177,8 @@ describe("workspace tab state (Story 1.1)", () => {
   it("detects Markdown and MDX paths case-insensitively (T-1.2.1)", () => {
     expect(isMarkdownPath("biblia/premisa.md")).toBe(true);
     expect(isMarkdownPath("notas/ideas.MDX")).toBe(true);
+    expect(isMarkdownPath("libro/capitulo.markdown")).toBe(true);
+    expect(isMarkdownPath("libro/capitulo.MARKDOWN")).toBe(true);
     expect(isMarkdownPath("guion/acto.fountain")).toBe(false);
     expect(isMarkdownPath("README.txt")).toBe(false);
   });

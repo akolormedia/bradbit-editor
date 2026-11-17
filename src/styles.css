@@ -4445,3 +4445,98 @@ textarea.text-input {
   border-radius: 6px;
   font-size: 12px;
 }
+
+/* Context menus (T-3.8.1) */
+.context-menu {
+  position: fixed;
+  z-index: 1000;
+  min-width: 218px;
+  max-width: 320px;
+  padding: 5px;
+  border: 1px solid var(--border-color);
+  border-radius: 9px;
+  background: var(--bg-elevated);
+  box-shadow: 0 14px 34px rgba(0, 0, 0, 0.28);
+  color: var(--text-primary);
+  font-family: var(--font-ui);
+  font-size: 12.5px;
+  outline: none;
+  user-select: none;
+}
+
+.context-menu-item {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  width: 100%;
+  min-height: 31px;
+  padding: 5px 9px;
+  border: 0;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--text-primary);
+  font: inherit;
+  text-align: left;
+  cursor: default;
+}
+
+.context-menu-item:hover,
+.context-menu-item:focus-visible {
+  background: var(--bg-hover);
+  outline: none;
+}
+
+.context-menu-item:disabled {
+  color: var(--text-muted);
+  opacity: 0.55;
+}
+
+.context-menu-item.is-danger {
+  color: var(--danger);
+}
+
+.context-menu-item.is-danger:hover,
+.context-menu-item.is-danger:focus-visible {
+  background: color-mix(in srgb, var(--danger) 12%, transparent);
+}
+
+.context-menu-icon {
+  display: inline-flex;
+  flex: none;
+  width: 16px;
+  height: 16px;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-muted);
+}
+
+.context-menu-item.is-danger .context-menu-icon {
+  color: inherit;
+}
+
+.context-menu-label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.context-menu-shortcut {
+  margin-left: auto;
+  padding-left: 18px;
+  color: var(--text-muted);
+  font-size: 10.5px;
+  letter-spacing: 0.02em;
+}
+
+.context-menu-separator {
+  height: 1px;
+  margin: 4px 7px;
+  background: var(--border-color);
+}
+
+.context-menu-empty {
+  padding: 8px;
+  color: var(--text-muted);
+  font-size: 12px;
+}

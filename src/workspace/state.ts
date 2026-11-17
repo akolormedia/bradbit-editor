@@ -212,7 +212,7 @@ export function countWordsAndChars(text: string): { words: number; chars: number
 }
 
 export function isMarkdownPath(path: string): boolean {
-  return /\.(md|mdx)$/i.test(path);
+  return /\.(md|mdx|markdown)$/i.test(path);
 }
 
 export function isFountainPath(path: string): boolean {
