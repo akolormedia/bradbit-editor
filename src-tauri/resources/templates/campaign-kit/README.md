@@ -1,7 +1,34 @@
 # campaign-kit
 
+[![License: MIT](https://img.shields.io/badge/license-MIT-green)](LICENSE)
+[![Bradbit writing kit](https://img.shields.io/badge/Bradbit-writing%20kit-1c1917)](https://github.com/akolormedia/bradbit-editor)
+
+> Part of the Bradbit writing kits. Use it in **Bradbit Editor** or with `bradbit init`.
+
 Base workspace for advertising campaigns with Bradbit. One project holds
 **one client** and all of its campaigns, brand manuals and references.
+
+## When to use it
+Use this kit in an agency or freelance practice where a client has
+multiple campaigns. Keep the client context and brand once, then create a
+campaign folder for each brief.
+
+## Workflow
+1. `/client` — onboard the client and fill `brand/`.
+2. `/brief` — campaign brief.
+3. `/strategy` — audience, insight, positioning and proposition.
+4. `/concept` — creative territories and the big idea.
+5. `/copy` and `/art-direction` — produce the work.
+6. `/deliverable` — channel-ready pieces.
+7. `/deck` — Markdown client deck.
+8. `/status` — status and approvals.
+
+## Creating a project
+From the app: **New project** → **Advertising campaigns (campaign-kit)**.
+From the CLI:
+```bash
+bradbit init my-client --kit campaign-kit
+```
 
 ## Quick start
 
@@ -85,6 +112,14 @@ flow; there is no slide editor yet.
   in `brand/manual.md`.
 - For files larger than ~5 MB, use Git LFS or document an external link.
 
+## Language and aliases
+
+Kit instructions are English; the agent replies and writes deliverables in
+the language configured in Bradbit. Canonical command ids are English,
+with Spanish aliases when the app runs in Spanish (`/cliente`,
+`/estrategia`, `/concepto`, ...). The editor sends the canonical id to the
+runtime.
+
 ## Versioning
 
 The Git assistant is a **general Bradbit capability**, not part of this
@@ -96,3 +131,17 @@ only commits after the user approves. Never commit secrets or generated
 Technical note: Bradbit reads `.bradbit/` as the canonical kit folder. If
 you open the kit with OpenCode upstream, rename `.bradbit/` to
 `.opencode/`; Bradbit still reads `.opencode/` as legacy compatibility.
+
+## Documentation
+
+- [Bradbit Editor](https://github.com/akolormedia/bradbit-editor)
+- [Bradbit CLI](https://github.com/akolormedia/bradbit-cli)
+- [Installation guide](https://github.com/akolormedia/bradbit-editor/blob/main/docs/INSTALL.md) · [Español](https://github.com/akolormedia/bradbit-editor/blob/main/docs/INSTALL.es.md)
+
+## Contributing
+
+Issues and pull requests are welcome. Keep the kit declarative: agents, commands and skills belong in `.bradbit/`; instructions stay in English, canonical command IDs in English, and user-facing examples in Spanish.
+
+## License
+
+MIT. See [`LICENSE`](LICENSE). The kit is content; **Bradbit Editor** and **Bradbit CLI** are also MIT licensed.

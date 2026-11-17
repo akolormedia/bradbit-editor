@@ -29,6 +29,13 @@
     "icon": [
       "icons/icon.png"
     ],
+    "license": "MIT",
+    "licenseFile": "../LICENSE",
+    "resources": {
+      "../LICENSE": "LICENSE",
+      "../THIRD_PARTY_NOTICES.md": "THIRD_PARTY_NOTICES.md",
+      "../licenses/": "licenses/"
+    },
     "macOS": {
       "signingIdentity": "-",
       "hardenedRuntime": false

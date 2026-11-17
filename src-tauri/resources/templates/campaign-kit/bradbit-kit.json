@@ -4,12 +4,15 @@
   "version": "1.0.0",
   "description": "Advertising campaign workspace with client folders, briefs, strategy, creative, deliverables and approvals.",
   "author": "Bradbit",
+  "license": "MIT",
   "minimumBradbit": "0.1.0-alpha.2",
   "contents": [
     "AGENTS.md",
     ".bradbit/",
     "clients/",
     "campaigns/",
-    "library/"
+    "library/",
+    "README.md",
+    "LICENSE"
   ]
 }

@@ -4,6 +4,7 @@
   "version": "1.0.0",
   "description": "Novel and book writing kit with a story bible, structure, manuscript, research, revision and pitch.",
   "author": "Bradbit",
+  "license": "MIT",
   "minimumBradbit": "0.1.0-alpha.2",
   "contents": [
     "AGENTS.md",
@@ -13,6 +14,8 @@
     "manuscript/",
     "research/",
     "notes/",
-    "pitch/"
+    "pitch/",
+    "README.md",
+    "LICENSE"
   ]
 }

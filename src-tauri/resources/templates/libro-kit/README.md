@@ -1,8 +1,35 @@
 # libro-kit
 
+[![License: MIT](https://img.shields.io/badge/license-MIT-green)](LICENSE)
+[![Bradbit writing kit](https://img.shields.io/badge/Bradbit-writing%20kit-1c1917)](https://github.com/akolormedia/bradbit-editor)
+
+> Part of the Bradbit writing kits. Use it in **Bradbit Editor** or with `bradbit init`.
+
 Base project template for writing a novel or book with Bradbit. It keeps
 the story bible, structure, manuscript, research, revision notes and
 pitch documents in one workspace.
+
+## When to use it
+Use this kit for a novel, a novella or a long-form book where the
+deliverable is a manuscript and the work is organized around a story
+bible, structure, chapters and revision.
+
+## Workflow
+1. `/idea` — premise, genre, audience and target length.
+2. `/character` — character sheets and voices.
+3. `/structure` — choose a novel structure method.
+4. `/outline` — chapter-by-chapter outline.
+5. `/chapter` — chapter drafts in `manuscript/`.
+6. `/continuity` — check timeline, names and facts.
+7. `/review` and `/style` — revision and voice.
+8. `/synopsis` — synopsis and query letter.
+
+## Creating a project
+From the app: **New project** → **Novel (libro-kit)**.
+From the CLI:
+```bash
+bradbit init my-novel --kit libro-kit
+```
 
 ## Quick start
 
@@ -74,6 +101,14 @@ title page metadata in `bible/premise.md` or a dedicated
 `manuscript/title-page.md` if needed. The editor previews Markdown and
 can print/export a PDF; there is no DOCX export yet.
 
+## Language and aliases
+
+Kit instructions are English; the agent replies and writes the manuscript
+in the language configured in Bradbit. Canonical command ids are English,
+with Spanish aliases when the app runs in Spanish (`/personaje`,
+`/estructura`, `/capitulo`, ...). The editor sends the canonical id to the
+runtime.
+
 ## Versioning
 
 The Git assistant is a general Bradbit capability. `/save-version`
@@ -84,3 +119,17 @@ Never commit secrets or generated `exports/`.
 Technical note: Bradbit reads `.bradbit/` as the canonical kit folder. If
 you open the kit with OpenCode upstream, rename `.bradbit/` to
 `.opencode/`; Bradbit still reads `.opencode/` as legacy compatibility.
+
+## Documentation
+
+- [Bradbit Editor](https://github.com/akolormedia/bradbit-editor)
+- [Bradbit CLI](https://github.com/akolormedia/bradbit-cli)
+- [Installation guide](https://github.com/akolormedia/bradbit-editor/blob/main/docs/INSTALL.md) · [Español](https://github.com/akolormedia/bradbit-editor/blob/main/docs/INSTALL.es.md)
+
+## Contributing
+
+Issues and pull requests are welcome. Keep the kit declarative: agents, commands and skills belong in `.bradbit/`; instructions stay in English, canonical command IDs in English, and user-facing examples in Spanish.
+
+## License
+
+MIT. See [`LICENSE`](LICENSE). The kit is content; **Bradbit Editor** and **Bradbit CLI** are also MIT licensed.

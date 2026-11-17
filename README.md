@@ -1,161 +1,126 @@
-# Bradbit Editor (`bradbit-editor`)
+<p align="center">
+  <img src="docs/assets/bradbit-mark.svg" width="76" height="76" alt="Bradbit" />
+</p>
 
-Desktop text editor for creative writing (`.md`, `.mdx`, `.fountain`, `.txt`), agnostic by design, built with **Tauri v2**, **CodeMirror 6** and **Rust**.
+<h1 align="center">Bradbit Editor</h1>
 
-> **Alpha version `0.1.0-alpha.5`** · macOS only · early testing. Change history in [`CHANGELOG.md`](CHANGELOG.md).
+<p align="center">
+  A desktop writing room for screenwriters and authors.
+</p>
 
-## Features
+<p align="center">
+  <a href="https://github.com/akolormedia/bradbit-editor/releases/latest"><img alt="Latest release" src="https://img.shields.io/github/v/release/akolormedia/bradbit-editor?include_prereleases&label=release" /></a>
+  <img alt="macOS 13+" src="https://img.shields.io/badge/macOS-13%2B-black" />
+  <img alt="Universal" src="https://img.shields.io/badge/arch-arm64%20%7C%20x64-blue" />
+  <a href="LICENSE"><img alt="MIT" src="https://img.shields.io/badge/license-MIT-green" /></a>
+  <a href="https://github.com/akolormedia/bradbit-editor/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/akolormedia/bradbit-editor/actions/workflows/ci.yml/badge.svg?branch=main" /></a>
+</p>
 
-- **Integrated chat with the Bradbit agent runtime (`T-2.1.1`):**
-  - Layout in the style of `opencode-desktop`: **writing session on the left** and the `EditorWorkspace` on the right, with a resizable divider.
-  - The **Chat** and **Editor** icons in the top bar show or hide each panel without losing the CodeMirror state. When one is hidden, the other uses the full window width, with messages and composer centered.
-  - **Multiple session tabs** with `+`, switching and closing. Each tab keeps its history, generation state and composer draft.
-  - **Per-project persistence:** reopening the app restores open tabs, the active session, the chat width and the panel state.
-  - Starts or reuses **`opencode serve`** automatically for the open folder, creates a session if there is none, and streams the response live.
-  - Composer with **Enter to send**, **Shift+Enter** for a new line, and a **Stop** button during generation.
-  - **Live tools with permissions (`T-2.1.3`):** compact cards for `read`, `edit`, `write`, `shell`, searches and skills, with running, completed and error status and expandable input and result details. Clicking a file that was read or edited opens it in the editor; if the tool changed it, the button opens its **Diff** directly. When the runtime asks for permission, a card offers **Allow once**, **Always allow** or **Reject**.
-  - **Interactive questions (`T-2.1.4`):** when the agent uses the `question` tool, a card appears with options, free text and multiple fields. After answering, the card shows **Answered** or **Cancelled**, stays in the chat history and no longer occupies a fixed area above the composer.
-  - **Project kit (`T-2.2.1`/`T-2.2.2`):** discovers agents, commands and skills from `.bradbit/` (and legacy `.opencode/`), and updates automatically when the kit changes. The composer offers command autocomplete with **`/`**, attachments with **`@`** or the **＋** button, and the editor's **↗** button sends the current selection to the active chat.
-  - **Composer in the style of `opencode-desktop` (`T-2.2.3`):** a single panel with a helpful placeholder, a **model** picker with search, recents and provider grouping, a separate **effort/variant** picker, the **↑** send button, and a **＋** menu with a context file, command, kit agent and **Manage models**. In *Settings → Manage models* you can search and enable or disable which models appear. Visibility and recents are saved in the settings.
-  - **Integrated terminal (`T-2.3.1`):** the **`>_`** button in the bottom bar switches between **Chat / Terminal** in the left column, without losing the editor or the buffer. Native PTY in Rust with a **Shell / opencode / claude / custom command** picker, automatic resize, restart and clear. The session closes when the folder closes.
-  - **Minimal top bar and application menu (`T-2.4.2`):** the project title and the **Chat/Editor** toggles live at the top. File, edit, view and settings actions are grouped in a dropdown menu with shortcuts. The left panel and terminal toggles are in the bottom bar, next to the branch.
-  - **Chat and editor surfaces (`T-2.4.3`):** Chat/Terminal and the `EditorWorkspace` are two independent panels with a border, radius and spacing over the app background, in the style of `opencode-desktop`. The tree and the document share the editor surface, and the dividers keep the drag-relative resize.
-  - Shows connection status, actionable errors and context/token usage, and keeps the session history while you switch files.
-  - Uses the project's `.bradbit/` kit, agents and models through the bundled `bradbit` sidecar. Bradbit does not store model keys in the project.
-  - **BYOK:** *Settings → AI and models* connects DeepSeek, OpenRouter, OpenAI, Anthropic, OpenCode or a custom OpenAI-compatible endpoint. The guided **Connect a model** wizard links to each provider's key page, tests the key with a real request and only then saves it to the macOS Keychain. Keys are injected into the sidecar at launch and never written to the project.
+![Illustrative preview of the Bradbit writing workspace: chat on the left, Fountain script on the right, and a saved version card.](docs/assets/editor-overview.png)
 
-- **Native macOS menu (`Story 1.1.1`):** the system menu bar includes **Bradbit Editor, File, Edit, View and Window**:
-  - *File:* Open folder (`⌘O`), Open recent, New project (`⇧⌘N`), Save as template, Open templates folder, Quick open (`⌘P`), New file (`⌘N`), Save (`⌘S`), Export PDF (`⌘E`) and Close tab (`⌘W`).
-  - *Edit:* Undo and Redo connected to each tab's history, Bold (`⌘B`) and Italic (`⌘I`) in Markdown/MDX, Cut, Copy, Paste and Select all, Find (`⌘F`), Find and replace (`⌥⌘F`) and Find in project (`⌘⇧F`).
-  - *View:* Show or hide the explorer (`⌘⇧E`), Preview (`⌘⌥P`), Word wrap, Line numbers and Full screen.
-  - *Window:* Minimize, Zoom and Bring all to front.
-  - Items are enabled, disabled and checked according to the real state, and labels change with the language.
-- **Any folder is a project:** open any folder on disk without proprietary configuration files (`project.yaml`).
-- **Welcome screen and recent projects:** open folders from disk or reopen any recent project in one click. A non-blocking **Getting started** card checks the Bradbit engine, the bundled libgit2 version, the configured AI provider/model and the available templates, with a guided **Connect a model** flow and a shortcut to new projects. Writing never waits for an AI provider.
-- **Writing kits and language (`T-3.4.x`):** three kits bundled: **Screenwriting**, **Novel** and **Advertising campaigns**. Instructions are in English; the agent replies and writes in the language configured in the app, with Spanish command aliases (`/escena`, `/capitulo`, `/cliente`, ...). The general Git assistant provides `/save-version` and `/history` in every project, with explicit approval before committing.
-- **New project and templates (`T-1.3.2`):**
-  - **New project (`⇧⌘N`)** from the welcome screen, the top bar or the *File* menu: choose a template, a name and a destination folder.
-  - Built-in templates: **Screenwriting (`guionista-kit`)**, with bible, structure, script, research, agents, commands and skills; **Novel (`libro-kit`)**; **Advertising campaigns (`campaign-kit`)**; and **Blank project**. Each kit carries a `bradbit-kit.json` manifest.
-  - **User templates:** any folder in `~/Library/Application Support/Bradbit/templates/` appears automatically in the template picker.
-  - When the project is created, **history (Git)** is initialized automatically with the bundled engine, and the app opens the resulting folder.
-  - **Save current project as template…** and **Open templates folder**, from the modal and the *File* menu.
-- **Resizable and collapsible side explorer (`⌘⇧E`):**
-  - Compact **Files / Outline / Versions** icon selector at the left end of the bottom bar. Only the active section is shown, and the tree gets more height because it no longer needs a tab row.
-  - Hides `.git`, `.DS_Store` and `.opencode` by default, with the option *Show configuration files*.
-  - **Filter files (`T-2.4.5`):** a field above the tree that filters by name or path, keeps ancestor folders, auto-expands matches and clears with `Escape`.
-  - Built-in actions: New file (`⌘N`), New folder, Rename and Delete (with confirmation).
-  - **Untitled new file (`T-2.4.6`):** `⌘N`, the menu and the tree open an **Untitled** tab. The real name is requested when saving, through the native dialog, inside the project folder. Untitled tabs are not persisted.
-- **Document outline (`T-1.2.2`):**
-  - In Markdown/MDX: headings (`#`, `##`, `###`…) that jump to the exact line when clicked.
-  - In Fountain: sections (`# Acto`) and scenes (`INT.`, `EXT.`, `I/E.`, `.forced`) with hierarchy and an estimated page count (`~N pages`).
-  - Updates automatically while you type, and also works from the preview: clicking returns to editing and jumps to the line.
-- **Search and quick navigation (`T-1.2.4`):**
-  - **Quick open (`⌘P`):** a palette that filters any project file by name or path and opens it with Enter.
-  - **Find in project (`⌘⇧F`):** full-text search across all files, with `path:line` results and snippets. Enter opens the file at the exact line.
-  - Both palettes respect the *Show configuration files* setting and support keyboard navigation (`↑↓`, Enter, Esc).
-- **Smart tabs:**
-  - A single click opens a tab in *preview* mode (italic). A double click or an edit pins the tab.
-  - Unsaved-changes indicator (`•`), safe close with confirmation (`⌘W`) and atomic writes to disk (`⌘S`).
-- **Live external files (`T-1.4.1`):**
-  - Changes made by `opencode`, `claude` or any other external process update the file tree immediately.
-  - Clean tabs reload automatically.
-  - If a tab has unsaved changes, your text is kept and a `⚠` notice appears with the message *Changed on disk*. Your draft is never overwritten.
-  - Deleted files close their tab if it was clean. If it had changes, the copy is kept so you can save it.
-- **Git status badges (`T-1.4.2`):**
-  - Badges in the explorer and tabs: **`M`** modified, **`+`** new or untracked, **`D`** deleted, **`R`** renamed and **`!`** conflict.
-  - The bottom bar shows the current branch and the `↑`/`↓` counters for commits ahead and behind.
-  - Badges update on save and when the file watcher detects external changes.
-  - Files deleted from disk appear in the Versions panel (`T-1.4.4`), since they no longer exist in the tree.
-- **Integrated Diff viewer (`T-1.4.3`):**
-  - The **Diff** button in the header compares the last saved version (Git `HEAD`) with the tab's current content, side by side, with highlighted changes and collapsed unchanged sections.
-  - New files show the notice *New file (no saved version)* and are compared against an empty document.
-  - The **↺ Discard changes** button asks for confirmation and restores the file to `HEAD`. If it is a new file, it is deleted from disk and from the index. The tab, tree and badges refresh immediately.
-  - Also works with unsaved changes: the Diff shows the live text of the tab, and discarding removes both the draft and the changes on disk.
-- **Versions panel (`T-1.4.4`):**
-  - **Versions** section of the side selector, also available with **`⌘⌥G`**.
-  - **Save version:** summarizes pending changes, lets you write the summary, and signs the commit with the configured version author; if none is set, it uses `Bradbit Writer <writer@bradbit.local>`.
-  - **Current changes:** a readable list of *Edited*, *New*, *Deleted*, *Renamed* or *Conflict* files. Each row opens its Diff and offers discard or restore.
-  - **Version history:** a timeline of commits with date and author. Expanding a version lets you inspect its files and restore any of them without leaving the editor.
-  - **Parallel drafts:** a list of Git branches, creation of a new draft from the current version, and switching drafts with a safe reload of open tabs.
-  - In folders without Git, the panel offers **Enable history** to create the repository and start saving versions.
-  - Files deleted from disk now appear in *Current changes* with their restore action.
-- **GitHub sync (`T-1.5.4`):**
-  - **GitHub account in Settings:** the token is stored only in the **macOS Keychain**, never in `settings.json` or the project. Includes account verification, sign-out and a link to create a Personal Access Token.
-  - **Publish to GitHub:** creates the remote repository (private or public) and uploads the current version. If a non-GitHub remote already existed, it adds a `github` remote without touching `origin`.
-  - **Push and pull changes:** `push` and `pull --ff-only`, with the token passed through an in-memory credential callback — never embedded in the remote URL, `.git/config` or logs. Pulling reloads open tabs safely.
-  - **Propose changes to the team:** pushes the current draft and opens a Pull Request with title, description and base branch. The panel lists open Pull Requests and opens them in GitHub.
-- **Professional editing with CodeMirror 6:**
-  - Undo and redo per tab, find and replace in the file (`⌘F`), word wrap, optional line numbers, a native spellchecker, and colored syntax for Markdown/MDX and Fountain.
-  - Bold (`⌘B`) and italic (`⌘I`) in Markdown/MDX, with the selection or cursor wrapped in markers.
-- **Fountain 1.1 and PDF export (`T-1.2.3`):**
-  - Distinct highlighting for scenes, sections, transitions, characters, dialogue, parentheticals and `[[...]]` notes.
-  - **Export PDF (`⌘E`)** from the document header or the *File* menu. It produces a deterministic screenplay-formatted PDF (US Letter, Courier 12pt, 55 lines per page, `(MORE)` and `(CONT'D)` rules, and page numbering).
-  - The PDF is saved in the project's `exports/` folder, keeping the script subfolder (`exports/guion/acto-1.pdf`), and opens automatically in the system viewer. It works offline.
-  - **Paginated screenplay preview (`T-2.5.7`):** the Preview / Edit button renders the script as numbered paper pages (US Letter, Courier, scene headings, centered cues, dialogue and transitions) without opening the PDF.
-- **Document header and reading preview (`T-1.2.1`):**
-  - The header above the editor shows the active file's name and path, with **Copy**, **Preview / Edit** (Markdown and Fountain) and **PDF** (Fountain) actions.
-  - Rendered and sanitized Markdown/MDX preview (`⌘⌥P`), with headings, lists, quotes, code, tables and links. The reading view is monochrome so the document reads like a manuscript; links keep an underline and only use the accent color on hover.
-  - External links open in the browser. Relative project links open directly in the editor.
-- **Application settings (`⌘,`, `T-2.4.4`):** a window with a search field and categories on the left (General, Appearance, Editor, Files & search, Terminal, Git, GitHub, AI & models). Includes language, light/dark/system mode, color themes (Bradbit, Nord, Solarized, Gruvbox) with light and dark variants, font size (`12`–`24` px), word wrap, line numbers, configuration files, the default terminal command, the Git author, the GitHub account and model management.
+<p align="center"><em>Illustrative preview of the writing workspace. The real app uses your project, theme and fonts.</em></p>
 
-## Installation (alpha)
+Bradbit Editor is a macOS app for writing **Markdown**, **MDX**, **Fountain** and **plain text**. It keeps your folder as the source of truth, saves versions without Git, and puts an optional AI writing room beside the page.
 
-**Requirements**
-- **macOS 13 Ventura or later**, Apple Silicon or Intel. The installer is **universal**.
-- **No separate OpenCode install is required** for the chat: the macOS app bundles the `bradbit` runtime as a sidecar. For source builds, download it with `npm run fetch:bradbit`.
-- Git is **not required**: history, diffs, branches and GitHub sync use the bundled libgit2 engine. Command Line Tools are not needed to run the app.
-- GitHub token (optional): only needed to publish and sync repositories.
+> **Alpha `0.1.0-alpha.5`** · macOS 13+ · Apple Silicon and Intel · ad-hoc signed, not notarized. See the [installation guide](docs/INSTALL.md) and [`CHANGELOG.md`](CHANGELOG.md).
 
-**Option A: installer**
+## Why Bradbit
+
+- **Your folder is the project.** No import, no proprietary project file, no database. Open any folder and keep writing.
+- **Versions without the vocabulary.** Save a version, read changes in plain language, restore one file or open a parallel draft. Git works underneath with libgit2; you never have to see it.
+- **An assistant with the manuscript open.** Chat beside the page. The agent reads the files you point to, proposes edits and asks before running tools. Every change can be reviewed in the diff.
+- **Built for scripts.** Fountain highlighting, scene outline, paginated preview and screenplay-formatted PDF export.
+- **Local-first and BYOK.** No account. AI keys live in the macOS Keychain. Writing works offline and never waits for a model.
+
+## Download and install
+
+**Requirements:** macOS 13 Ventura or later, Apple Silicon or Intel, about 1 GB free.
 
 1. Download the latest `Bradbit Editor_<version>_universal.dmg` from the [releases page](https://github.com/akolormedia/bradbit-editor/releases/latest).
-2. Drag the app into *Applications*.
-3. On first launch, macOS blocks the app because it is **ad-hoc signed but not notarized**. Open **System Settings → Privacy & Security**, scroll down and click **Open Anyway**.
+2. Drag **Bradbit Editor** into **Applications**.
+3. On first launch, macOS blocks the app because it is ad-hoc signed but not notarized. Open **System Settings → Privacy & Security**, scroll down and click **Open Anyway**.
 
-Full installation guide and troubleshooting: **[English](docs/INSTALL.md)** · **[Español](docs/INSTALL.es.md)**.
+No Git, Node, Rust, Xcode, Command Line Tools or OpenCode installation is required. History, versions and GitHub sync use the bundled libgit2 engine; the agent runtime is bundled as a sidecar.
 
-**Option B: build from source**
+Full instructions, troubleshooting and uninstall: **[English](docs/INSTALL.md)** · **[Español](docs/INSTALL.es.md)**.
+
+## Quick start
+
+1. Open Bradbit and choose **Open folder**, or create a project from a writing kit.
+2. Write in the editor. Use the **Explorer**, **Outline** and **Versions** sections on the left.
+3. Optional: open **Connect model** and follow the guided setup. Keys are stored in the macOS **Keychain**, never in the project.
+4. Save a version from the **Versions** panel when you reach a point worth keeping. No terminal required.
+
+## Writing kits
+
+Three kits ship with the app. Each one is a plain folder with agents, commands, skills and examples; you can edit it or create your own.
+
+| Kit | What it is for | Spanish command examples |
+|---|---|---|
+| **Screenwriting** (`guionista-kit`) | Film, series and microdrama; story bible, structure, scenes, research and Fountain scripts. | `/escena`, `/revisar`, `/voz` |
+| **Novel** (`libro-kit`) | Novels and long-form books; chapters, characters, continuity, revision and pitch. | `/capitulo`, `/personaje`, `/sinopsis` |
+| **Advertising campaigns** (`campaign-kit`) | Client workspaces, briefs, strategy, concepts, copy, deliverables and approvals. | `/cliente`, `/brief`, `/concepto` |
+
+Kit instructions are in English; the agent replies and writes in the language configured in the app. See the [feature guide](docs/FEATURES.md) for the full feature inventory.
+
+## Documentation
+
+- [Installation guide (English)](docs/INSTALL.md) · [Español](docs/INSTALL.es.md)
+- [Feature guide](docs/FEATURES.md)
+- [Changelog](CHANGELOG.md)
+- [Issues](https://github.com/akolormedia/bradbit-editor/issues)
+- Public site and docs: **`bradbit.io/docs`** (coming with the beta; the URL will be the canonical documentation home).
+
+## Architecture
+
+- **Tauri v2 + Rust** for the native macOS shell, menus, file system, Keychain, PDF export and process management.
+- **CodeMirror 6** for the editor, Markdown/MDX and Fountain syntax, search and the writing workspace.
+- **libgit2** for local versions, diffs, branches and GitHub sync. No system Git or Command Line Tools.
+- **`bradbit` sidecar** for the agent runtime, built from [`bradbit-cli`](https://github.com/akolormedia/bradbit-cli), a fork of OpenCode.
+- **Project kits** in `.bradbit/` for agents, commands and skills. `.opencode/` remains legacy-compatible.
+
+The editor is intentionally agnostic: scene, character and outline behavior belongs to the kit, not to the editor engine.
+
+## Development
 
 ```bash
 npm install
-npm run sidecar:universal   # downloads arm64 + x64 and creates the universal sidecar
-npm run tauri build -- --target universal-apple-darwin --config src-tauri/tauri.sidecar.conf.json
-# The installer is written to src-tauri/target/universal-apple-darwin/release/bundle/dmg/
+npm run fetch:bradbit      # download the sidecar for the current architecture
+npm run tauri dev          # native app with hot reload
 ```
 
-For a faster local build for the current architecture only:
+Useful checks:
 
 ```bash
-npm run fetch:bradbit
-npm run tauri build -- --config src-tauri/tauri.sidecar.conf.json
-```
-
-The sidecar version and asset names are pinned in `bradbit-cli.json`. The downloaded binaries live in `src-tauri/binaries/` and are not committed.
-
-## Known limitations (alpha)
-
-The full list is in [`CHANGELOG.md`](CHANGELOG.md#known-limitations). Summary:
-- Creating a project by chatting with the agent from the welcome screen is still planned (`T-2.5.10`).
-- Three writing kits are bundled: screenwriting (`guionista-kit`), novel (`libro-kit`) and advertising campaigns (`campaign-kit`). Additional kits and extensions are planned for Phase 4.
-- The app is ad-hoc signed but not notarized, and only macOS has been tested.
-
-## Development and tests
-
-```bash
-# Install frontend dependencies
-npm install
-
-# Full verification (frontend + Rust)
 npm run typecheck
 npm test
 npm run build
 cargo test --manifest-path src-tauri/Cargo.toml
 cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets -- -D warnings
-
-# Run in native desktop mode (Tauri); fetch the sidecar first on a fresh checkout
-npm run fetch:bradbit
-npm run tauri dev
-
-# Build the macOS installer with the sidecar (fetch it first)
-npm run tauri build -- --config src-tauri/tauri.sidecar.conf.json
 ```
+
+Build the universal installer:
+
+```bash
+npm run sidecar:universal
+npm run tauri build -- --target universal-apple-darwin --config src-tauri/tauri.sidecar.conf.json
+# DMG: src-tauri/target/universal-apple-darwin/release/bundle/dmg/
+```
+
+The sidecar version and asset names are pinned in [`bradbit-cli.json`](bradbit-cli.json). Downloaded binaries live in `src-tauri/binaries/` and are not committed.
+
+## Contributing
+
+Issues and pull requests are welcome. Keep changes consistent with the editor's agnostic design: writing-specific behavior belongs in a kit or a template, not in the editor engine. For anything user-facing, include tests and update the docs in the same change.
+
+## License
+
+Bradbit Editor is **MIT licensed**. See [`LICENSE`](LICENSE).
+
+The app bundles third-party components under their own licenses, including:
+
+- **libgit2** — GPLv2 with linking exception (statically linked).
+- **Tauri CSS stack and DOMPurify** — MPL-2.0 (DOMPurify is distributed under its Apache-2.0 option).
+- **`bradbit` sidecar** — MIT, with OpenTUI/FFmpeg under LGPL-2.1-or-later.
+
+The complete notices, source links and full license texts are in [`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md) and [`licenses/`](licenses/), and are bundled inside the app. Bradbit and the Bradbit mark are trademarks of Akolormedia.
