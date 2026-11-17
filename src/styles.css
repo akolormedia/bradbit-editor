@@ -4570,30 +4570,6 @@ textarea.text-input {
   margin-top: 2px;
 }
 
-.import-docx-preview-label {
-  margin-bottom: 5px;
-  color: var(--text-muted);
-  font-size: 10.5px;
-  font-weight: 600;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-}
-
-.import-docx-preview {
-  max-height: 210px;
-  margin: 0 0 12px;
-  padding: 10px 12px;
-  overflow: auto;
-  border: 1px solid var(--border-color);
-  border-radius: 7px;
-  background: var(--bg-input);
-  color: var(--text-secondary);
-  font-family: var(--font-mono);
-  font-size: 11px;
-  line-height: 1.5;
-  white-space: pre-wrap;
-}
-
 .import-docx-header {
   display: flex;
   align-items: center;
@@ -4605,15 +4581,86 @@ textarea.text-input {
   margin: 0;
 }
 
-.import-docx-preview-btn {
+.import-docx-preview-tabs {
+  display: flex;
+  gap: 5px;
+  margin-bottom: 8px;
+}
+
+.import-docx-preview-tab {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  flex: none;
+  padding: 5px 10px;
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-muted);
+  font: inherit;
+  font-size: 11.5px;
+  cursor: pointer;
 }
 
-.import-docx-preview-btn.active {
+.import-docx-preview-tab:hover {
+  border-color: var(--text-muted);
+  color: var(--text-primary);
+}
+
+.import-docx-preview-tab.active {
   border-color: color-mix(in srgb, var(--accent) 55%, var(--border-color));
   background: color-mix(in srgb, var(--accent) 12%, transparent);
   color: var(--accent);
+}
+
+.import-docx-preview-panel {
+  margin-bottom: 12px;
+}
+
+.import-docx-rendered.markdown-preview {
+  height: auto;
+  max-height: 280px;
+  padding: 0;
+  overflow-y: auto;
+  border: 1px solid var(--border-color);
+  border-radius: 7px;
+  background: var(--bg-input);
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.import-docx-rendered .markdown-preview-inner {
+  max-width: none;
+  margin: 0;
+  padding: 12px 14px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.import-docx-rendered h1 {
+  font-size: 1.35em;
+}
+
+.import-docx-rendered h2 {
+  font-size: 1.18em;
+}
+
+.import-docx-rendered h3 {
+  font-size: 1.05em;
+}
+
+.import-docx-preview {
+  max-height: 280px;
+  margin: 0;
+  padding: 10px 12px;
+  overflow: auto;
+  border: 1px solid var(--border-color);
+  border-radius: 7px;
+  background: var(--bg-input);
+  color: var(--text-secondary);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  line-height: 1.5;
+  white-space: pre-wrap;
 }

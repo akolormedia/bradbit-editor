@@ -83,6 +83,7 @@ export const translations = {
     importDocxDestinationHint:
       "Si ya existe, se guardará con otro nombre.",
     importDocxPreview: "Vista previa",
+    importDocxSourceView: "Markdown",
     importDocxImport: "Importar",
     importDocxDone: "DOCX importado en {path}",
     importDocxEmpty: "El documento no contiene texto importable.",
@@ -607,6 +608,7 @@ export const translations = {
     importDocxDestinationHint:
       "If it already exists, another name will be used.",
     importDocxPreview: "Preview",
+    importDocxSourceView: "Markdown",
     importDocxImport: "Import",
     importDocxDone: "DOCX imported to {path}",
     importDocxEmpty: "The document has no importable text.",

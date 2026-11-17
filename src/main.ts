@@ -171,7 +171,7 @@ type ModalState =
       tables?: number;
       headings?: number;
       words?: number;
-      previewOpen?: boolean;
+      previewMode?: "rendered" | "source";
       error?: string;
     }
   | { kind: "entry-input"; mode: "new-folder" | "rename"; targetPath: string; value: string; error?: string }
@@ -2677,7 +2677,7 @@ class BradbitApp {
         kind: "import-docx",
         status: "ready",
         sourceName,
-        previewOpen: true,
+        previewMode: "rendered",
         ...result,
       };
       this.render();
@@ -4539,28 +4539,6 @@ class BradbitApp {
     const title = document.createElement("h3");
     title.textContent = t(lang, "importDocxTitle");
     header.appendChild(title);
-
-    const previewOpen = state.previewOpen !== false;
-    if (state.status === "ready") {
-      const previewToggle = document.createElement("button");
-      previewToggle.type = "button";
-      previewToggle.className = "toolbar-btn import-docx-preview-btn";
-      previewToggle.classList.toggle("active", previewOpen);
-      previewToggle.dataset.testid = "import-docx-preview-toggle";
-      previewToggle.setAttribute("aria-pressed", String(previewOpen));
-      previewToggle.title = t(lang, "importDocxPreview");
-      previewToggle.setAttribute("aria-label", t(lang, "importDocxPreview"));
-      previewToggle.appendChild(createIcon("eye", 14));
-      const previewToggleLabel = document.createElement("span");
-      previewToggleLabel.textContent = t(lang, "importDocxPreview");
-      previewToggle.appendChild(previewToggleLabel);
-      previewToggle.onclick = () => {
-        if (this.modal.kind !== "import-docx") return;
-        this.modal = { ...this.modal, previewOpen: !previewOpen };
-        this.render();
-      };
-      header.appendChild(previewToggle);
-    }
     dialog.appendChild(header);
 
     if (state.status === "loading") {
@@ -4601,14 +4579,67 @@ class BradbitApp {
         warnings.appendChild(item);
       }
 
-      const previewLabel = document.createElement("div");
-      previewLabel.className = "import-docx-preview-label";
-      previewLabel.textContent = t(lang, "importDocxPreview");
-      const preview = document.createElement("pre");
-      preview.className = "import-docx-preview";
-      preview.textContent = (state.markdown ?? "").slice(0, 1200);
-      if ((state.markdown ?? "").length > 1200) {
-        preview.textContent += "\n…";
+      const previewMode = state.previewMode ?? "rendered";
+      const previewTabs = document.createElement("div");
+      previewTabs.className = "import-docx-preview-tabs";
+      previewTabs.setAttribute("role", "tablist");
+
+      const renderedTab = document.createElement("button");
+      renderedTab.type = "button";
+      renderedTab.className = "import-docx-preview-tab";
+      renderedTab.dataset.testid = "import-docx-preview-rendered";
+      renderedTab.setAttribute("role", "tab");
+      renderedTab.setAttribute(
+        "aria-selected",
+        String(previewMode === "rendered"),
+      );
+      renderedTab.classList.toggle("active", previewMode === "rendered");
+      renderedTab.appendChild(createIcon("eye", 14));
+      renderedTab.appendChild(
+        document.createTextNode(t(lang, "importDocxPreview")),
+      );
+      renderedTab.onclick = () => {
+        if (this.modal.kind !== "import-docx") return;
+        this.modal = { ...this.modal, previewMode: "rendered" };
+        this.render();
+      };
+
+      const sourceTab = document.createElement("button");
+      sourceTab.type = "button";
+      sourceTab.className = "import-docx-preview-tab";
+      sourceTab.dataset.testid = "import-docx-preview-source";
+      sourceTab.setAttribute("role", "tab");
+      sourceTab.setAttribute(
+        "aria-selected",
+        String(previewMode === "source"),
+      );
+      sourceTab.classList.toggle("active", previewMode === "source");
+      sourceTab.appendChild(createIcon("code", 14));
+      sourceTab.appendChild(
+        document.createTextNode(t(lang, "importDocxSourceView")),
+      );
+      sourceTab.onclick = () => {
+        if (this.modal.kind !== "import-docx") return;
+        this.modal = { ...this.modal, previewMode: "source" };
+        this.render();
+      };
+
+      previewTabs.append(renderedTab, sourceTab);
+
+      const previewPanel = document.createElement("div");
+      previewPanel.className = "import-docx-preview-panel";
+      previewPanel.setAttribute("role", "tabpanel");
+      if (previewMode === "rendered") {
+        previewPanel.classList.add("markdown-preview", "import-docx-rendered");
+        const inner = document.createElement("div");
+        inner.className = "markdown-preview-inner";
+        inner.innerHTML = renderMarkdownPreview(state.markdown ?? "");
+        previewPanel.appendChild(inner);
+      } else {
+        const sourceView = document.createElement("pre");
+        sourceView.className = "import-docx-preview";
+        sourceView.textContent = state.markdown ?? "";
+        previewPanel.appendChild(sourceView);
       }
 
       const destination = document.createElement("p");
@@ -4617,11 +4648,15 @@ class BradbitApp {
         path: "manuscript/imported.md",
       })} ${t(lang, "importDocxDestinationHint")}`;
 
-      dialog.append(source, summary, keep, warnings);
-      if (previewOpen) {
-        dialog.append(previewLabel, preview);
-      }
-      dialog.appendChild(destination);
+      dialog.append(
+        source,
+        summary,
+        keep,
+        warnings,
+        previewTabs,
+        previewPanel,
+        destination,
+      );
 
       if (state.error) {
         const error = document.createElement("div");
