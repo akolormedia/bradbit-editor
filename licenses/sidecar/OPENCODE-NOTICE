@@ -1,0 +1,15 @@
+Bradbit CLI
+
+Bradbit CLI is a fork and adaptation of OpenCode.
+
+  Upstream:  https://github.com/anomalyco/opencode
+  Copyright (c) 2025 opencode and contributors
+  License:   MIT (see LICENSE)
+
+Bradbit-specific changes and branding:
+  Copyright (c) 2026 Akolormedia / Rafael Olivares
+  License:   MIT
+
+OpenCode is built with Bun (https://bun.sh) and bundles third-party
+packages under their respective licenses. The full upstream license and
+copyright notices remain in LICENSE.
