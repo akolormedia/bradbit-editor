@@ -1,5 +1,6 @@
 pub mod byok;
 pub mod cancel;
+pub mod fdx;
 pub mod fountain;
 pub mod fs_ops;
 pub mod git;
@@ -138,6 +139,12 @@ fn reveal_in_finder(root: String, rel_path: String) -> Result<(), String> {
         let _ = target;
         Err("Show in Finder is only available on macOS".to_string())
     }
+}
+
+/// Converts the Final Draft file selected by the native dialog into Fountain.
+#[tauri::command]
+fn convert_fdx_file(path: String) -> Result<String, String> {
+    fdx::convert_path(&path)
 }
 
 /// Reads the DOCX selected by the native file dialog and returns it as base64.
@@ -797,6 +804,7 @@ pub fn run() {
             open_templates_folder,
             reveal_in_finder,
             read_docx_file,
+            convert_fdx_file,
             start_watching,
             stop_watching,
             git_status,

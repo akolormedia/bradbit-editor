@@ -19,9 +19,18 @@ function state(overrides: Partial<MenuUiState> = {}): MenuUiState {
   };
 }
 
+function flattenItems(
+  items: ReturnType<typeof buildAppMenu>[number]["items"],
+): ReturnType<typeof buildAppMenu>[number]["items"] {
+  return items.flatMap((item) => [
+    item,
+    ...(item.children ? flattenItems(item.children) : []),
+  ]);
+}
+
 function commandIds(): string[] {
   return buildAppMenu(state()).flatMap((group) =>
-    group.items.map((item) => item.command.id),
+    flattenItems(group.items).map((item) => item.command.id),
   );
 }
 
@@ -30,7 +39,9 @@ function commandItem(
   id: string,
 ) {
   for (const group of groups) {
-    const item = group.items.find((entry) => entry.command.id === id);
+    const item = flattenItems(group.items).find(
+      (entry) => entry.command.id === id,
+    );
     if (item) return item;
   }
   throw new Error(`Missing command ${id}`);
@@ -62,7 +73,9 @@ describe("application menu model (T-2.4.2)", () => {
     expect(commandIds()).toEqual([
       "file.openFolder",
       "file.newProject",
+      "file.importMenu",
       "file.importDocx",
+      "file.importFdx",
       "file.newFile",
       "file.quickOpen",
       "file.save",
@@ -84,7 +97,9 @@ describe("application menu model (T-2.4.2)", () => {
       state({ hasFolder: false, hasActiveTab: false, isMarkdown: false }),
     );
     expect(commandItem(empty, "file.newFile").enabled).toBe(false);
+    expect(commandItem(empty, "file.importMenu").enabled).toBe(false);
     expect(commandItem(empty, "file.importDocx").enabled).toBe(false);
+    expect(commandItem(empty, "file.importFdx").enabled).toBe(false);
     expect(commandItem(empty, "file.save").enabled).toBe(false);
     expect(commandItem(empty, "view.togglePreview").enabled).toBe(false);
     expect(commandItem(empty, "view.wordWrap").enabled).toBe(true);
@@ -92,7 +107,9 @@ describe("application menu model (T-2.4.2)", () => {
 
     const ready = buildAppMenu(state());
     expect(commandItem(ready, "file.newFile").enabled).toBe(true);
+    expect(commandItem(ready, "file.importMenu").children).toHaveLength(2);
     expect(commandItem(ready, "file.importDocx").enabled).toBe(true);
+    expect(commandItem(ready, "file.importFdx").enabled).toBe(true);
     expect(commandItem(ready, "view.togglePreview").enabled).toBe(true);
   });
 

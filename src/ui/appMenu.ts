@@ -10,6 +10,7 @@ export interface AppMenuItem {
   enabled: boolean;
   checked?: boolean;
   separatorBefore?: boolean;
+  children?: AppMenuItem[];
 }
 
 export interface AppMenuGroup {
@@ -47,10 +48,22 @@ export function buildAppMenu(state: MenuUiState): AppMenuGroup[] {
           enabled: true,
         },
         {
-          command: { id: "file.importDocx" },
-          label: t(lang, "importDocxMenu"),
+          command: { id: "file.importMenu" },
+          label: t(lang, "importMenu"),
           enabled: hasFolder,
           separatorBefore: true,
+          children: [
+            {
+              command: { id: "file.importDocx" },
+              label: t(lang, "importDocxMenu"),
+              enabled: hasFolder,
+            },
+            {
+              command: { id: "file.importFdx" },
+              label: t(lang, "importFdxMenu"),
+              enabled: hasFolder,
+            },
+          ],
         },
         {
           command: { id: "file.newFile" },
@@ -271,7 +284,7 @@ export class AppMenu {
   private enabledItems(): HTMLButtonElement[] {
     return Array.from(
       this.popover.querySelectorAll<HTMLButtonElement>(
-        ".app-menu-item:not(:disabled)",
+        ".app-menu-group > .app-menu-item:not(:disabled), .app-menu-group > .app-menu-submenu > .app-menu-item:not(:disabled)",
       ),
     );
   }
@@ -307,6 +320,47 @@ export class AppMenu {
     items[next]?.focus();
   }
 
+  private createItemButton(
+    item: AppMenuItem,
+    submenuItem = false,
+  ): HTMLButtonElement {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "app-menu-item";
+    if (submenuItem) button.classList.add("app-menu-subitem");
+    button.dataset.command = item.command.id;
+    button.disabled = !item.enabled;
+    button.setAttribute(
+      "role",
+      item.checked === undefined ? "menuitem" : "menuitemcheckbox",
+    );
+    if (item.checked !== undefined) {
+      button.setAttribute("aria-checked", String(item.checked));
+    }
+
+    const check = document.createElement("span");
+    check.className = "app-menu-check";
+    if (item.checked) check.appendChild(createIcon("check", 13));
+
+    const text = document.createElement("span");
+    text.className = "app-menu-label";
+    text.textContent = item.label;
+
+    button.append(check, text);
+    if (item.shortcut) {
+      const shortcut = document.createElement("span");
+      shortcut.className = "app-menu-shortcut";
+      shortcut.textContent = item.shortcut;
+      button.appendChild(shortcut);
+    }
+
+    button.onclick = () => {
+      this.close(false);
+      this.onCommand(item.command);
+    };
+    return button;
+  }
+
   private renderItems(): void {
     this.popover.replaceChildren();
     if (!this.state) return;
@@ -328,40 +382,49 @@ export class AppMenu {
           groupEl.appendChild(separator);
         }
 
-        const button = document.createElement("button");
-        button.type = "button";
-        button.className = "app-menu-item";
-        button.dataset.command = item.command.id;
-        button.disabled = !item.enabled;
-        button.setAttribute(
-          "role",
-          item.checked === undefined ? "menuitem" : "menuitemcheckbox",
-        );
-        if (item.checked !== undefined) {
-          button.setAttribute("aria-checked", String(item.checked));
+        if (item.children?.length) {
+          const wrapper = document.createElement("div");
+          wrapper.className = "app-menu-submenu";
+
+          const trigger = this.createItemButton(item);
+          trigger.classList.add("has-submenu");
+          trigger.setAttribute("aria-haspopup", "menu");
+          trigger.setAttribute("aria-expanded", "false");
+
+          const chevron = document.createElement("span");
+          chevron.className = "app-menu-submenu-arrow";
+          chevron.appendChild(createIcon("chevron-right", 13));
+          trigger.appendChild(chevron);
+
+          const submenu = document.createElement("div");
+          submenu.className = "app-menu-submenu-popover";
+          submenu.setAttribute("role", "menu");
+          submenu.hidden = true;
+          for (const child of item.children) {
+            submenu.appendChild(this.createItemButton(child, true));
+          }
+
+          const setSubmenuOpen = (open: boolean) => {
+            if (trigger.disabled) return;
+            submenu.hidden = !open;
+            trigger.setAttribute("aria-expanded", String(open));
+          };
+
+          trigger.onclick = (event) => {
+            event.stopPropagation();
+            const open = submenu.hidden;
+            setSubmenuOpen(open);
+            if (open) {
+              submenu
+                .querySelector<HTMLButtonElement>(".app-menu-item:not(:disabled)")
+                ?.focus();
+            }
+          };
+          wrapper.append(trigger, submenu);
+          groupEl.appendChild(wrapper);
+        } else {
+          groupEl.appendChild(this.createItemButton(item));
         }
-
-        const check = document.createElement("span");
-        check.className = "app-menu-check";
-        if (item.checked) check.appendChild(createIcon("check", 13));
-
-        const text = document.createElement("span");
-        text.className = "app-menu-label";
-        text.textContent = item.label;
-
-        button.append(check, text);
-        if (item.shortcut) {
-          const shortcut = document.createElement("span");
-          shortcut.className = "app-menu-shortcut";
-          shortcut.textContent = item.shortcut;
-          button.appendChild(shortcut);
-        }
-
-        button.onclick = () => {
-          this.close(false);
-          this.onCommand(item.command);
-        };
-        groupEl.appendChild(button);
       });
 
       this.popover.appendChild(groupEl);
