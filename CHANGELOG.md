@@ -15,6 +15,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 
 ### Added
 - **First-run health card** on the welcome screen: Bradbit engine, bundled libgit2 version, configured AI provider/model and available templates, with **Connect model** and **Create project** shortcuts. It is non-blocking: opening a folder and writing work without an AI provider.
+- **Installation guide** in English and Spanish (`docs/INSTALL.md` and `docs/INSTALL.es.md`): requirements, universal DMG, first-run **Open Anyway**, no Git/Command Line Tools, troubleshooting, privacy and uninstall.
 - **Universal macOS installer:** arm64 + x86_64 in one `.dmg`. The main app and the `bradbit` sidecar are both universal; CI verifies both slices, the ad-hoc signature and the sidecar version.
 - **Guided model connection wizard:** presets for DeepSeek, OpenRouter, OpenAI, Anthropic, OpenCode and custom OpenAI-compatible endpoints; links to each provider's key page; a real connection test; and Keychain-only storage. A failed test never saves the key. Also available from *Settings → AI and models*.
 - **libgit2 notices** (`THIRD_PARTY_NOTICES.md` and `licenses/libgit2-COPYING`).
