@@ -4,6 +4,8 @@ export interface ByokPreset {
   kind: ByokProviderKind;
   name: string;
   envVar: string;
+  /** Where the user creates or copies the provider API key. */
+  keyUrl: string;
 }
 
 export interface ByokDraft {
@@ -22,12 +24,37 @@ export type ByokValidationError =
   | "duplicate";
 
 export const BYOK_PRESETS: ByokPreset[] = [
-  { kind: "deepseek", name: "DeepSeek", envVar: "DEEPSEEK_API_KEY" },
-  { kind: "openrouter", name: "OpenRouter", envVar: "OPENROUTER_API_KEY" },
-  { kind: "openai", name: "OpenAI", envVar: "OPENAI_API_KEY" },
-  { kind: "anthropic", name: "Anthropic", envVar: "ANTHROPIC_API_KEY" },
+  {
+    kind: "deepseek",
+    name: "DeepSeek",
+    envVar: "DEEPSEEK_API_KEY",
+    keyUrl: "https://platform.deepseek.com/api_keys",
+  },
+  {
+    kind: "openrouter",
+    name: "OpenRouter",
+    envVar: "OPENROUTER_API_KEY",
+    keyUrl: "https://openrouter.ai/keys",
+  },
+  {
+    kind: "openai",
+    name: "OpenAI",
+    envVar: "OPENAI_API_KEY",
+    keyUrl: "https://platform.openai.com/api-keys",
+  },
+  {
+    kind: "anthropic",
+    name: "Anthropic",
+    envVar: "ANTHROPIC_API_KEY",
+    keyUrl: "https://console.anthropic.com/settings/keys",
+  },
   // Verified against `bradbit serve` /api/integration. OpenCode Go shares this key.
-  { kind: "opencode", name: "OpenCode", envVar: "OPENCODE_API_KEY" },
+  {
+    kind: "opencode",
+    name: "OpenCode",
+    envVar: "OPENCODE_API_KEY",
+    keyUrl: "https://opencode.ai/console",
+  },
 ];
 
 export function byokPreset(kind: ByokProviderKind): ByokPreset | null {

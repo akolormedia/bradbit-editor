@@ -417,6 +417,14 @@ fn byok_delete_key(
 }
 
 #[tauri::command]
+fn byok_test_connection(
+    provider: byok::ByokTestProvider,
+    key: String,
+) -> Result<byok::ByokTestResult, String> {
+    byok::test_connection(&provider, &key)
+}
+
+#[tauri::command]
 fn opencode_start(
     app: tauri::AppHandle,
     root: String,
@@ -766,6 +774,7 @@ pub fn run() {
             byok_status,
             byok_set_key,
             byok_delete_key,
+            byok_test_connection,
             opencode_start,
             opencode_stop,
             opencode_send,

@@ -15,6 +15,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 
 ### Added
 - **First-run health card** on the welcome screen: Bradbit engine, bundled libgit2 version, configured AI provider/model and available templates, with **Connect model** and **Create project** shortcuts. It is non-blocking: opening a folder and writing work without an AI provider.
+- **Guided model connection wizard:** presets for DeepSeek, OpenRouter, OpenAI, Anthropic, OpenCode and custom OpenAI-compatible endpoints; links to each provider's key page; a real connection test; and Keychain-only storage. A failed test never saves the key. Also available from *Settings → AI and models*.
 - **libgit2 notices** (`THIRD_PARTY_NOTICES.md` and `licenses/libgit2-COPYING`).
 - Tests for libgit2 status/log/commit/diff/restore/branches/merge/clone, `.gitignore`, binary diffs, safe checkout and `file://` remotes.
 

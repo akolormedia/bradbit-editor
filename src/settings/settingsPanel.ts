@@ -54,6 +54,7 @@ export interface SettingsPanelOptions {
   onDisconnectGithub: () => void;
   onOpenGithubTokenPage: () => void;
   onManageModels: () => void;
+  onOpenConnectWizard: () => void;
   onByokAdd: (draft: ByokDraft) => void;
   onByokRemove: (providerId: string) => void;
   onByokKeyDraft: (providerId: string, value: string) => void;
@@ -756,6 +757,14 @@ export class SettingsPanel {
       empty.textContent = t(language, "settingsByokEmpty");
       group.appendChild(empty);
     }
+
+    const wizard = document.createElement("button");
+    wizard.type = "button";
+    wizard.className = "toolbar-btn primary byok-wizard-btn";
+    wizard.dataset.testid = "settings-byok-wizard";
+    wizard.textContent = t(language, "settingsByokWizard");
+    wizard.onclick = () => this.options.onOpenConnectWizard();
+    group.appendChild(wizard);
 
     for (const provider of byok.providers) {
       group.appendChild(this.byokProviderCard(provider));

@@ -22,7 +22,7 @@ Desktop text editor for creative writing (`.md`, `.mdx`, `.fountain`, `.txt`), a
   - **Chat and editor surfaces (`T-2.4.3`):** Chat/Terminal and the `EditorWorkspace` are two independent panels with a border, radius and spacing over the app background, in the style of `opencode-desktop`. The tree and the document share the editor surface, and the dividers keep the drag-relative resize.
   - Shows connection status, actionable errors and context/token usage, and keeps the session history while you switch files.
   - Uses the project's `.bradbit/` kit, agents and models through the bundled `bradbit` sidecar. Bradbit does not store model keys in the project.
-  - **BYOK:** *Settings → AI and models* connects DeepSeek, OpenRouter, OpenAI, Anthropic, OpenCode or a custom OpenAI-compatible endpoint. Keys live in the macOS Keychain and are injected into the sidecar at launch.
+  - **BYOK:** *Settings → AI and models* connects DeepSeek, OpenRouter, OpenAI, Anthropic, OpenCode or a custom OpenAI-compatible endpoint. The guided **Connect a model** wizard links to each provider's key page, tests the key with a real request and only then saves it to the macOS Keychain. Keys are injected into the sidecar at launch and never written to the project.
 
 - **Native macOS menu (`Story 1.1.1`):** the system menu bar includes **Bradbit Editor, File, Edit, View and Window**:
   - *File:* Open folder (`⌘O`), Open recent, New project (`⇧⌘N`), Save as template, Open templates folder, Quick open (`⌘P`), New file (`⌘N`), Save (`⌘S`), Export PDF (`⌘E`) and Close tab (`⌘W`).
@@ -31,7 +31,7 @@ Desktop text editor for creative writing (`.md`, `.mdx`, `.fountain`, `.txt`), a
   - *Window:* Minimize, Zoom and Bring all to front.
   - Items are enabled, disabled and checked according to the real state, and labels change with the language.
 - **Any folder is a project:** open any folder on disk without proprietary configuration files (`project.yaml`).
-- **Welcome screen and recent projects:** open folders from disk or reopen any recent project in one click. A non-blocking **Getting started** card checks the Bradbit engine, the bundled libgit2 version, the configured AI provider/model and the available templates, with direct access to Settings and to new projects. Writing never waits for an AI provider.
+- **Welcome screen and recent projects:** open folders from disk or reopen any recent project in one click. A non-blocking **Getting started** card checks the Bradbit engine, the bundled libgit2 version, the configured AI provider/model and the available templates, with a guided **Connect a model** flow and a shortcut to new projects. Writing never waits for an AI provider.
 - **Writing kits and language (`T-3.4.x`):** three kits bundled: **Screenwriting**, **Novel** and **Advertising campaigns**. Instructions are in English; the agent replies and writes in the language configured in the app, with Spanish command aliases (`/escena`, `/capitulo`, `/cliente`, ...). The general Git assistant provides `/save-version` and `/history` in every project, with explicit approval before committing.
 - **New project and templates (`T-1.3.2`):**
   - **New project (`⇧⌘N`)** from the welcome screen, the top bar or the *File* menu: choose a template, a name and a destination folder.

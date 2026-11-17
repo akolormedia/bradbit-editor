@@ -6,7 +6,9 @@ import { renderFountainPreview } from "./editor/fountainPreview";
 import { t } from "./i18n";
 import {
   AppSettings,
+  ByokProviderKind,
   ByokProviderStatus,
+  ByokTestResult,
   FileTreeNode,
   FsChangeEvent,
   GitBranch,
@@ -85,6 +87,10 @@ import { TerminalPanel } from "./terminal/terminalPanel";
 import { applyColorTheme, resolveColorMode } from "./theme/palettes";
 import { buildHealthReport, HealthReport } from "./health/health";
 import { createHealthPanel } from "./health/healthPanel";
+import {
+  ConnectModelDraft,
+  ConnectModelPanel,
+} from "./settings/connectModel";
 import { AppMenu } from "./ui/appMenu";
 import { createIcon } from "./ui/icons";
 import { createIconButton } from "./ui/iconButton";
@@ -132,6 +138,11 @@ import {
 type ModalState =
   | { kind: "none" }
   | { kind: "settings"; error?: string }
+  | {
+      kind: "connect-model";
+      initialKind?: ByokProviderKind;
+      fromSettings?: boolean;
+    }
   | { kind: "manage-models"; search: string; fromSettings?: boolean }
   | { kind: "quick-open" }
   | { kind: "global-search" }
@@ -774,6 +785,65 @@ class BradbitApp {
         }
       });
     }
+  }
+
+  private openConnectModelWizard(
+    initialKind?: ByokProviderKind,
+    fromSettings = false,
+  ): void {
+    this.modal = { kind: "connect-model", initialKind, fromSettings };
+    this.render();
+  }
+
+  private closeConnectModelWizard(fromSettings: boolean): void {
+    this.modal = fromSettings ? { kind: "settings" } : { kind: "none" };
+    this.render();
+  }
+
+  private async testByokConnection(
+    draft: ConnectModelDraft,
+  ): Promise<ByokTestResult> {
+    return backend.byokTestConnection(
+      {
+        kind: draft.kind,
+        baseUrl: draft.kind === "custom" ? draft.baseUrl.trim() : undefined,
+        model: draft.kind === "custom" ? draft.model.trim() : undefined,
+      },
+      draft.key.trim(),
+    );
+  }
+
+  private async saveConnectedModel(
+    draft: ConnectModelDraft,
+    fromSettings: boolean,
+  ): Promise<void> {
+    const provider = byokProviderFromDraft(draft);
+    const existed = this.settings.byokProviders.some(
+      (item) => item.id === provider.id,
+    );
+    try {
+      await backend.byokSetKey(provider.id, draft.key.trim());
+      await this.updateSettings({
+        byokProviders: [
+          ...this.settings.byokProviders.filter(
+            (item) => item.id !== provider.id,
+          ),
+          provider,
+        ],
+      });
+    } catch (error) {
+      if (!existed) {
+        await backend.byokDeleteKey(provider.id).catch(() => {});
+      }
+      throw error;
+    }
+    await this.refreshByokStatus();
+    await this.restartChatForByok();
+    this.statusNotice = t(this.settings.language, "connectModelSaved", {
+      name: provider.name,
+    });
+    this.modal = fromSettings ? { kind: "settings" } : { kind: "none" };
+    this.render();
   }
 
   private async refreshByokStatus(): Promise<void> {
@@ -3031,7 +3101,7 @@ class BradbitApp {
           loading: this.healthLoading,
           onAction: (action) => {
             if (action === "models") {
-              this.openSettingsAt("models");
+              this.openConnectModelWizard();
             } else if (action === "new-project") {
               void this.openNewProjectModal();
             } else {
@@ -4336,6 +4406,8 @@ class BradbitApp {
         onDisconnectGithub: () => void this.disconnectGitHub(),
         onOpenGithubTokenPage: () => this.openGitHubTokenPage(),
         onManageModels: () => this.openManageModels(true),
+        onOpenConnectWizard: () =>
+          this.openConnectModelWizard(undefined, true),
         onByokAdd: (draft) => void this.addByokProvider(draft),
         onByokRemove: (providerId) => void this.removeByokProvider(providerId),
         onByokKeyDraft: (providerId, value) => {
@@ -4346,6 +4418,34 @@ class BradbitApp {
         onClose: () => this.closeModal(),
       });
       dialog.appendChild(panel.element);
+    } else if (this.modal.kind === "connect-model") {
+      const modalState = this.modal;
+      const fromSettings = modalState.fromSettings ?? false;
+      dialog.classList.add("connect-model-dialog");
+      const title = document.createElement("h3");
+      title.textContent = t(lang, "connectModelTitle");
+      const panel = new ConnectModelPanel({
+        language: lang,
+        providers: this.settings.byokProviders,
+        initialKind: modalState.initialKind,
+        onClose: () => this.closeConnectModelWizard(fromSettings),
+        onTest: (draft) => this.testByokConnection(draft),
+        onSave: (draft) => this.saveConnectedModel(draft, fromSettings),
+        onOpenKeyPage: (url) => {
+          void backend.openExternalUrl(url).catch((err) => {
+            this.byokError = err instanceof Error ? err.message : String(err);
+          });
+        },
+      });
+      const footer = document.createElement("div");
+      footer.className = "modal-footer";
+      const cancel = document.createElement("button");
+      cancel.type = "button";
+      cancel.className = "toolbar-btn";
+      cancel.textContent = t(lang, "cancel");
+      cancel.onclick = () => this.closeConnectModelWizard(fromSettings);
+      footer.appendChild(cancel);
+      dialog.append(title, panel.element, footer);
     } else if (this.modal.kind === "manage-models") {
       this.renderManageModels(lang, dialog);
     } else if (this.modal.kind === "quick-open" || this.modal.kind === "global-search") {

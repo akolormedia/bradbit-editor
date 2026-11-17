@@ -1,6 +1,8 @@
 import {
   AppSettings,
   ByokProviderStatus,
+  ByokTestProvider,
+  ByokTestResult,
   CreatedProject,
   FileTreeNode,
   FsChangeEvent,
@@ -834,6 +836,19 @@ export const backend = {
   async byokStatus(): Promise<ByokProviderStatus[]> {
     if (!isTauriEnvironment()) return [];
     return tauriInvoke<ByokProviderStatus[]>("byok_status");
+  },
+
+  async byokTestConnection(
+    provider: ByokTestProvider,
+    key: string,
+  ): Promise<ByokTestResult> {
+    if (!isTauriEnvironment()) {
+      throw new Error("BYOK requires the desktop app");
+    }
+    return tauriInvoke<ByokTestResult>("byok_test_connection", {
+      provider,
+      key,
+    });
   },
 
   async byokSetKey(providerId: string, key: string): Promise<void> {

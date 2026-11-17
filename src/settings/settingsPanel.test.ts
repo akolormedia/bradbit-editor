@@ -33,6 +33,7 @@ function options(
     onDisconnectGithub: vi.fn(),
     onOpenGithubTokenPage: vi.fn(),
     onManageModels: vi.fn(),
+    onOpenConnectWizard: vi.fn(),
     onByokAdd: vi.fn(),
     onByokRemove: vi.fn(),
     onByokKeyDraft: vi.fn(),
@@ -176,6 +177,23 @@ describe("settings panel (T-2.4.4)", () => {
     expect(
       visible.element.querySelector('[data-testid="settings-nav-git"]'),
     ).not.toBeNull();
+  });
+
+  it("opens the guided model connection wizard from AI settings", () => {
+    const onOpenConnectWizard = vi.fn();
+    const panel = mount(
+      options({
+        settings: { ...DEFAULT_SETTINGS, showDeveloperOptions: true },
+        initialCategory: "models",
+        onOpenConnectWizard,
+      }),
+    );
+    panel.element
+      .querySelector<HTMLButtonElement>(
+        '[data-testid="settings-byok-wizard"]',
+      )!
+      .click();
+    expect(onOpenConnectWizard).toHaveBeenCalled();
   });
 
   it("supports custom terminal commands", () => {
