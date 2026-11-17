@@ -4593,3 +4593,27 @@ textarea.text-input {
   line-height: 1.5;
   white-space: pre-wrap;
 }
+
+.import-docx-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.import-docx-header h3 {
+  margin: 0;
+}
+
+.import-docx-preview-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex: none;
+}
+
+.import-docx-preview-btn.active {
+  border-color: color-mix(in srgb, var(--accent) 55%, var(--border-color));
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+  color: var(--accent);
+}

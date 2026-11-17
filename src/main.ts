@@ -171,6 +171,7 @@ type ModalState =
       tables?: number;
       headings?: number;
       words?: number;
+      previewOpen?: boolean;
       error?: string;
     }
   | { kind: "entry-input"; mode: "new-folder" | "rename"; targetPath: string; value: string; error?: string }
@@ -2676,6 +2677,7 @@ class BradbitApp {
         kind: "import-docx",
         status: "ready",
         sourceName,
+        previewOpen: true,
         ...result,
       };
       this.render();
@@ -4532,9 +4534,34 @@ class BradbitApp {
     const state = this.modal;
     dialog.classList.add("import-docx-dialog");
 
+    const header = document.createElement("div");
+    header.className = "import-docx-header";
     const title = document.createElement("h3");
     title.textContent = t(lang, "importDocxTitle");
-    dialog.appendChild(title);
+    header.appendChild(title);
+
+    const previewOpen = state.previewOpen !== false;
+    if (state.status === "ready") {
+      const previewToggle = document.createElement("button");
+      previewToggle.type = "button";
+      previewToggle.className = "toolbar-btn import-docx-preview-btn";
+      previewToggle.classList.toggle("active", previewOpen);
+      previewToggle.dataset.testid = "import-docx-preview-toggle";
+      previewToggle.setAttribute("aria-pressed", String(previewOpen));
+      previewToggle.title = t(lang, "importDocxPreview");
+      previewToggle.setAttribute("aria-label", t(lang, "importDocxPreview"));
+      previewToggle.appendChild(createIcon("eye", 14));
+      const previewToggleLabel = document.createElement("span");
+      previewToggleLabel.textContent = t(lang, "importDocxPreview");
+      previewToggle.appendChild(previewToggleLabel);
+      previewToggle.onclick = () => {
+        if (this.modal.kind !== "import-docx") return;
+        this.modal = { ...this.modal, previewOpen: !previewOpen };
+        this.render();
+      };
+      header.appendChild(previewToggle);
+    }
+    dialog.appendChild(header);
 
     if (state.status === "loading") {
       const loading = document.createElement("p");
@@ -4590,7 +4617,11 @@ class BradbitApp {
         path: "manuscript/imported.md",
       })} ${t(lang, "importDocxDestinationHint")}`;
 
-      dialog.append(source, summary, keep, warnings, previewLabel, preview, destination);
+      dialog.append(source, summary, keep, warnings);
+      if (previewOpen) {
+        dialog.append(previewLabel, preview);
+      }
+      dialog.appendChild(destination);
 
       if (state.error) {
         const error = document.createElement("div");
