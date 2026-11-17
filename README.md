@@ -101,15 +101,18 @@ Desktop text editor for creative writing (`.md`, `.mdx`, `.fountain`, `.txt`), a
 ## Installation (alpha)
 
 **Requirements**
-- macOS. The alpha has only been tested on macOS. The installer is **universal**: Apple Silicon and Intel.
-- **No separate OpenCode install is required** for the chat: the macOS app bundles the `bradbit` runtime as a sidecar. For source builds, download it with `npm run fetch:bradbit`. An `opencode` binary on `PATH` remains as an optional fallback.
+- **macOS 13 Ventura or later**, Apple Silicon or Intel. The installer is **universal**.
+- **No separate OpenCode install is required** for the chat: the macOS app bundles the `bradbit` runtime as a sidecar. For source builds, download it with `npm run fetch:bradbit`.
 - Git is **not required**: history, diffs, branches and GitHub sync use the bundled libgit2 engine. Command Line Tools are not needed to run the app.
 - GitHub token (optional): only needed to publish and sync repositories.
 
 **Option A: installer**
-1. Download `Bradbit Editor_0.1.0-alpha.5_universal.dmg` from the releases page.
+
+1. Download the latest `Bradbit Editor_<version>_universal.dmg` from the [releases page](https://github.com/akolormedia/bradbit-editor/releases/latest).
 2. Drag the app into *Applications*.
-3. The alpha is **ad-hoc signed but not notarized**. On first launch macOS blocks it with *“Apple could not verify…”*; open **System Settings → Privacy & Security**, scroll down and click **Open Anyway** (on older macOS versions you can also right-click the app and choose **Open**). If macOS says the app is *damaged*, re-download the latest alpha: that message means the bundle signature is invalid.
+3. On first launch, macOS blocks the app because it is **ad-hoc signed but not notarized**. Open **System Settings → Privacy & Security**, scroll down and click **Open Anyway**.
+
+Full installation guide and troubleshooting: **[English](docs/INSTALL.md)** · **[Español](docs/INSTALL.es.md)**.
 
 **Option B: build from source**
 
@@ -127,8 +130,7 @@ npm run fetch:bradbit
 npm run tauri build -- --config src-tauri/tauri.sidecar.conf.json
 ```
 
-The sidecar version and asset names are pinned in `bradbit-cli.json`. The
-downloaded binaries live in `src-tauri/binaries/` and are not committed.
+The sidecar version and asset names are pinned in `bradbit-cli.json`. The downloaded binaries live in `src-tauri/binaries/` and are not committed.
 
 ## Known limitations (alpha)
 
