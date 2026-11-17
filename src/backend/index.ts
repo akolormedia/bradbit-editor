@@ -243,6 +243,21 @@ export const backend = {
     return typeof selected === "string" ? selected : null;
   },
 
+  async pickDocxFileDialog(): Promise<string | null> {
+    if (!isTauriEnvironment()) return null;
+    const { open } = await import("@tauri-apps/plugin-dialog");
+    const selected = await open({
+      directory: false,
+      multiple: false,
+      filters: [{ name: "Word", extensions: ["docx"] }],
+    });
+    return typeof selected === "string" ? selected : null;
+  },
+
+  async readDocxFile(path: string): Promise<string> {
+    return tauriInvoke<string>("read_docx_file", { path });
+  },
+
   async discoverKit(rootPath: string): Promise<KitCatalog> {
     if (!isTauriEnvironment()) {
       return { agents: [], commands: [], skills: [] };

@@ -140,6 +140,25 @@ fn reveal_in_finder(root: String, rel_path: String) -> Result<(), String> {
     }
 }
 
+/// Reads the DOCX selected by the native file dialog and returns it as base64.
+/// The extension check keeps the command scoped to the import flow; the file
+/// is converted to Markdown and discarded.
+#[tauri::command]
+fn read_docx_file(path: String) -> Result<String, String> {
+    if !path.to_ascii_lowercase().ends_with(".docx") {
+        return Err("Only .docx files can be imported".to_string());
+    }
+    let metadata = std::fs::metadata(&path)
+        .map_err(|e| format!("Could not read the Word document: {}", e))?;
+    if metadata.len() > 50 * 1024 * 1024 {
+        return Err("The Word document is larger than 50 MB".to_string());
+    }
+    let bytes = std::fs::read(&path)
+        .map_err(|e| format!("Could not read the Word document: {}", e))?;
+    use base64::Engine as _;
+    Ok(base64::engine::general_purpose::STANDARD.encode(bytes))
+}
+
 #[tauri::command]
 fn start_watching(
     app: tauri::AppHandle,
@@ -777,6 +796,7 @@ pub fn run() {
             save_current_as_template,
             open_templates_folder,
             reveal_in_finder,
+            read_docx_file,
             start_watching,
             stop_watching,
             git_status,
@@ -867,5 +887,25 @@ mod tests {
         assert!(reveal_target(root, "notes/missing.md").is_err());
         assert!(reveal_target(root, "../outside.md").is_err());
         assert!(reveal_target(root, "/etc/passwd").is_err());
+    }
+
+    #[test]
+    fn reads_docx_files_as_base64_and_rejects_other_extensions() {
+        use base64::Engine as _;
+
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("sample.docx");
+        let bytes = b"fake docx bytes";
+        fs::write(&path, bytes).unwrap();
+
+        let encoded = super::read_docx_file(path.to_string_lossy().to_string()).unwrap();
+        assert_eq!(
+            base64::engine::general_purpose::STANDARD.decode(encoded).unwrap(),
+            bytes
+        );
+
+        let text = dir.path().join("sample.docx.txt");
+        fs::write(&text, b"not a docx").unwrap();
+        assert!(super::read_docx_file(text.to_string_lossy().to_string()).is_err());
     }
 }

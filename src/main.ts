@@ -93,6 +93,10 @@ import {
 } from "./settings/connectModel";
 import { AppMenu } from "./ui/appMenu";
 import { openContextMenu, type ContextMenuItem } from "./ui/contextMenu";
+import {
+  convertDocxToMarkdown,
+  type DocxImportWarning,
+} from "./import/docx";
 import { createIcon } from "./ui/icons";
 import { createIconButton } from "./ui/iconButton";
 import { MenuSyncQueue } from "./workspace/menuSync";
@@ -157,6 +161,18 @@ type ModalState =
       submitting?: boolean;
     }
   | { kind: "save-template"; name: string; error?: string; saving?: boolean }
+  | {
+      kind: "import-docx";
+      status: "loading" | "ready" | "error";
+      sourceName: string;
+      markdown?: string;
+      warnings?: DocxImportWarning[];
+      images?: number;
+      tables?: number;
+      headings?: number;
+      words?: number;
+      error?: string;
+    }
   | { kind: "entry-input"; mode: "new-folder" | "rename"; targetPath: string; value: string; error?: string }
   | { kind: "branch-input"; value: string; error?: string }
   | {
@@ -215,6 +231,7 @@ class BradbitApp {
   private terminalPanel: TerminalPanel | null = null;
   private appMenu: AppMenu | null = null;
   private outlineRefreshTimer: number | null = null;
+  private importDocxRequest = 0;
   private modal: ModalState = { kind: "none" };
   private settingsCategory: SettingsCategoryId = "general";
   private settingsQuery = "";
@@ -2382,6 +2399,7 @@ class BradbitApp {
   }
 
   private closeModal(): void {
+    this.importDocxRequest += 1;
     this.modal = { kind: "none" };
     this.render();
   }
@@ -2626,6 +2644,122 @@ class BradbitApp {
     }
   }
 
+  private async importDocx(): Promise<void> {
+    const lang = this.settings.language;
+    if (!this.folder) {
+      this.showStatusNotice(t(lang, "importDocxNoFolder"));
+      return;
+    }
+
+    const source = await backend.pickDocxFileDialog();
+    if (!source) return;
+
+    const request = ++this.importDocxRequest;
+    const sourceName = source.split(/[\\/]/).pop() ?? source;
+    this.modal = { kind: "import-docx", status: "loading", sourceName };
+    this.render();
+
+    try {
+      const encoded = await backend.readDocxFile(source);
+      if (request !== this.importDocxRequest) return;
+
+      const bytes = Uint8Array.from(atob(encoded), (char) =>
+        char.charCodeAt(0),
+      );
+      const result = await convertDocxToMarkdown(bytes.buffer);
+      if (request !== this.importDocxRequest) return;
+      if (!result.markdown.trim()) {
+        throw new Error(t(lang, "importDocxEmpty"));
+      }
+
+      this.modal = {
+        kind: "import-docx",
+        status: "ready",
+        sourceName,
+        ...result,
+      };
+      this.render();
+    } catch (err) {
+      if (request !== this.importDocxRequest) return;
+      this.modal = {
+        kind: "import-docx",
+        status: "error",
+        sourceName,
+        error: err instanceof Error ? err.message : String(err),
+      };
+      this.render();
+    }
+  }
+
+  private async submitDocxImport(): Promise<void> {
+    if (
+      this.modal.kind !== "import-docx" ||
+      this.modal.status !== "ready" ||
+      !this.folder
+    ) {
+      return;
+    }
+
+    const current = this.modal;
+    const markdown = current.markdown ?? "";
+    const existing = new Set(
+      flattenFileTree(this.folder.tree).map((file) => file.path),
+    );
+    let relativePath = "manuscript/imported.md";
+    let suffix = 2;
+    while (existing.has(relativePath)) {
+      relativePath = `manuscript/imported-${suffix}.md`;
+      suffix += 1;
+    }
+
+    try {
+      await backend.writeTextFile(
+        this.folder.rootPath,
+        relativePath,
+        markdown,
+      );
+      this.importDocxRequest += 1;
+      this.modal = { kind: "none" };
+      await this.refreshTree();
+      this.render();
+      await this.openFileFromTree(relativePath, true);
+      this.showStatusNotice(
+        t(this.settings.language, "importDocxDone", {
+          path: relativePath,
+        }),
+      );
+    } catch (err) {
+      this.modal = {
+        ...current,
+        error: err instanceof Error ? err.message : String(err),
+      };
+      this.render();
+    }
+  }
+
+  private docxWarningText(
+    lang: AppSettings["language"],
+    warning: DocxImportWarning,
+    modal: Extract<ModalState, { kind: "import-docx" }>,
+  ): string {
+    switch (warning) {
+      case "images":
+        return t(lang, "importDocxImages", {
+          count: String(modal.images ?? 0),
+        });
+      case "tables":
+        return t(lang, "importDocxTables", {
+          count: String(modal.tables ?? 0),
+        });
+      case "styles":
+        return t(lang, "importDocxStyles");
+      case "comments":
+        return t(lang, "importDocxComments");
+      case "trackedChanges":
+        return t(lang, "importDocxTracked");
+    }
+  }
+
   private showStatusNotice(message: string): void {
     this.statusNotice = message;
     const active = this.getActiveTab();
@@ -2684,6 +2818,9 @@ class BradbitApp {
         break;
       case "file.newProject":
         await this.openNewProjectModal();
+        break;
+      case "file.importDocx":
+        await this.importDocx();
         break;
       case "file.saveAsTemplate":
         this.openSaveTemplateModal();
@@ -4387,6 +4524,104 @@ class BradbitApp {
     window.setTimeout(() => input.focus(), 10);
   }
 
+  private renderImportDocxModal(
+    lang: AppSettings["language"],
+    dialog: HTMLElement,
+  ): void {
+    if (this.modal.kind !== "import-docx") return;
+    const state = this.modal;
+    dialog.classList.add("import-docx-dialog");
+
+    const title = document.createElement("h3");
+    title.textContent = t(lang, "importDocxTitle");
+    dialog.appendChild(title);
+
+    if (state.status === "loading") {
+      const loading = document.createElement("p");
+      loading.className = "settings-hint";
+      loading.textContent = t(lang, "importDocxLoading", {
+        name: state.sourceName,
+      });
+      dialog.appendChild(loading);
+    } else if (state.status === "error") {
+      const error = document.createElement("div");
+      error.className = "error-banner";
+      error.textContent = state.error || t(lang, "importDocxError");
+      dialog.append(error);
+    } else {
+      const source = document.createElement("p");
+      source.className = "settings-hint";
+      source.textContent = t(lang, "importDocxSource", {
+        name: state.sourceName,
+      });
+
+      const summary = document.createElement("p");
+      summary.className = "import-docx-summary";
+      summary.textContent = t(lang, "importDocxSummary", {
+        words: String(state.words ?? 0),
+        headings: String(state.headings ?? 0),
+      });
+
+      const keep = document.createElement("p");
+      keep.className = "import-docx-keep";
+      keep.textContent = t(lang, "importDocxKeep");
+
+      const warnings = document.createElement("ul");
+      warnings.className = "import-docx-warnings";
+      for (const warning of state.warnings ?? []) {
+        const item = document.createElement("li");
+        item.textContent = this.docxWarningText(lang, warning, state);
+        warnings.appendChild(item);
+      }
+
+      const previewLabel = document.createElement("div");
+      previewLabel.className = "import-docx-preview-label";
+      previewLabel.textContent = t(lang, "importDocxPreview");
+      const preview = document.createElement("pre");
+      preview.className = "import-docx-preview";
+      preview.textContent = (state.markdown ?? "").slice(0, 1200);
+      if ((state.markdown ?? "").length > 1200) {
+        preview.textContent += "\n…";
+      }
+
+      const destination = document.createElement("p");
+      destination.className = "settings-hint";
+      destination.textContent = `${t(lang, "importDocxDestination", {
+        path: "manuscript/imported.md",
+      })} ${t(lang, "importDocxDestinationHint")}`;
+
+      dialog.append(source, summary, keep, warnings, previewLabel, preview, destination);
+
+      if (state.error) {
+        const error = document.createElement("div");
+        error.className = "error-banner";
+        error.textContent = state.error;
+        dialog.appendChild(error);
+      }
+    }
+
+    const footer = document.createElement("div");
+    footer.className = "modal-footer";
+    const cancel = document.createElement("button");
+    cancel.type = "button";
+    cancel.className = "toolbar-btn";
+    cancel.textContent = t(lang, "cancel");
+    cancel.onclick = () => this.closeModal();
+    footer.appendChild(cancel);
+
+    if (state.status === "ready") {
+      const submit = document.createElement("button");
+      submit.type = "button";
+      submit.className = "toolbar-btn primary";
+      submit.dataset.testid = "import-docx-submit";
+      submit.textContent = t(lang, "importDocxImport");
+      submit.onclick = () => void this.submitDocxImport();
+      footer.appendChild(submit);
+    }
+
+    dialog.appendChild(footer);
+  }
+
   private renderManageModels(
     lang: AppSettings["language"],
     dialog: HTMLElement,
@@ -4657,6 +4892,8 @@ class BradbitApp {
       this.renderNewProjectModal(dialog, lang);
     } else if (this.modal.kind === "save-template") {
       this.renderSaveTemplateModal(dialog, lang);
+    } else if (this.modal.kind === "import-docx") {
+      this.renderImportDocxModal(lang, dialog);
     } else if (this.modal.kind === "entry-input") {
       const modalState = this.modal;
       const h3 = document.createElement("h3");

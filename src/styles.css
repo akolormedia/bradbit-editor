@@ -4540,3 +4540,56 @@ textarea.text-input {
   color: var(--text-muted);
   font-size: 12px;
 }
+
+/* DOCX import (T-3.8.2) */
+.import-docx-dialog {
+  width: min(640px, calc(100vw - 40px));
+}
+
+.import-docx-summary {
+  margin: 10px 0 6px;
+  color: var(--text-secondary);
+  font-size: 12.5px;
+}
+
+.import-docx-keep {
+  margin: 0 0 10px;
+  color: var(--text-secondary);
+  font-size: 12.5px;
+}
+
+.import-docx-warnings {
+  margin: 0 0 14px;
+  padding-left: 18px;
+  color: var(--text-muted);
+  font-size: 12px;
+  line-height: 1.55;
+}
+
+.import-docx-warnings li + li {
+  margin-top: 2px;
+}
+
+.import-docx-preview-label {
+  margin-bottom: 5px;
+  color: var(--text-muted);
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.import-docx-preview {
+  max-height: 210px;
+  margin: 0 0 12px;
+  padding: 10px 12px;
+  overflow: auto;
+  border: 1px solid var(--border-color);
+  border-radius: 7px;
+  background: var(--bg-input);
+  color: var(--text-secondary);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+}

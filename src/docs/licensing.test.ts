@@ -64,6 +64,8 @@ describe("licenses and third-party notices (T-3.6.3)", () => {
       "licenses/LGPL-2.1.txt",
       "licenses/Apache-2.0.txt",
       "licenses/DOMPurify-LICENSE",
+      "licenses/mammoth-LICENSE",
+      "licenses/turndown-LICENSE",
       "licenses/opentui/LICENSE",
       "licenses/opentui/LICENSE-FFMPEG",
       "licenses/opentui/FFMPEG-SOURCE.md",

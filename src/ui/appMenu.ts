@@ -47,11 +47,16 @@ export function buildAppMenu(state: MenuUiState): AppMenuGroup[] {
           enabled: true,
         },
         {
+          command: { id: "file.importDocx" },
+          label: t(lang, "importDocxMenu"),
+          enabled: hasFolder,
+          separatorBefore: true,
+        },
+        {
           command: { id: "file.newFile" },
           label: t(lang, "newFile"),
           shortcut: "⌘N",
           enabled: hasFolder,
-          separatorBefore: true,
         },
         {
           command: { id: "file.quickOpen" },

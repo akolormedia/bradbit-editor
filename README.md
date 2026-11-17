@@ -63,6 +63,12 @@ Three kits ship with the app. Each one is a plain folder with agents, commands, 
 
 Kit instructions are in English; the agent replies and writes in the language configured in the app. See the [feature guide](docs/FEATURES.md) for the full feature inventory.
 
+## Import and export
+
+- **Import a Word manuscript:** with a folder open, choose **File → Import DOCX…**. It creates a single `manuscript/imported.md` (or `imported-2.md` if needed) and shows what will be kept and what will be lost before writing. Headings, paragraphs, bold and italic are preserved; images, tables, comments, tracked changes and advanced Word styles are not.
+- **Export a screenplay:** Fountain files have **Export PDF** (`⌘E`) with deterministic screenplay formatting.
+- DOCX export and book PDF export are planned in the next tickets; this alpha only imports DOCX.
+
 ## Documentation
 
 - [Installation guide (English)](docs/INSTALL.md) · [Español](docs/INSTALL.es.md)
