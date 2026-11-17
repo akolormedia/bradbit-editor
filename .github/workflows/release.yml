@@ -35,23 +35,36 @@ jobs:
         uses: dtolnay/rust-toolchain@stable
         with:
           toolchain: ${{ env.RUST_TOOLCHAIN }}
+          targets: aarch64-apple-darwin,x86_64-apple-darwin
 
       - name: Cache Rust build
         uses: swatinem/rust-cache@v2
         with:
           workspaces: src-tauri
 
-      - name: Fetch Bradbit sidecar
-        run: npm run fetch:bradbit
+      - name: Fetch universal Bradbit sidecar
+        run: npm run sidecar:universal
 
-      - name: Build the app bundle
-        run: npm run tauri build -- --config src-tauri/tauri.sidecar.conf.json
+      - name: Build the universal app bundle
+        run: npm run tauri build -- --target universal-apple-darwin --config src-tauri/tauri.sidecar.conf.json
 
-      - name: Verify the bundled app and its signature
+      - name: Verify both architectures and the signature
         run: |
-          APP="src-tauri/target/release/bundle/macos/Bradbit Editor.app"
-          test -x "$APP/Contents/MacOS/bradbit"
-          "$APP/Contents/MacOS/bradbit" --version
+          APP="src-tauri/target/universal-apple-darwin/release/bundle/macos/Bradbit Editor.app"
+          MAIN="$APP/Contents/MacOS/bradbit-editor"
+          SIDECAR="$APP/Contents/MacOS/bradbit"
+          test -x "$MAIN"
+          test -x "$SIDECAR"
+          lipo -archs "$MAIN" | tee /dev/stderr | grep -q "x86_64"
+          lipo -archs "$MAIN" | grep -q "arm64"
+          lipo -archs "$SIDECAR" | tee /dev/stderr | grep -q "x86_64"
+          lipo -archs "$SIDECAR" | grep -q "arm64"
+          "$SIDECAR" --version
+          if arch -x86_64 /usr/bin/true >/dev/null 2>&1; then
+            arch -x86_64 "$SIDECAR" --version
+          else
+            echo "Rosetta is not available; x86_64 execution skipped (slices verified with lipo)."
+          fi
           codesign --verify --deep --strict --verbose=2 "$APP"
           if codesign -dv --verbose=4 "$APP" 2>&1 | grep -q "linker-signed"; then
             echo "The app bundle still has the linker ad-hoc signature; macOS reports it as damaged." >&2
@@ -61,8 +74,8 @@ jobs:
       - name: Upload installer artifact
         uses: actions/upload-artifact@v4
         with:
-          name: bradbit-editor-macos
-          path: src-tauri/target/release/bundle/dmg/*.dmg
+          name: bradbit-editor-macos-universal
+          path: src-tauri/target/universal-apple-darwin/release/bundle/dmg/*.dmg
           if-no-files-found: error
 
       - name: Extract release notes from CHANGELOG
@@ -80,6 +93,6 @@ jobs:
         if: startsWith(github.ref, 'refs/tags/v')
         uses: softprops/action-gh-release@v2
         with:
-          files: src-tauri/target/release/bundle/dmg/*.dmg
+          files: src-tauri/target/universal-apple-darwin/release/bundle/dmg/*.dmg
           body_path: release-notes.md
           prerelease: ${{ contains(github.ref_name, '-') }}

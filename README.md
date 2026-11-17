@@ -101,13 +101,13 @@ Desktop text editor for creative writing (`.md`, `.mdx`, `.fountain`, `.txt`), a
 ## Installation (alpha)
 
 **Requirements**
-- macOS. The alpha has only been tested on macOS.
+- macOS. The alpha has only been tested on macOS. The installer is **universal**: Apple Silicon and Intel.
 - **No separate OpenCode install is required** for the chat: the macOS app bundles the `bradbit` runtime as a sidecar. For source builds, download it with `npm run fetch:bradbit`. An `opencode` binary on `PATH` remains as an optional fallback.
 - Git is **not required**: history, diffs, branches and GitHub sync use the bundled libgit2 engine. Command Line Tools are not needed to run the app.
 - GitHub token (optional): only needed to publish and sync repositories.
 
 **Option A: installer**
-1. Download `Bradbit.Editor_0.1.0-alpha.5_<architecture>.dmg` from the releases page.
+1. Download `Bradbit Editor_0.1.0-alpha.5_universal.dmg` from the releases page.
 2. Drag the app into *Applications*.
 3. The alpha is **ad-hoc signed but not notarized**. On first launch macOS blocks it with *“Apple could not verify…”*; open **System Settings → Privacy & Security**, scroll down and click **Open Anyway** (on older macOS versions you can also right-click the app and choose **Open**). If macOS says the app is *damaged*, re-download the latest alpha: that message means the bundle signature is invalid.
 
@@ -115,9 +115,16 @@ Desktop text editor for creative writing (`.md`, `.mdx`, `.fountain`, `.txt`), a
 
 ```bash
 npm install
-npm run fetch:bradbit   # downloads the pinned bradbit-cli sidecar
+npm run sidecar:universal   # downloads arm64 + x64 and creates the universal sidecar
+npm run tauri build -- --target universal-apple-darwin --config src-tauri/tauri.sidecar.conf.json
+# The installer is written to src-tauri/target/universal-apple-darwin/release/bundle/dmg/
+```
+
+For a faster local build for the current architecture only:
+
+```bash
+npm run fetch:bradbit
 npm run tauri build -- --config src-tauri/tauri.sidecar.conf.json
-# The installer is written to src-tauri/target/release/bundle/dmg/
 ```
 
 The sidecar version and asset names are pinned in `bradbit-cli.json`. The
