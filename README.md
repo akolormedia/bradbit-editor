@@ -89,6 +89,11 @@ npm run fetch:bradbit      # download the sidecar for the current architecture
 npm run tauri dev          # native app with hot reload
 ```
 
+The packaged WebView has developer tools disabled (`app.windows[0].devtools` in
+`src-tauri/tauri.conf.json`) so the writer-facing app never exposes *Inspect
+Element*. For UI inspection, run the Vite frontend in a browser with
+`npm run dev`; use the Rust tests for native behavior.
+
 Useful checks:
 
 ```bash

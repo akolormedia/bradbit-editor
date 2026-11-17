@@ -105,6 +105,41 @@ fn open_templates_folder(app: tauri::AppHandle) -> Result<(), String> {
         .map_err(|e| format!("Could not open the templates folder: {}", e))
 }
 
+/// Resolves a project-relative path and checks that it exists inside the
+/// opened folder. Kept separate from the `open` process so the safety rules
+/// are unit-testable.
+fn reveal_target(root: &str, rel_path: &str) -> Result<std::path::PathBuf, String> {
+    let root_path = std::fs::canonicalize(root)
+        .map_err(|e| format!("Could not open the folder '{}': {}", root, e))?;
+    if !root_path.is_dir() {
+        return Err(format!("The path '{}' is not a folder", root));
+    }
+    let target = fs_ops::resolve_safe_relative(&root_path, rel_path)?;
+    if !target.exists() {
+        return Err(format!("The path '{}' does not exist", rel_path));
+    }
+    Ok(target)
+}
+
+#[tauri::command]
+fn reveal_in_finder(root: String, rel_path: String) -> Result<(), String> {
+    let target = reveal_target(&root, &rel_path)?;
+    #[cfg(target_os = "macos")]
+    {
+        std::process::Command::new("open")
+            .arg("-R")
+            .arg(&target)
+            .status()
+            .map_err(|e| format!("Could not show the file in Finder: {}", e))?;
+        Ok(())
+    }
+    #[cfg(not(target_os = "macos"))]
+    {
+        let _ = target;
+        Err("Show in Finder is only available on macOS".to_string())
+    }
+}
+
 #[tauri::command]
 fn start_watching(
     app: tauri::AppHandle,
@@ -741,6 +776,7 @@ pub fn run() {
             create_project_from_template,
             save_current_as_template,
             open_templates_folder,
+            reveal_in_finder,
             start_watching,
             stop_watching,
             git_status,
@@ -810,4 +846,26 @@ pub fn run() {
         ])
         .run(tauri::generate_context!())
         .expect("error while running bradbit-editor");
+}
+
+#[cfg(test)]
+mod tests {
+    use super::reveal_target;
+    use std::fs;
+
+    #[test]
+    fn resolves_only_existing_paths_inside_the_project() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path().to_str().unwrap();
+        fs::create_dir_all(dir.path().join("notes")).unwrap();
+        fs::write(dir.path().join("notes/idea.md"), "# Idea").unwrap();
+
+        assert_eq!(
+            reveal_target(root, "notes/idea.md").unwrap(),
+            fs::canonicalize(dir.path()).unwrap().join("notes/idea.md")
+        );
+        assert!(reveal_target(root, "notes/missing.md").is_err());
+        assert!(reveal_target(root, "../outside.md").is_err());
+        assert!(reveal_target(root, "/etc/passwd").is_err());
+    }
 }

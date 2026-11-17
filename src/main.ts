@@ -92,6 +92,7 @@ import {
   ConnectModelPanel,
 } from "./settings/connectModel";
 import { AppMenu } from "./ui/appMenu";
+import { openContextMenu, type ContextMenuItem } from "./ui/contextMenu";
 import { createIcon } from "./ui/icons";
 import { createIconButton } from "./ui/iconButton";
 import { MenuSyncQueue } from "./workspace/menuSync";
@@ -3309,7 +3310,7 @@ class BradbitApp {
           );
         } else if (node.name.endsWith(".fountain")) {
           icon.appendChild(createIcon("clapperboard", 15));
-        } else if (node.name.endsWith(".md") || node.name.endsWith(".mdx")) {
+        } else if (isMarkdownPath(node.name)) {
           icon.appendChild(createIcon("file-text", 15));
         } else {
           icon.appendChild(createIcon("file", 15));
@@ -3387,6 +3388,12 @@ class BradbitApp {
           }
         };
 
+        row.addEventListener("contextmenu", (event) => {
+          event.preventDefault();
+          event.stopPropagation();
+          this.showTreeContextMenu(event, node);
+        });
+
         treeContainer.appendChild(row);
 
         if (node.isDir && node.children && !isCollapsed) {
@@ -3397,6 +3404,166 @@ class BradbitApp {
 
     renderNodes(filteredTree, 0);
     return treeContainer;
+  }
+
+  private showTreeContextMenu(event: MouseEvent, node: FileTreeNode): void {
+    const lang = this.settings.language;
+    const items: ContextMenuItem[] = [];
+    const separator = (id: string): ContextMenuItem => ({
+      id,
+      label: "",
+      separator: true,
+    });
+
+    if (!node.isDir) {
+      items.push({
+        id: "open",
+        label: t(lang, "open"),
+        icon: "file-text",
+        action: () => void this.openFileFromTree(node.path, true),
+      });
+    } else {
+      items.push(
+        {
+          id: "new-file",
+          label: t(lang, "newFile"),
+          icon: "file-plus",
+          action: () => this.openUntitledFile(node.path),
+        },
+        {
+          id: "new-folder",
+          label: t(lang, "newFolder"),
+          icon: "folder-plus",
+          action: () => this.openEntryModal("new-folder", node.path),
+        },
+      );
+    }
+
+    items.push(
+      separator("edit-separator"),
+      {
+        id: "rename",
+        label: t(lang, "rename"),
+        icon: "pencil",
+        action: () => this.openEntryModal("rename", node.path),
+      },
+      {
+        id: "delete",
+        label: t(lang, "delete"),
+        icon: "trash",
+        danger: true,
+        action: () => {
+          this.modal = { kind: "confirm-delete", targetPath: node.path };
+          this.render();
+        },
+      },
+      separator("path-separator"),
+      {
+        id: "copy-path",
+        label: t(lang, "copyPath"),
+        icon: "copy",
+        action: () => {
+          void copyTextToClipboard(node.path).then((copied) => {
+            this.showStatusNotice(
+              t(lang, copied ? "pathCopied" : "copyError"),
+            );
+          });
+        },
+      },
+      {
+        id: "reveal",
+        label: t(lang, "revealInFinder"),
+        icon: "external-link",
+        action: () => {
+          if (!this.folder) return;
+          void backend
+            .revealInFinder(this.folder.rootPath, node.path)
+            .catch((error) => {
+              console.error("Could not reveal the file", error);
+              this.showStatusNotice(t(lang, "revealError"));
+            });
+        },
+      },
+    );
+
+    openContextMenu({
+      x: event.clientX,
+      y: event.clientY,
+      items,
+      label: node.name,
+    });
+  }
+
+  private showTabContextMenu(event: MouseEvent, tab: OpenTab): void {
+    const lang = this.settings.language;
+    const items: ContextMenuItem[] = [
+      {
+        id: "close-tab",
+        label: t(lang, "closeTab"),
+        icon: "x",
+        action: () => this.requestCloseTab(tab.path),
+      },
+      {
+        id: "close-others",
+        label: t(lang, "closeOtherTabs"),
+        action: () => this.closeOtherTabs(tab.path),
+      },
+    ];
+
+    if (!tab.untitled) {
+      items.push(
+        { id: "tab-separator", label: "", separator: true },
+        {
+          id: "copy-tab-path",
+          label: t(lang, "copyPath"),
+          icon: "copy",
+          action: () => {
+            void copyTextToClipboard(tab.path).then((copied) => {
+              this.showStatusNotice(
+                t(lang, copied ? "pathCopied" : "copyError"),
+              );
+            });
+          },
+        },
+        {
+          id: "reveal-tab",
+          label: t(lang, "revealInFinder"),
+          icon: "external-link",
+          action: () => {
+            if (!this.folder) return;
+            void backend
+              .revealInFinder(this.folder.rootPath, tab.path)
+              .catch((error) => {
+                console.error("Could not reveal the file", error);
+                this.showStatusNotice(t(lang, "revealError"));
+              });
+          },
+        },
+      );
+    }
+
+    openContextMenu({
+      x: event.clientX,
+      y: event.clientY,
+      items,
+      label: tab.name,
+    });
+  }
+
+  private closeOtherTabs(path: string): void {
+    const lang = this.settings.language;
+    const others = this.tabState.tabs.filter((tab) => tab.path !== path);
+    if (others.some(isTabDirty)) {
+      this.showStatusNotice(t(lang, "closeOtherTabsDirty"));
+      return;
+    }
+
+    for (const tab of others) {
+      this.editor?.closeDocumentState(tab.path);
+      this.tabState = closeTabInState(this.tabState, tab.path);
+    }
+    this.tabState = { ...this.tabState, activeTabPath: path };
+    this.render();
   }
 
   private renderOutline(lang: AppSettings["language"]): HTMLElement {
@@ -3734,6 +3901,12 @@ class BradbitApp {
           this.tabState = openFileInTabs(this.tabState, tab, true);
           this.render();
         };
+
+        tabEl.addEventListener("contextmenu", (event) => {
+          event.preventDefault();
+          event.stopPropagation();
+          this.showTabContextMenu(event, tab);
+        });
 
         tabEl.appendChild(title);
         if (badgeEl) {

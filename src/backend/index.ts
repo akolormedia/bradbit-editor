@@ -235,7 +235,7 @@ export const backend = {
     const selected = await save({
       defaultPath,
       filters: [
-        { name: "Markdown", extensions: ["md", "mdx"] },
+        { name: "Markdown", extensions: ["md", "mdx", "markdown"] },
         { name: "Fountain", extensions: ["fountain"] },
         { name: "Texto", extensions: ["txt"] },
       ],
@@ -369,6 +369,17 @@ export const backend = {
         }
       }
     }
+  },
+
+  async revealInFinder(rootPath: string, relPath: string): Promise<void> {
+    if (isTauriEnvironment()) {
+      await tauriInvoke<void>("reveal_in_finder", {
+        root: rootPath,
+        relPath,
+      });
+      return;
+    }
+    throw new Error("Show in Finder is only available in the desktop app");
   },
 
   async deleteEntry(rootPath: string, relPath: string): Promise<void> {
