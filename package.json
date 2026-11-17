@@ -12,7 +12,8 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "tauri": "tauri",
-    "fetch:bradbit": "node scripts/fetch-bradbit.mjs"
+    "fetch:bradbit": "node scripts/fetch-bradbit.mjs",
+    "sidecar:universal": "npm run fetch:bradbit -- --all && node scripts/make-universal-sidecar.mjs"
   },
   "dependencies": {
     "@codemirror/commands": "^6.8.0",
