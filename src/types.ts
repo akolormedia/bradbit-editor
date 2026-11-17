@@ -24,6 +24,19 @@ export interface ByokProviderStatus extends ByokProvider {
   hasKey: boolean;
 }
 
+export interface ByokTestProvider {
+  kind: ByokProviderKind;
+  baseUrl?: string;
+  model?: string;
+}
+
+export interface ByokTestResult {
+  ok: boolean;
+  status?: number;
+  modelCount: number;
+  error?: string;
+}
+
 export interface AppSettings {
   language: Language;
   theme: ThemeMode;

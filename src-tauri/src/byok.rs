@@ -8,10 +8,12 @@
 
 use std::collections::HashSet;
 use std::path::Path;
+use std::time::Duration;
 
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use serde_json::{json, Map, Value};
 
+use crate::git::redact_secrets;
 use crate::github::secrets::{CachedSecretStore, OsKeychain, SecretStore};
 use crate::settings::{AppSettings, ByokProvider};
 
@@ -85,6 +87,152 @@ impl ByokSecrets {
         self.store
             .delete(&account)
             .map_err(|error| format!("Could not delete the API key: {error}"))
+    }
+}
+
+/// Provider metadata used by the guided connection test. The key is passed
+/// separately and is never stored by this module.
+#[derive(Debug, Clone, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct ByokTestProvider {
+    pub kind: String,
+    pub base_url: Option<String>,
+    pub model: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct ByokTestResult {
+    pub ok: bool,
+    pub status: Option<u16>,
+    pub model_count: usize,
+    pub error: Option<String>,
+}
+
+struct ConnectionTarget {
+    url: String,
+    headers: Vec<(&'static str, String)>,
+}
+
+/// Validate a key against the selected provider without saving anything.
+/// Invalid input is returned as `Err`; HTTP failures are returned as a
+/// structured `ByokTestResult` so the UI can localize them.
+pub fn test_connection(provider: &ByokTestProvider, key: &str) -> Result<ByokTestResult, String> {
+    validate_secret(key)?;
+    let target = connection_target(provider, key)?;
+    let agent: ureq::Agent = ureq::Agent::config_builder()
+        .timeout_global(Some(Duration::from_secs(20)))
+        .http_status_as_error(false)
+        .build()
+        .into();
+    let mut request = agent.get(&target.url);
+    for (name, value) in &target.headers {
+        request = request.header(*name, value);
+    }
+    match request.call() {
+        Ok(mut response) => {
+            let status = response.status().as_u16();
+            let body = response.body_mut().read_to_string().unwrap_or_default();
+            let mut result = classify_connection_response(status, &body);
+            if let Some(error) = result.error.as_mut() {
+                if !key.is_empty() {
+                    *error = error.replace(key, "***");
+                }
+            }
+            Ok(result)
+        }
+        Err(error) => Ok(ByokTestResult {
+            ok: false,
+            status: None,
+            model_count: 0,
+            error: Some(if matches!(error, ureq::Error::Timeout(_)) {
+                "timeout".to_string()
+            } else {
+                redact_secrets(&error.to_string())
+            }),
+        }),
+    }
+}
+
+fn connection_target(provider: &ByokTestProvider, key: &str) -> Result<ConnectionTarget, String> {
+    let metadata = ByokProvider {
+        id: "connection-test".to_string(),
+        name: "Connection test".to_string(),
+        kind: provider.kind.clone(),
+        base_url: provider.base_url.clone(),
+        model: provider.model.clone(),
+        env_var: "BRADBIT_CONNECTION_TEST_API_KEY".to_string(),
+    };
+    validate_provider(&metadata)?;
+
+    let bearer = || vec![("Authorization", format!("Bearer {key}"))];
+    let (url, headers) = match provider.kind.as_str() {
+        "deepseek" => ("https://api.deepseek.com/models".to_string(), bearer()),
+        "openrouter" => ("https://openrouter.ai/api/v1/key".to_string(), bearer()),
+        "openai" => ("https://api.openai.com/v1/models".to_string(), bearer()),
+        "anthropic" => (
+            "https://api.anthropic.com/v1/models".to_string(),
+            vec![
+                ("x-api-key", key.to_string()),
+                ("anthropic-version", "2023-06-01".to_string()),
+            ],
+        ),
+        "opencode" => ("https://opencode.ai/console/api/user".to_string(), bearer()),
+        "custom" => {
+            let base = provider
+                .base_url
+                .as_deref()
+                .ok_or_else(|| "Custom provider needs a base URL".to_string())?
+                .trim()
+                .trim_end_matches('/');
+            let url = if base.ends_with("/models") {
+                base.to_string()
+            } else {
+                format!("{base}/models")
+            };
+            (url, bearer())
+        }
+        _ => return Err("Unsupported provider kind".to_string()),
+    };
+    Ok(ConnectionTarget { url, headers })
+}
+
+fn classify_connection_response(status: u16, body: &str) -> ByokTestResult {
+    let payload: Option<Value> = serde_json::from_str(body).ok();
+    let model_count = payload
+        .as_ref()
+        .and_then(|value| value.get("data"))
+        .and_then(Value::as_array)
+        .map(Vec::len)
+        .unwrap_or(0);
+    let ok = (200..300).contains(&status);
+    ByokTestResult {
+        ok,
+        status: Some(status),
+        model_count,
+        error: if ok {
+            None
+        } else {
+            Some(error_detail(status, payload.as_ref(), body))
+        },
+    }
+}
+
+fn error_detail(status: u16, payload: Option<&Value>, body: &str) -> String {
+    for pointer in ["/error/message", "/message"] {
+        if let Some(message) = payload
+            .and_then(|value| value.pointer(pointer))
+            .and_then(Value::as_str)
+        {
+            return redact_secrets(message);
+        }
+    }
+    let trimmed = body.trim();
+    if trimmed.is_empty() {
+        format!("HTTP {status}")
+    } else {
+        let snippet: String = trimmed.chars().take(300).collect();
+        format!("HTTP {status}: {}", redact_secrets(&snippet))
     }
 }
 
@@ -586,6 +734,103 @@ mod tests {
             ..Default::default()
         };
         assert!(statuses(&settings, &secrets).unwrap_err().contains("http"));
+    }
+
+    fn test_provider(kind: &str, base_url: Option<&str>, model: Option<&str>) -> ByokTestProvider {
+        ByokTestProvider {
+            kind: kind.to_string(),
+            base_url: base_url.map(str::to_string),
+            model: model.map(str::to_string),
+        }
+    }
+
+    #[test]
+    fn connection_targets_are_provider_specific() {
+        let deepseek =
+            connection_target(&test_provider("deepseek", None, None), "sk-test").unwrap();
+        assert_eq!(deepseek.url, "https://api.deepseek.com/models");
+        assert_eq!(
+            deepseek.headers,
+            vec![("Authorization", "Bearer sk-test".to_string())]
+        );
+
+        let anthropic =
+            connection_target(&test_provider("anthropic", None, None), "sk-ant").unwrap();
+        assert_eq!(anthropic.url, "https://api.anthropic.com/v1/models");
+        assert_eq!(
+            anthropic.headers,
+            vec![
+                ("x-api-key", "sk-ant".to_string()),
+                ("anthropic-version", "2023-06-01".to_string())
+            ]
+        );
+
+        let custom = connection_target(
+            &test_provider("custom", Some("https://api.example.com/v1/"), Some("m")),
+            "sk-custom",
+        )
+        .unwrap();
+        assert_eq!(custom.url, "https://api.example.com/v1/models");
+
+        let custom_with_models = connection_target(
+            &test_provider(
+                "custom",
+                Some("https://api.example.com/v1/models"),
+                Some("m"),
+            ),
+            "sk-custom",
+        )
+        .unwrap();
+        assert_eq!(custom_with_models.url, "https://api.example.com/v1/models");
+    }
+
+    #[test]
+    fn classifies_success_invalid_keys_and_redacts_errors() {
+        let ok = classify_connection_response(200, r#"{"data":[{"id":"a"},{"id":"b"}]}"#);
+        assert!(ok.ok);
+        assert_eq!(ok.status, Some(200));
+        assert_eq!(ok.model_count, 2);
+        assert!(ok.error.is_none());
+
+        let invalid =
+            classify_connection_response(401, r#"{"error":{"message":"Incorrect API key"}}"#);
+        assert!(!invalid.ok);
+        assert_eq!(invalid.status, Some(401));
+        assert!(invalid.error.unwrap().contains("Incorrect"));
+
+        let leaked =
+            classify_connection_response(500, r#"{"message":"failed with ghp_supersecret"}"#);
+        let message = leaked.error.unwrap();
+        assert!(!message.contains("ghp_supersecret"), "{message}");
+        assert!(message.contains("***"), "{message}");
+    }
+
+    #[test]
+    fn connection_test_rejects_invalid_inputs_before_network() {
+        assert!(test_connection(&test_provider("unknown", None, None), "sk").is_err());
+        assert!(test_connection(&test_provider("deepseek", None, None), "  ").is_err());
+        assert!(test_connection(
+            &test_provider("custom", Some("file:///tmp/api"), Some("m")),
+            "sk"
+        )
+        .is_err());
+        assert!(test_connection(
+            &test_provider("custom", Some("https://api.example.com"), None),
+            "sk"
+        )
+        .is_err());
+    }
+
+    #[test]
+    #[ignore = "network"]
+    fn provider_endpoints_reject_invalid_keys() {
+        let result = test_connection(
+            &test_provider("deepseek", None, None),
+            "sk-invalid-bradbit-test",
+        )
+        .unwrap();
+        assert!(!result.ok);
+        assert!(matches!(result.status, Some(401) | Some(403)), "{result:?}");
     }
 
     #[test]

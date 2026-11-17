@@ -21,6 +21,7 @@ describe("BYOK provider helpers (T-3.1.9)", () => {
       kind: "deepseek",
       name: "DeepSeek",
       envVar: "DEEPSEEK_API_KEY",
+      keyUrl: "https://platform.deepseek.com/api_keys",
     });
     expect(byokProviderFromDraft(byokDraft("openrouter"))).toEqual({
       id: "openrouter",
