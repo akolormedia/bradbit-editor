@@ -148,13 +148,13 @@ fn read_docx_file(path: String) -> Result<String, String> {
     if !path.to_ascii_lowercase().ends_with(".docx") {
         return Err("Only .docx files can be imported".to_string());
     }
-    let metadata = std::fs::metadata(&path)
-        .map_err(|e| format!("Could not read the Word document: {}", e))?;
+    let metadata =
+        std::fs::metadata(&path).map_err(|e| format!("Could not read the Word document: {}", e))?;
     if metadata.len() > 50 * 1024 * 1024 {
         return Err("The Word document is larger than 50 MB".to_string());
     }
-    let bytes = std::fs::read(&path)
-        .map_err(|e| format!("Could not read the Word document: {}", e))?;
+    let bytes =
+        std::fs::read(&path).map_err(|e| format!("Could not read the Word document: {}", e))?;
     use base64::Engine as _;
     Ok(base64::engine::general_purpose::STANDARD.encode(bytes))
 }
@@ -900,7 +900,9 @@ mod tests {
 
         let encoded = super::read_docx_file(path.to_string_lossy().to_string()).unwrap();
         assert_eq!(
-            base64::engine::general_purpose::STANDARD.decode(encoded).unwrap(),
+            base64::engine::general_purpose::STANDARD
+                .decode(encoded)
+                .unwrap(),
             bytes
         );
 
