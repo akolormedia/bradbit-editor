@@ -70,6 +70,7 @@ struct MenuLabels {
     open_folder: &'static str,
     open_recent: &'static str,
     new_project: &'static str,
+    import_docx: &'static str,
     save_as_template: &'static str,
     open_templates_folder: &'static str,
     new_file: &'static str,
@@ -117,6 +118,7 @@ impl MenuLabels {
                 open_folder: "Open Folder…",
                 open_recent: "Open Recent",
                 new_project: "New Project…",
+                import_docx: "Import DOCX…",
                 save_as_template: "Save as Template…",
                 open_templates_folder: "Open Templates Folder",
                 new_file: "New File",
@@ -161,6 +163,7 @@ impl MenuLabels {
                 open_folder: "Abrir carpeta…",
                 open_recent: "Abrir reciente",
                 new_project: "Nuevo proyecto…",
+                import_docx: "Importar DOCX…",
                 save_as_template: "Guardar como plantilla…",
                 open_templates_folder: "Abrir carpeta de plantillas",
                 new_file: "Nuevo archivo",
@@ -210,6 +213,7 @@ pub fn is_known_command(id: &str) -> bool {
         "app.settings"
             | "file.openFolder"
             | "file.newProject"
+            | "file.importDocx"
             | "file.saveAsTemplate"
             | "file.openTemplatesFolder"
             | "file.newFile"
@@ -238,7 +242,7 @@ pub fn command_enabled(state: &MenuUiState, id: &str) -> bool {
     match id {
         "app.settings" | "file.openFolder" => true,
         "file.newProject" | "file.openTemplatesFolder" => true,
-        "file.saveAsTemplate" => state.has_folder,
+        "file.saveAsTemplate" | "file.importDocx" => state.has_folder,
         "file.newFile" | "file.quickOpen" | "edit.findInProject" | "view.toggleSidebar" => {
             state.has_folder
         }
@@ -336,6 +340,10 @@ pub fn build_menu<R: Runtime>(
         .id("file.newProject")
         .accelerator("Shift+CmdOrCtrl+N")
         .build(app)?;
+    let import_docx = MenuItemBuilder::new(labels.import_docx)
+        .id("file.importDocx")
+        .enabled(state.has_folder)
+        .build(app)?;
     let save_as_template = MenuItemBuilder::new(labels.save_as_template)
         .id("file.saveAsTemplate")
         .enabled(state.has_folder)
@@ -384,6 +392,7 @@ pub fn build_menu<R: Runtime>(
     let file_menu = file_menu
         .separator()
         .item(&new_project)
+        .item(&import_docx)
         .item(&save_as_template)
         .item(&open_templates_folder)
         .separator()
@@ -618,6 +627,7 @@ mod tests {
         assert!(is_known_command("file.save"));
         assert!(is_known_command("file.exportPdf"));
         assert!(is_known_command("file.newProject"));
+        assert!(is_known_command("file.importDocx"));
         assert!(is_known_command("file.saveAsTemplate"));
         assert!(is_known_command("file.openTemplatesFolder"));
         assert!(is_known_command("file.quickOpen"));
@@ -646,6 +656,7 @@ mod tests {
         assert_eq!(es.export_pdf, "Exportar PDF…");
         assert_eq!(es.quick_open, "Apertura rápida…");
         assert_eq!(es.new_project, "Nuevo proyecto…");
+        assert_eq!(es.import_docx, "Importar DOCX…");
         assert_eq!(es.save_as_template, "Guardar como plantilla…");
         assert_eq!(es.open_templates_folder, "Abrir carpeta de plantillas");
         assert_eq!(es.find_in_project, "Buscar en proyecto…");
@@ -658,6 +669,7 @@ mod tests {
         assert_eq!(en.export_pdf, "Export PDF…");
         assert_eq!(en.quick_open, "Quick Open…");
         assert_eq!(en.new_project, "New Project…");
+        assert_eq!(en.import_docx, "Import DOCX…");
         assert_eq!(en.save_as_template, "Save as Template…");
         assert_eq!(en.open_templates_folder, "Open Templates Folder");
         assert_eq!(en.find_in_project, "Find in Project…");
@@ -684,6 +696,7 @@ mod tests {
         assert!(command_enabled(&state, "file.newProject"));
         assert!(command_enabled(&state, "file.openTemplatesFolder"));
         assert!(!command_enabled(&state, "file.saveAsTemplate"));
+        assert!(!command_enabled(&state, "file.importDocx"));
         assert!(!command_enabled(&state, "file.newFile"));
         assert!(!command_enabled(&state, "file.save"));
         assert!(!command_enabled(&state, "file.quickOpen"));
@@ -695,6 +708,7 @@ mod tests {
 
         state.has_folder = true;
         assert!(command_enabled(&state, "file.newFile"));
+        assert!(command_enabled(&state, "file.importDocx"));
         assert!(command_enabled(&state, "file.saveAsTemplate"));
         assert!(command_enabled(&state, "file.quickOpen"));
         assert!(command_enabled(&state, "edit.findInProject"));

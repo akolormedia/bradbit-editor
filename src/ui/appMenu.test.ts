@@ -62,6 +62,7 @@ describe("application menu model (T-2.4.2)", () => {
     expect(commandIds()).toEqual([
       "file.openFolder",
       "file.newProject",
+      "file.importDocx",
       "file.newFile",
       "file.quickOpen",
       "file.save",
@@ -83,6 +84,7 @@ describe("application menu model (T-2.4.2)", () => {
       state({ hasFolder: false, hasActiveTab: false, isMarkdown: false }),
     );
     expect(commandItem(empty, "file.newFile").enabled).toBe(false);
+    expect(commandItem(empty, "file.importDocx").enabled).toBe(false);
     expect(commandItem(empty, "file.save").enabled).toBe(false);
     expect(commandItem(empty, "view.togglePreview").enabled).toBe(false);
     expect(commandItem(empty, "view.wordWrap").enabled).toBe(true);
@@ -90,6 +92,7 @@ describe("application menu model (T-2.4.2)", () => {
 
     const ready = buildAppMenu(state());
     expect(commandItem(ready, "file.newFile").enabled).toBe(true);
+    expect(commandItem(ready, "file.importDocx").enabled).toBe(true);
     expect(commandItem(ready, "view.togglePreview").enabled).toBe(true);
   });
 

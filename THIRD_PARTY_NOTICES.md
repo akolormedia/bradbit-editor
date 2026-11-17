@@ -84,6 +84,8 @@ The OpenTUI distribution also includes the following components; their notices a
 - **Tauri API and plugins:** MIT OR Apache-2.0.
 - **Lucide:** ISC.
 - **DOMPurify:** MPL-2.0 OR Apache-2.0 (distributed under Apache-2.0).
+- **Mammoth:** BSD-2-Clause. Used only for DOCX import; license text in [`licenses/mammoth-LICENSE`](licenses/mammoth-LICENSE).
+- **Turndown:** MIT. Used only for DOCX import; license text in [`licenses/turndown-LICENSE`](licenses/turndown-LICENSE).
 - The full production dependency set is in [`package-lock.json`](package-lock.json); there are **no GPL or LGPL production dependencies**.
 
 ## Source code and relinking
