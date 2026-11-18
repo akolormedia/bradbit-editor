@@ -69,6 +69,12 @@ export interface OpenedFolder {
   tree: FileTreeNode[];
 }
 
+export interface FolderPdfResult {
+  kind: "markdown" | "fountain";
+  /** Absolute paths of the generated PDFs. */
+  outputs: string[];
+}
+
 export interface RecentProject {
   path: string;
   name: string;

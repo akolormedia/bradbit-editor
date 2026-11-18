@@ -12,23 +12,20 @@ export const translations = {
     welcomeSubtitle:
       "Editor de texto agnóstico para escritura creativa. Abre cualquier carpeta para empezar a escribir.",
     healthTitle: "Primeros pasos",
-    healthIntro:
-      "Comprobación rápida del entorno. Puedes abrir una carpeta y escribir aunque aún no conectes un modelo.",
     healthNote:
       "Escribir no depende del modelo de IA: conéctalo cuando lo necesites.",
     healthRuntime: "Motor Bradbit",
-    healthRuntimeReady: "Instalado y listo para conversar y escribir.",
+    healthRuntimeReady: "Instalado y listo.",
     healthRuntimeMissing: "No se encontró. Reinstala Bradbit.",
     healthGit: "Historial y versiones",
-    healthGitReady: "Listo · {version}",
-    healthGitMissing: "No se pudo iniciar el motor de historial. Reinstala Bradbit.",
+    healthGitReady: "{version}",
+    healthGitMissing: "No se pudo iniciar. Reinstala Bradbit.",
     healthAi: "Modelo de IA",
     healthAiReady: "{name}",
     healthAiReadyModel: "{name} · {model}",
     healthAiReadyMore: "{name} (+{count} más)",
     healthAiReadyModelMore: "{name} · {model} (+{count} más)",
-    healthAiMissing:
-      "Sin proveedor conectado. Puedes escribir igualmente y conectarlo cuando quieras.",
+    healthAiMissing: "Sin proveedor conectado.",
     healthAiAction: "Conectar modelo",
     healthTemplates: "Plantillas",
     healthTemplatesReady: "{count} disponibles",
@@ -48,6 +45,8 @@ export const translations = {
     saveOutsideProject:
       "El archivo debe guardarse dentro de la carpeta del proyecto.",
     newFolder: "Nueva carpeta",
+    exportFolderPdf: "Exportar carpeta a PDF…",
+    folderPdfExported: "{count} PDF exportados en {path}",
     rename: "Renombrar",
     delete: "Eliminar",
     save: "Guardar",
@@ -560,23 +559,20 @@ export const translations = {
     welcomeSubtitle:
       "Agnostic creative writing text editor. Open any folder to start writing.",
     healthTitle: "Getting started",
-    healthIntro:
-      "A quick environment check. You can open a folder and write even before connecting a model.",
     healthNote:
       "Writing does not depend on the AI model: connect it whenever you need it.",
     healthRuntime: "Bradbit engine",
-    healthRuntimeReady: "Installed and ready to chat and write.",
+    healthRuntimeReady: "Installed and ready.",
     healthRuntimeMissing: "Not found. Reinstall Bradbit.",
     healthGit: "History and versions",
-    healthGitReady: "Ready · {version}",
-    healthGitMissing: "Could not start the history engine. Reinstall Bradbit.",
+    healthGitReady: "{version}",
+    healthGitMissing: "Could not start. Reinstall Bradbit.",
     healthAi: "AI model",
     healthAiReady: "{name}",
     healthAiReadyModel: "{name} · {model}",
     healthAiReadyMore: "{name} (+{count} more)",
     healthAiReadyModelMore: "{name} · {model} (+{count} more)",
-    healthAiMissing:
-      "No provider connected. You can still write and connect one whenever you want.",
+    healthAiMissing: "No provider connected.",
     healthAiAction: "Connect model",
     healthTemplates: "Templates",
     healthTemplatesReady: "{count} available",
@@ -596,6 +592,8 @@ export const translations = {
     saveOutsideProject:
       "The file must be saved inside the project folder.",
     newFolder: "New Folder",
+    exportFolderPdf: "Export folder to PDF…",
+    folderPdfExported: "{count} PDFs exported to {path}",
     rename: "Rename",
     delete: "Delete",
     save: "Save",

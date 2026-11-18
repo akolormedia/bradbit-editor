@@ -3333,8 +3333,8 @@ textarea.text-input {
 .health-card {
   display: flex;
   flex-direction: column;
-  gap: 12px;
-  padding: 14px 16px;
+  gap: 8px;
+  padding: 12px 14px;
   border: 1px solid var(--border-color);
   border-radius: 10px;
   background: var(--bg-surface);
@@ -3349,7 +3349,7 @@ textarea.text-input {
 
 .health-header h3 {
   margin: 0;
-  font-size: 12px;
+  font-size: 11.5px;
   text-transform: uppercase;
   letter-spacing: 0.04em;
   color: var(--text-muted);
@@ -3357,10 +3357,10 @@ textarea.text-input {
 
 .health-badge {
   flex: 0 0 auto;
-  padding: 3px 8px;
+  padding: 2px 7px;
   border: 1px solid var(--border-color);
   border-radius: 999px;
-  font-size: 11px;
+  font-size: 10.5px;
   color: var(--text-muted);
 }
 
@@ -3369,18 +3369,16 @@ textarea.text-input {
   border-color: var(--success);
 }
 
-.health-intro,
 .health-note,
 .health-checking,
 .health-error {
   margin: 0;
-  font-size: 12px;
-  line-height: 1.45;
+  font-size: 11px;
+  line-height: 1.4;
   color: var(--text-secondary);
 }
 
 .health-note {
-  font-size: 11px;
   color: var(--text-muted);
 }
 
@@ -3393,15 +3391,21 @@ textarea.text-input {
 }
 
 .health-checks {
-  display: flex;
-  flex-direction: column;
-  gap: 9px;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px 14px;
 }
 
 .health-check {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 7px;
+  min-width: 0;
+  min-height: 20px;
+}
+
+.health-check.has-action {
+  grid-column: 1 / -1;
 }
 
 .health-dot {
@@ -3428,26 +3432,32 @@ textarea.text-input {
   flex: 1;
   min-width: 0;
   display: flex;
-  flex-direction: column;
-  gap: 1px;
+  align-items: baseline;
+  gap: 5px;
+  overflow: hidden;
 }
 
 .health-check-body strong {
-  font-size: 12.5px;
+  flex: 0 0 auto;
+  font-size: 12px;
   font-weight: 600;
+  white-space: nowrap;
 }
 
 .health-check-body span {
-  font-size: 11.5px;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 11px;
   color: var(--text-muted);
-  overflow-wrap: anywhere;
 }
 
 .health-action,
 .health-refresh {
   flex: 0 0 auto;
-  font-size: 11.5px;
-  padding: 5px 9px;
+  font-size: 11px;
+  padding: 3px 7px;
   white-space: nowrap;
 }
 
@@ -3455,9 +3465,14 @@ textarea.text-input {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 12px;
-  padding-top: 10px;
+  gap: 8px;
+  padding-top: 6px;
   border-top: 1px solid var(--border-color);
+}
+
+.health-footer .health-note {
+  font-size: 10.5px;
+  line-height: 1.35;
 }
 
 .recents-section h3 {

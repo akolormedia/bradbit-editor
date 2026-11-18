@@ -2685,6 +2685,40 @@ class BradbitApp {
     }
   }
 
+  private async exportFolderPdf(node: FileTreeNode): Promise<void> {
+    if (!this.folder || !isTauriEnvironment()) {
+      return;
+    }
+    const lang = this.settings.language;
+    const author = effectiveGitAuthor(this.settings).name || "Bradbit Writer";
+
+    try {
+      const result = await backend.exportFolderPdf(
+        this.folder.rootPath,
+        node.path,
+        "",
+        author,
+      );
+      if (result.outputs.length === 1) {
+        this.showStatusNotice(
+          `${t(lang, "pdfExported")}: ${result.outputs[0]}`,
+        );
+        return;
+      }
+      const first = result.outputs[0] ?? "";
+      const separator = first.lastIndexOf("/");
+      const folder = separator > 0 ? first.slice(0, separator) : first;
+      this.showStatusNotice(
+        t(lang, "folderPdfExported", {
+          count: String(result.outputs.length),
+          path: folder,
+        }),
+      );
+    } catch (err) {
+      this.showStatusNotice(err instanceof Error ? err.message : String(err));
+    }
+  }
+
   private async importDocx(): Promise<void> {
     const lang = this.settings.language;
     if (!this.folder) {
@@ -3707,6 +3741,12 @@ class BradbitApp {
           label: t(lang, "newFolder"),
           icon: "folder-plus",
           action: () => this.openEntryModal("new-folder", node.path),
+        },
+        {
+          id: "export-folder-pdf",
+          label: t(lang, "exportFolderPdf"),
+          icon: "download",
+          action: () => void this.exportFolderPdf(node),
         },
       );
     }

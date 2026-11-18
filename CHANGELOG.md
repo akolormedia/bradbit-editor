@@ -12,12 +12,14 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 - New projects start on `main` for deterministic behavior across machines.
 - **Developer options** are hidden by default; the terminal, configuration files and advanced Git author fields appear only after enabling them in Settings.
 - **Saving a version** falls back to `Bradbit Writer <writer@bradbit.local>` when no author is configured.
+- **Compact first-run checklist:** the welcome card no longer repeats the intro, checks sit in two columns and details stay on one line with ellipsis.
 
 ### Added
 - **Curated context menus** for the file tree and tabs: open, new file/folder, rename, delete, close tab/others, copy path and show in Finder. The text editor keeps the native macOS menu so spelling, Look Up and services remain available. The WebView inspector is disabled in the packaged app.
 - **DOCX import:** **File → Import → DOCX…** converts a Word manuscript into a single Markdown file. It preserves headings, paragraphs, bold and italic, and warns before dropping images, tables, comments, tracked changes and advanced styles.
 - **Final Draft import:** **File → Import → Final Draft (.fdx)…** converts an FDX screenplay into Fountain with `jumpcut`, with a rendered screenplay preview before writing.
 - **DOCX export:** **File → Export DOCX…** writes a Markdown manuscript using the standard A4 manuscript preset (Times New Roman 12 pt, double spacing, title page and page numbers).
+- **Folder PDF export:** right-click any folder under **Files** and choose **Export folder to PDF…**. Markdown folders become one A4 book PDF with chapter breaks and page numbers; Fountain folders produce one screenplay PDF per script under `exports/`. Mixed folders show a clear message instead of guessing.
 - **`.markdown` support** across file detection, icons and the Save dialog.
 - **First-run health card** on the welcome screen: Bradbit engine, bundled libgit2 version, configured AI provider/model and available templates, with **Connect model** and **Create project** shortcuts. It is non-blocking: opening a folder and writing work without an AI provider.
 - **Installation guide** in English and Spanish (`docs/INSTALL.md` and `docs/INSTALL.es.md`): requirements, universal DMG, first-run **Open Anyway**, no Git/Command Line Tools, troubleshooting, privacy and uninstall.

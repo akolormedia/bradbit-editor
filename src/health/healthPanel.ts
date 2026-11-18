@@ -43,11 +43,7 @@ export function createHealthPanel(options: HealthPanelOptions): HTMLElement {
   }
   header.append(title, badge);
 
-  const intro = document.createElement("p");
-  intro.className = "health-intro";
-  intro.textContent = t(language, "healthIntro");
-
-  section.append(header, intro);
+  section.appendChild(header);
 
   if (loading) {
     const checking = document.createElement("p");
@@ -84,11 +80,13 @@ export function createHealthPanel(options: HealthPanelOptions): HTMLElement {
         check.detailKey,
         check.detailParams,
       );
+      detail.title = detail.textContent;
       body.append(name, detail);
 
       row.append(dot, body);
 
       if (check.action) {
+        row.classList.add("has-action");
         const action = document.createElement("button");
         action.type = "button";
         action.className = "toolbar-btn health-action";
