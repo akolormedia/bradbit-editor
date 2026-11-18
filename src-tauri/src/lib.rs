@@ -1,7 +1,9 @@
+pub mod book_pdf;
 pub mod byok;
 pub mod cancel;
 pub mod docx_export;
 pub mod fdx;
+pub mod folder_pdf;
 pub mod fountain;
 pub mod fs_ops;
 pub mod git;
@@ -81,6 +83,34 @@ fn export_markdown_docx(
         .open_path(&output, None::<&str>)
         .map_err(|e| format!("DOCX saved to {} but could not be opened: {}", output, e))?;
     Ok(output)
+}
+
+#[tauri::command]
+fn export_folder_pdf(
+    app: tauri::AppHandle,
+    root: String,
+    rel_folder: String,
+    title: String,
+    author: String,
+) -> Result<folder_pdf::FolderPdfResult, folder_pdf::FolderPdfError> {
+    let result = folder_pdf::export_to_project(&root, &rel_folder, &title, &author)?;
+    let target = if result.outputs.len() == 1 {
+        result.outputs[0].clone()
+    } else {
+        std::path::Path::new(&result.outputs[0])
+            .parent()
+            .map(|path| path.to_string_lossy().to_string())
+            .unwrap_or_else(|| result.outputs[0].clone())
+    };
+    app.opener()
+        .open_path(&target, None::<&str>)
+        .unwrap_or_else(|error| {
+            eprintln!(
+                "PDFs saved to {} but could not be opened: {}",
+                target, error
+            );
+        });
+    Ok(result)
 }
 
 #[tauri::command]
@@ -815,6 +845,7 @@ pub fn run() {
             refresh_menu,
             export_fountain_pdf,
             export_markdown_docx,
+            export_folder_pdf,
             search_in_folder,
             list_templates,
             create_project_from_template,

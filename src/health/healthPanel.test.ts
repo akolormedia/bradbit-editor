@@ -151,4 +151,13 @@ describe("first-run health panel (T-3.5.4)", () => {
     expect(badge?.classList.contains("ok")).toBe(true);
     expect(badge?.textContent).toContain("Listo para escribir");
   });
+
+  it("stays compact without a duplicated intro", () => {
+    const element = panel();
+    expect(element.querySelector(".health-intro")).toBeNull();
+    expect(element.querySelector(".health-checks")).not.toBeNull();
+    expect(
+      element.querySelector('[data-testid="health-check-runtime"]')?.textContent,
+    ).toContain("Motor Bradbit");
+  });
 });

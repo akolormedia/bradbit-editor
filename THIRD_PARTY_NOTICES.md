@@ -76,6 +76,7 @@ The OpenTUI distribution also includes the following components; their notices a
 - **git2** 0.21: MIT OR Apache-2.0.
 - **jumpcut** 2.1: MIT. Used only for Final Draft (FDX) import; license text in [`licenses/jumpcut-LICENSE`](licenses/jumpcut-LICENSE).
 - **docx-rs** 0.4.22: MIT. Used only for Markdown → DOCX export; license text in [`licenses/docx-rs-LICENSE`](licenses/docx-rs-LICENSE).
+- **pulldown-cmark** 0.13: MIT. Markdown parser used by the A4 book PDF export; license text in [`licenses/pulldown-cmark-LICENSE`](licenses/pulldown-cmark-LICENSE).
 - **OpenSSL / `openssl-sys`:** Apache-2.0. Used only to satisfy the `git2` HTTPS build; on macOS the final app uses **SecureTransport** and does not link OpenSSL.
 - The remaining crates are MIT, Apache-2.0, BSD, ISC, Zlib, Unicode-3.0 or compatible dual licenses. The full resolved set is in [`src-tauri/Cargo.lock`](src-tauri/Cargo.lock); there are **no GPL, AGPL or SSPL components** other than libgit2.
 - `r-efi` declares `MIT OR Apache-2.0 OR LGPL-2.1-or-later`; Bradbit uses the MIT/Apache option.

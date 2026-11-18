@@ -554,7 +554,7 @@ fn title_page_layout(title: &[String]) -> Page {
 /// Latin-1 covers Spanish; the common typographic marks map to their
 /// WinAnsi positions; anything else becomes `?` rather than corrupting
 /// the stream.
-fn winansi(text: &str) -> Vec<u8> {
+pub(crate) fn winansi(text: &str) -> Vec<u8> {
     text.chars()
         .map(|c| match c {
             '\u{2018}' => 0x91,

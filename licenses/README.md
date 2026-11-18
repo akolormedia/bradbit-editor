@@ -14,6 +14,7 @@ This folder contains the license texts referenced by
 | `DOMPurify-LICENSE` | DOMPurify (MPL-2.0 OR Apache-2.0). |
 | `jumpcut-LICENSE` | JumpCut Final Draft converter (MIT). |
 | `docx-rs-LICENSE` | docx-rs Word document writer (MIT). |
+| `pulldown-cmark-LICENSE` | pulldown-cmark Markdown parser (MIT). |
 | `mammoth-LICENSE` | Mammoth DOCX parser (BSD-2-Clause). |
 | `turndown-LICENSE` | Turndown HTML-to-Markdown converter (MIT). |
 | `opentui/` | OpenTUI, FFmpeg, libwebp, LittleCMS, Ghostty, zlib, stb and Wuffs notices and source information. |

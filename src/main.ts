@@ -10,6 +10,7 @@ import {
   ByokProviderStatus,
   ByokTestResult,
   FileTreeNode,
+  FolderPdfError,
   FsChangeEvent,
   GitBranch,
   GitCommit,
@@ -93,10 +94,8 @@ import {
 } from "./settings/connectModel";
 import { AppMenu } from "./ui/appMenu";
 import { openContextMenu, type ContextMenuItem } from "./ui/contextMenu";
-import {
-  convertDocxToMarkdown,
-  type DocxImportWarning,
-} from "./import/docx";
+import { convertDocxToMarkdown, type DocxImportWarning } from "./import/docx";
+import { folderPdfErrorCopy } from "./export/folderPdfError";
 import { createIcon } from "./ui/icons";
 import { createIconButton } from "./ui/iconButton";
 import { MenuSyncQueue } from "./workspace/menuSync";
@@ -182,6 +181,7 @@ type ModalState =
       previewMode?: "rendered" | "source";
       error?: string;
     }
+  | { kind: "folder-pdf-error"; error: FolderPdfError }
   | { kind: "entry-input"; mode: "new-folder" | "rename"; targetPath: string; value: string; error?: string }
   | { kind: "branch-input"; value: string; error?: string }
   | {
@@ -221,6 +221,23 @@ function isNativeMenuShortcut(key: string, _shift: boolean, alt: boolean): boole
   if (key === "p") return true;
   if (key === "g" && alt) return true;
   return NATIVE_MENU_KEYS.has(key);
+}
+
+function isFolderPdfError(value: unknown): value is FolderPdfError {
+  if (typeof value !== "object" || value === null) return false;
+  const candidate = value as {
+    code?: unknown;
+    message?: unknown;
+    markdown?: unknown;
+    fountain?: unknown;
+  };
+  return (
+    typeof candidate.code === "string" &&
+    typeof candidate.message === "string" &&
+    typeof candidate.markdown === "number" &&
+    typeof candidate.fountain === "number" &&
+    ["empty", "mixed", "invalidPath", "io"].includes(candidate.code)
+  );
 }
 
 class BradbitApp {
@@ -2685,6 +2702,45 @@ class BradbitApp {
     }
   }
 
+  private async exportFolderPdf(node: FileTreeNode): Promise<void> {
+    if (!this.folder || !isTauriEnvironment()) {
+      return;
+    }
+    const lang = this.settings.language;
+    const author = effectiveGitAuthor(this.settings).name || "Bradbit Writer";
+
+    try {
+      const result = await backend.exportFolderPdf(
+        this.folder.rootPath,
+        node.path,
+        "",
+        author,
+      );
+      if (result.outputs.length === 1) {
+        this.showStatusNotice(
+          `${t(lang, "pdfExported")}: ${result.outputs[0]}`,
+        );
+        return;
+      }
+      const first = result.outputs[0] ?? "";
+      const separator = first.lastIndexOf("/");
+      const folder = separator > 0 ? first.slice(0, separator) : first;
+      this.showStatusNotice(
+        t(lang, "folderPdfExported", {
+          count: String(result.outputs.length),
+          path: folder,
+        }),
+      );
+    } catch (err) {
+      if (isFolderPdfError(err)) {
+        this.modal = { kind: "folder-pdf-error", error: err };
+        this.render();
+        return;
+      }
+      this.showStatusNotice(err instanceof Error ? err.message : String(err));
+    }
+  }
+
   private async importDocx(): Promise<void> {
     const lang = this.settings.language;
     if (!this.folder) {
@@ -3707,6 +3763,12 @@ class BradbitApp {
           label: t(lang, "newFolder"),
           icon: "folder-plus",
           action: () => this.openEntryModal("new-folder", node.path),
+        },
+        {
+          id: "export-folder-pdf",
+          label: t(lang, "exportFolderPdf"),
+          icon: "download",
+          action: () => void this.exportFolderPdf(node),
         },
       );
     }
@@ -5290,6 +5352,38 @@ class BradbitApp {
       footer.append(cancelBtn, submitBtn);
       dialog.appendChild(footer);
       setTimeout(() => input.focus(), 10);
+    } else if (this.modal.kind === "folder-pdf-error") {
+      const copy = folderPdfErrorCopy(this.modal.error, lang);
+      dialog.dataset.testid = "folder-pdf-error-dialog";
+      const h3 = document.createElement("h3");
+      h3.textContent = t(lang, "folderPdfErrorTitle");
+      const message = document.createElement("p");
+      message.className = "folder-pdf-error-message";
+      message.textContent = copy.message;
+      const hint = document.createElement("p");
+      hint.className = "folder-pdf-error-hint";
+      hint.textContent = copy.hint;
+      dialog.append(h3, message, hint);
+
+      if (copy.detail) {
+        const detail = document.createElement("p");
+        detail.className = "modal-hint";
+        detail.textContent = copy.detail;
+        dialog.appendChild(detail);
+      }
+
+      const footer = document.createElement("div");
+      footer.className = "modal-footer";
+      const closeBtn = document.createElement("button");
+      closeBtn.type = "button";
+      closeBtn.className = "toolbar-btn primary";
+      closeBtn.textContent = t(lang, "folderPdfErrorClose");
+      closeBtn.onclick = () => {
+        this.modal = { kind: "none" };
+        this.render();
+      };
+      footer.appendChild(closeBtn);
+      dialog.appendChild(footer);
     } else if (this.modal.kind === "confirm-delete") {
       const h3 = document.createElement("h3");
       h3.textContent = t(lang, "deleteConfirmTitle");

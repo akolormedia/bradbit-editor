@@ -91,6 +91,10 @@ task-by-task feature inventory; the README gives the short version.
   - **Export PDF (`⌘E`)** from the document header or the *File* menu. It produces a deterministic screenplay-formatted PDF (US Letter, Courier 12pt, 55 lines per page, `(MORE)` and `(CONT'D)` rules, and page numbering).
   - The PDF is saved in the project's `exports/` folder, keeping the script subfolder (`exports/guion/acto-1.pdf`), and opens automatically in the system viewer. It works offline.
   - **Paginated screenplay preview (`T-2.5.7`):** the Preview / Edit button renders the script as numbered paper pages (US Letter, Courier, scene headings, centered cues, dialogue and transitions) without opening the PDF.
+- **Import and export (`T-3.8.x`):**
+  - **Import DOCX** into one Markdown manuscript and **import Final Draft (`.fdx`)** into Fountain, both with a rendered preview and loss warnings.
+  - **Export the active Markdown file to DOCX** with the A4 manuscript preset (Times New Roman 12 pt, double spacing, title page and page numbers).
+  - **Export any folder to PDF** from its context menu: a Markdown folder becomes one A4 book PDF with rendered Markdown, chapter breaks and page numbers; a Fountain folder produces one screenplay PDF per script. Mixed, empty or invalid folders show an explicit modal with the counts and how to fix it.
 - **Document header and reading preview (`T-1.2.1`):**
   - The header above the editor shows the active file's name and path, with **Copy**, **Preview / Edit** (Markdown and Fountain) and **PDF** (Fountain) actions.
   - Rendered and sanitized Markdown/MDX preview (`⌘⌥P`), with headings, lists, quotes, code, tables and links. The reading view is monochrome so the document reads like a manuscript; links keep an underline and only use the accent color on hover.

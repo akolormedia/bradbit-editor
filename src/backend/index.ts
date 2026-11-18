@@ -5,6 +5,7 @@ import {
   ByokTestResult,
   CreatedProject,
   FileTreeNode,
+  FolderPdfResult,
   FsChangeEvent,
   GitBranch,
   GitCommit,
@@ -486,6 +487,23 @@ export const backend = {
       root: rootPath,
       relPath,
       content,
+      title,
+      author,
+    });
+  },
+
+  async exportFolderPdf(
+    rootPath: string,
+    relFolder: string,
+    title: string,
+    author: string,
+  ): Promise<FolderPdfResult> {
+    if (!isTauriEnvironment()) {
+      throw new Error("PDF export requires the desktop app");
+    }
+    return tauriInvoke<FolderPdfResult>("export_folder_pdf", {
+      root: rootPath,
+      relFolder,
       title,
       author,
     });
