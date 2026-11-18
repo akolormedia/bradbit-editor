@@ -6,6 +6,28 @@
   "author": "Bradbit",
   "license": "MIT",
   "minimumBradbit": "0.1.0-alpha.2",
+  "contributes": {
+    "symbolSources": [
+      {
+        "id": "screenplay.characters",
+        "language": "fountain",
+        "kind": "character",
+        "include": ["bible/characters/**/*.md"],
+        "name": "frontmatter.name",
+        "aliases": ["frontmatter.aliases"],
+        "fallback": "heading"
+      },
+      {
+        "id": "screenplay.locations",
+        "language": "fountain",
+        "kind": "location",
+        "include": ["bible/locations/**/*.md"],
+        "name": "frontmatter.name",
+        "aliases": ["frontmatter.aliases"],
+        "fallback": "heading"
+      }
+    ]
+  },
   "contents": [
     "AGENTS.md",
     ".bradbit/",

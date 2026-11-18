@@ -28,6 +28,8 @@ pub struct AppSettings {
     pub font_size: u32,
     pub word_wrap: bool,
     pub line_numbers: bool,
+    #[serde(default = "default_true")]
+    pub fountain_autocomplete: bool,
     pub show_config_files: bool,
     #[serde(default)]
     pub show_developer_options: bool,
@@ -53,6 +55,10 @@ fn default_color_theme() -> String {
     "bradbit".to_string()
 }
 
+fn default_true() -> bool {
+    true
+}
+
 impl Default for AppSettings {
     fn default() -> Self {
         Self {
@@ -62,6 +68,7 @@ impl Default for AppSettings {
             font_size: 15,
             word_wrap: true,
             line_numbers: false,
+            fountain_autocomplete: true,
             show_config_files: false,
             show_developer_options: false,
             git_author_name: String::new(),
@@ -177,6 +184,7 @@ mod tests {
             font_size: 18,
             word_wrap: false,
             line_numbers: true,
+            fountain_autocomplete: false,
             show_config_files: true,
             show_developer_options: true,
             git_author_name: "Ada".to_string(),

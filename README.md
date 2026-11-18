@@ -63,6 +63,17 @@ Three kits ship with the app. Each one is a plain folder with agents, commands, 
 
 Kit instructions are in English; the agent replies and writes in the language configured in the app. See the [feature guide](docs/FEATURES.md) for the full feature inventory.
 
+## Screenwriting
+
+- **Fountain commands:** the screenwriting toolbar opens the right completion list at the cursor instead of rewriting the line:
+  - **Scene** opens `INT.`, `EXT.`, `INT./EXT.`, `I/E.` and `EST.`; after choosing one, Bradbit opens the location list automatically.
+  - **Character**, **Parenthetical**, **Transition** and **Section** open their own lists.
+  - **Action**, **Dialogue** and **Note** position the cursor or insert their template.
+- Shortcuts: **⌘1** Scene, **⌘2** Action, **⌘3** Character, **⌘4** Dialogue, **⌘5** Parenthetical, **⌘6** Transition, **⌘7** Section, **⌘8** Note.
+- Autocomplete never opens by itself inside dialogue. `Ctrl+Space` forces it, `Enter` or `Tab` accepts, `Esc` closes.
+- **Symbols are declarative:** characters and locations come from the project's optional `bradbit-kit.json` (`contributes.symbolSources`). The editor core has no hardcoded `bible/` paths. Projects without a manifest still complete characters and locations already used in the script.
+- The **Fountain suggestions** switch in Settings → Editor can turn autocomplete off.
+
 ## Import and export
 
 - **Import a Word manuscript:** with a folder open, choose **File → Import → DOCX…**. It creates a single `manuscript/imported.md` (or `imported-2.md` if needed) and shows what will be kept and what will be lost before writing. Headings, paragraphs, bold and italic are preserved; images, tables, comments, tracked changes and advanced Word styles are not.

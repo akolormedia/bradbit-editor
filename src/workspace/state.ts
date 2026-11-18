@@ -7,6 +7,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   fontSize: 15,
   wordWrap: true,
   lineNumbers: false,
+  fountainAutocomplete: true,
   showConfigFiles: false,
   showDeveloperOptions: false,
   gitAuthorName: "",
