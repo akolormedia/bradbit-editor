@@ -63,6 +63,13 @@ Three kits ship with the app. Each one is a plain folder with agents, commands, 
 
 Kit instructions are in English; the agent replies and writes in the language configured in the app. See the [feature guide](docs/FEATURES.md) for the full feature inventory.
 
+## Screenwriting
+
+- **Fountain autocomplete:** while writing a `.fountain` script, Bradbit suggests **characters and locations** already used in the script plus the project bible (`bible/characters/`, `bible/locations/`, or the Spanish `biblia/personajes/` and `biblia/lugares/`). It also completes scene templates, times of day, transitions and parentheticals.
+- Suggestions never open inside dialogue. `Ctrl+Space` forces the popup; `Enter` or `Tab` accepts; `Esc` closes.
+- **Screenplay toolbar:** Scene, Action, Character, Dialogue, Parenthetical, Transition, Section and Note buttons; `Tab` / `Shift+Tab` cycles elements on the current line.
+- The **Fountain suggestions** toggle in Settings → Editor turns autocomplete off.
+
 ## Import and export
 
 - **Import a Word manuscript:** with a folder open, choose **File → Import → DOCX…**. It creates a single `manuscript/imported.md` (or `imported-2.md` if needed) and shows what will be kept and what will be lost before writing. Headings, paragraphs, bold and italic are preserved; images, tables, comments, tracked changes and advanced Word styles are not.

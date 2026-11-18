@@ -91,6 +91,13 @@ task-by-task feature inventory; the README gives the short version.
   - **Export PDF (`⌘E`)** from the document header or the *File* menu. It produces a deterministic screenplay-formatted PDF (US Letter, Courier 12pt, 55 lines per page, `(MORE)` and `(CONT'D)` rules, and page numbering).
   - The PDF is saved in the project's `exports/` folder, keeping the script subfolder (`exports/guion/acto-1.pdf`), and opens automatically in the system viewer. It works offline.
   - **Paginated screenplay preview (`T-2.5.7`):** the Preview / Edit button renders the script as numbered paper pages (US Letter, Courier, scene headings, centered cues, dialogue and transitions) without opening the PDF.
+  - **Fountain autocomplete and screenplay toolbar (`T-3.8.6`):**
+    - Contextual suggestions for characters and locations used in the script plus `bible/characters/`, `bible/locations/`, `biblia/personajes/` and `biblia/lugares/`.
+    - Scene templates, times of day, transitions and parentheticals.
+    - Never opens inside dialogue. `Ctrl+Space` forces the popup, `Enter`/`Tab` accepts and `Esc` closes.
+    - Screenplay toolbar with Scene, Action, Character, Dialogue, Parenthetical, Transition, Section and Note.
+    - `Tab` / `Shift+Tab` cycles elements on the current line without breaking existing dialogue.
+    - Optional **Fountain suggestions** switch in Settings → Editor.
 - **Import and export (`T-3.8.x`):**
   - **Import DOCX** into one Markdown manuscript and **import Final Draft (`.fdx`)** into Fountain, both with a rendered preview and loss warnings.
   - **Export the active Markdown file to DOCX** with the A4 manuscript preset (Times New Roman 12 pt, double spacing, title page and page numbers).

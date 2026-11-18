@@ -27,12 +27,24 @@ import {
 } from "@codemirror/language";
 import { tags } from "@lezer/highlight";
 import { AppSettings } from "../types";
-import { isMarkdownPath } from "../workspace/state";
+import { isFountainPath, isMarkdownPath } from "../workspace/state";
 import {
   classifyFountainLine,
   createFountainState,
   fountainLineClass,
 } from "./fountain";
+import {
+  applyFountainElement as applyFountainLineElement,
+  cycleFountainElement as cycleFountainLineElement,
+  FountainElement,
+  fountainElementAt,
+  inferFountainElement,
+} from "./fountainEditing";
+import { fountainCompletionExtension } from "./fountainCompletion";
+import {
+  EMPTY_FOUNTAIN_SYMBOLS,
+  FountainSymbols,
+} from "./fountainSymbols";
 import { computeWrapEdit } from "./markdownFormat";
 
 /**
@@ -207,6 +219,7 @@ export interface EditorCallbacks {
   onContentChange: (path: string, content: string) => void;
   onCursorChange: (path: string, line: number, col: number) => void;
   onSaveShortcut: () => void;
+  getFountainBibleSymbols?: () => FountainSymbols;
 }
 
 export class BradbitCodeMirror {
@@ -218,6 +231,7 @@ export class BradbitCodeMirror {
   private lineNumbersCompartment = new Compartment();
   private appearanceCompartment = new Compartment();
   private languageCompartment = new Compartment();
+  private completionCompartment = new Compartment();
 
   constructor(
     private parent: HTMLElement,
@@ -269,6 +283,9 @@ export class BradbitCodeMirror {
 
   public applySettings(settings: AppSettings): void {
     if (!this.view) return;
+    const fountain = Boolean(
+      this.currentPath && isFountainPath(this.currentPath),
+    );
     this.view.dispatch({
       effects: [
         this.wrapCompartment.reconfigure(settings.wordWrap ? EditorView.lineWrapping : []),
@@ -276,6 +293,16 @@ export class BradbitCodeMirror {
           settings.lineNumbers ? [cmLineNumbers(), highlightActiveLineGutter()] : [],
         ),
         this.appearanceCompartment.reconfigure(buildAppearanceExtension(settings)),
+        this.completionCompartment.reconfigure(
+          fountain
+            ? fountainCompletionExtension(
+                () =>
+                  this.callbacks.getFountainBibleSymbols?.() ??
+                  EMPTY_FOUNTAIN_SYMBOLS,
+                settings.fountainAutocomplete,
+              )
+            : [],
+        ),
       ],
     });
   }
@@ -317,6 +344,74 @@ export class BradbitCodeMirror {
     this.applyWrap("*");
   }
 
+  public applyFountainElement(element: FountainElement): void {
+    if (!this.view || !this.currentPath || !isFountainPath(this.currentPath)) {
+      return;
+    }
+    const state = this.view.state;
+    const line = state.doc.lineAt(state.selection.main.from);
+    if (
+      element === "dialogue" &&
+      inferFountainElement(line.text) === "character"
+    ) {
+      this.moveToNextFountainLine(line.number, line.to);
+      return;
+    }
+    const edit = applyFountainLineElement(line.text, element);
+    this.view.dispatch({
+      changes: { from: line.from, to: line.to, insert: edit.text },
+      selection: {
+        anchor: line.from + edit.selectionStart,
+        head: line.from + edit.selectionEnd,
+      },
+    });
+    this.view.focus();
+  }
+
+  private cycleFountainElement(direction: 1 | -1): boolean {
+    if (!this.view || !this.currentPath || !isFountainPath(this.currentPath)) {
+      return false;
+    }
+    const state = this.view.state;
+    const selection = state.selection.main;
+    if (selection.from !== selection.to) return false;
+    const line = state.doc.lineAt(selection.from);
+    const current = fountainElementAt(state, line.number);
+    const edit = cycleFountainLineElement(line.text, direction, current);
+    if (edit.moveToNextLine) {
+      this.moveToNextFountainLine(line.number, line.to);
+      return true;
+    }
+    this.view.dispatch({
+      changes: { from: line.from, to: line.to, insert: edit.text },
+      selection: {
+        anchor: line.from + edit.selectionStart,
+        head: line.from + edit.selectionEnd,
+      },
+    });
+    this.view.focus();
+    return true;
+  }
+
+  private moveToNextFountainLine(lineNumber: number, lineEnd: number): void {
+    if (!this.view) return;
+    const state = this.view.state;
+    if (lineNumber < state.doc.lines) {
+      const nextLine = state.doc.line(lineNumber + 1);
+      this.view.dispatch({
+        selection: { anchor: nextLine.from },
+        effects: EditorView.scrollIntoView(nextLine.from, { y: "center" }),
+      });
+    } else {
+      const insert = "\n";
+      this.view.dispatch({
+        changes: { from: lineEnd, insert },
+        selection: { anchor: lineEnd + insert.length },
+      });
+    }
+    this.view.focus();
+  }
+
   private applyWrap(marker: string): void {
     if (!this.view) return;
     const { from, to } = this.view.state.selection.main;
@@ -355,6 +450,7 @@ export class BradbitCodeMirror {
   }
 
   private createState(path: string, content: string, settings: AppSettings): EditorState {
+    const fountain = isFountainPath(path);
     return EditorState.create({
       doc: content,
       extensions: [
@@ -375,6 +471,16 @@ export class BradbitCodeMirror {
           settings.lineNumbers ? [cmLineNumbers(), highlightActiveLineGutter()] : [],
         ),
         this.appearanceCompartment.of(buildAppearanceExtension(settings)),
+        this.completionCompartment.of(
+          fountain
+            ? fountainCompletionExtension(
+                () =>
+                  this.callbacks.getFountainBibleSymbols?.() ??
+                  EMPTY_FOUNTAIN_SYMBOLS,
+                settings.fountainAutocomplete,
+              )
+            : [],
+        ),
         this.languageCompartment.of(languageExtensionForPath(path)),
         keymap.of([
           {
@@ -402,7 +508,19 @@ export class BradbitCodeMirror {
                 },
               ]
             : []),
-          indentWithTab,
+          ...(fountain
+            ? [
+                {
+                  key: "Tab",
+                  run: () => this.cycleFountainElement(1),
+                },
+                {
+                  key: "Shift-Tab",
+                  run: () => this.cycleFountainElement(-1),
+                },
+                indentWithTab,
+              ]
+            : [indentWithTab]),
           ...searchKeymap,
           ...historyKeymap,
           ...defaultKeymap,

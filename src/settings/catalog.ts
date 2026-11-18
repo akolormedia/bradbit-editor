@@ -118,6 +118,12 @@ export const SETTINGS_ENTRIES: SettingsEntry[] = [
     descriptionKey: "settingsLineNumbersHint",
   },
   {
+    id: "fountainAutocomplete",
+    category: "editor",
+    labelKey: "settingsFountainAutocomplete",
+    descriptionKey: "settingsFountainAutocompleteHint",
+  },
+  {
     id: "showConfigFiles",
     category: "files",
     labelKey: "showConfigFiles",

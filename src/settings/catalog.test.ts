@@ -34,6 +34,7 @@ describe("settings catalog (T-2.4.4)", () => {
       "fontSize",
       "wordWrap",
       "lineNumbers",
+      "fountainAutocomplete",
       "showConfigFiles",
       "terminalCommand",
       "gitAuthorName",

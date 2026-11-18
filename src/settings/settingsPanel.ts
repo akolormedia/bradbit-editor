@@ -441,6 +441,21 @@ export class SettingsPanel {
         ),
       );
     }
+    if (has("fountainAutocomplete")) {
+      this.contentEl.appendChild(
+        this.row(
+          t(this.options.language, "settingsFountainAutocomplete"),
+          t(this.options.language, "settingsFountainAutocompleteHint"),
+          this.switchControl(
+            "settings-fountain-autocomplete",
+            this.options.settings.fountainAutocomplete,
+            (checked) =>
+              this.options.onUpdateSettings({ fountainAutocomplete: checked }),
+            t(this.options.language, "settingsFountainAutocomplete"),
+          ),
+        ),
+      );
+    }
   }
 
   private renderFiles(has: (id: string) => boolean): void {

@@ -98,6 +98,14 @@ import { convertDocxToMarkdown, type DocxImportWarning } from "./import/docx";
 import { folderPdfErrorCopy } from "./export/folderPdfError";
 import { createIcon } from "./ui/icons";
 import { createIconButton } from "./ui/iconButton";
+import { createFountainToolbar } from "./editor/fountainToolbar";
+import {
+  collectFountainSymbols,
+  collectBibleFilePaths,
+  EMPTY_FOUNTAIN_SYMBOLS,
+  FountainSymbols,
+  parseBibleEntry,
+} from "./editor/fountainSymbols";
 import { MenuSyncQueue } from "./workspace/menuSync";
 import { extractOutline, OutlineItem } from "./workspace/outline";
 import {
@@ -321,6 +329,7 @@ class BradbitApp {
   private diffData: { path: string; original: string; isNew: boolean } | null = null;
   private diffLoadingPath: string | null = null;
   private editor: BradbitCodeMirror | null = null;
+  private fountainBibleSymbols: FountainSymbols = EMPTY_FOUNTAIN_SYMBOLS;
 
   constructor(rootEl: HTMLElement) {
     this.rootEl = rootEl;
@@ -418,6 +427,7 @@ class BradbitApp {
     this.stopTerminalSession();
     this.chatPanel = null;
     this.folder = null;
+    this.fountainBibleSymbols = EMPTY_FOUNTAIN_SYMBOLS;
     this.kitCatalog = { agents: [], commands: GENERAL_COMMANDS, skills: [] };
     this.chatModels = [];
     this.tabState = { tabs: [], activeTabPath: null };
@@ -448,6 +458,7 @@ class BradbitApp {
       this.stopTerminalSession();
       this.chatPanel = null;
       this.folder = opened;
+      this.fountainBibleSymbols = EMPTY_FOUNTAIN_SYMBOLS;
       this.kitCatalog = { agents: [], commands: GENERAL_COMMANDS, skills: [] };
       try {
         this.workspaceState = await backend.loadWorkspaceState(opened.rootPath);
@@ -490,6 +501,7 @@ class BradbitApp {
         this.statusNotice = err instanceof Error ? err.message : String(err);
       }
       await this.refreshKitCatalog();
+      await this.refreshFountainBibleSymbols();
       await this.refreshGitStatus();
       await this.refreshGitMeta();
       this.render();
@@ -511,6 +523,45 @@ class BradbitApp {
       tree,
     };
     await this.refreshGitStatus();
+  }
+
+  private async refreshFountainBibleSymbols(): Promise<void> {
+    if (!this.folder || !isTauriEnvironment()) {
+      this.fountainBibleSymbols = EMPTY_FOUNTAIN_SYMBOLS;
+      return;
+    }
+    const root = this.folder.rootPath;
+    const characterPaths = collectBibleFilePaths(this.folder.tree, [
+      "bible/characters",
+      "biblia/personajes",
+    ]).slice(0, 200);
+    const locationPaths = collectBibleFilePaths(this.folder.tree, [
+      "bible/locations",
+      "biblia/lugares",
+    ]).slice(0, 200);
+
+    const readEntries = async (paths: string[]): Promise<string[]> => {
+      const names: string[] = [];
+      for (const path of paths) {
+        try {
+          names.push(...parseBibleEntry(await backend.readTextFile(root, path)));
+        } catch (err) {
+          console.error(`Could not read bible entry ${path}`, err);
+        }
+      }
+      return names;
+    };
+
+    const [characters, locations] = await Promise.all([
+      readEntries(characterPaths),
+      readEntries(locationPaths),
+    ]);
+    if (this.folder?.rootPath !== root) return;
+    this.fountainBibleSymbols = collectFountainSymbols(
+      "",
+      characters,
+      locations,
+    );
   }
 
   private async refreshGitStatus(): Promise<void> {
@@ -2486,6 +2537,14 @@ class BradbitApp {
 
     if (
       event.paths.some(
+        (path) => path.startsWith("bible/") || path.startsWith("biblia/"),
+      )
+    ) {
+      void this.refreshFountainBibleSymbols();
+    }
+
+    if (
+      event.paths.some(
         (path) => path.startsWith(".opencode/") || path.startsWith(".bradbit/"),
       )
     ) {
@@ -3222,6 +3281,7 @@ class BradbitApp {
           onSaveShortcut: () => {
             void this.saveActiveTab();
           },
+          getFountainBibleSymbols: () => this.fountainBibleSymbols,
         });
       }
       if (activeTab.viewMode !== "diff") {
@@ -4283,6 +4343,18 @@ class BradbitApp {
           onToggleDiff: () => void this.toggleDiff(),
           canDiscard,
           onDiscard: () => this.requestDiscard(),
+        }),
+      );
+    }
+
+    if (
+      activeTab &&
+      isFountainPath(activeTab.path) &&
+      activeTab.viewMode === "edit"
+    ) {
+      col.appendChild(
+        createFountainToolbar(lang, (element) => {
+          this.editor?.applyFountainElement(element);
         }),
       );
     }
