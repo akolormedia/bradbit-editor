@@ -92,8 +92,10 @@ task-by-task feature inventory; the README gives the short version.
   - The PDF is saved in the project's `exports/` folder, keeping the script subfolder (`exports/guion/acto-1.pdf`), and opens automatically in the system viewer. It works offline.
   - **Paginated screenplay preview (`T-2.5.7`):** the Preview / Edit button renders the script as numbered paper pages (US Letter, Courier, scene headings, centered cues, dialogue and transitions) without opening the PDF.
   - **Fountain commands and autocomplete (`T-3.8.6`):**
-    - **⌘1–⌘8** open Scene, Action, Character, Dialogue, Parenthetical, Transition, Section and Note commands.
-    - Scene opens `INT./EXT./INT./EXT./I/E./EST.`; choosing one opens the location list automatically. The other elements open their own lists.
+    - **⌘1–⌘6** open Scene, Character, Parenthetical, Transition, Section and Note commands.
+    - Scene opens `INT.`, `EXT.`, `INT./EXT.`, `EXT./INT.`, `I/E.` and `EST.`; choosing one opens the location list automatically. The other elements open their own lists.
+    - Moments and parentheticals are localized to the app language.
+    - Scene headings receive automatic numbers in the left margin.
     - `Ctrl+Space` forces completion, `Enter`/`Tab` accepts, `Esc` closes. Automatic suggestions never open inside dialogue.
     - Symbol sources are declared by the template or extension in `contributes.symbolSources`; the editor does not hardcode `bible/` paths.
     - Projects without a manifest still complete characters and locations already present in the script.

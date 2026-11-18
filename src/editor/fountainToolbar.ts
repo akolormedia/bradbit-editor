@@ -22,7 +22,13 @@ export function createFountainToolbar(
     button.className = "fountain-toolbar-btn";
     button.dataset.command = command.id;
     button.title = `${label} (${command.shortcut})`;
-    button.textContent = label;
+    const text = document.createElement("span");
+    text.className = "fountain-toolbar-text";
+    text.textContent = label;
+    const shortcut = document.createElement("span");
+    shortcut.className = "fountain-toolbar-shortcut";
+    shortcut.textContent = command.shortcut;
+    button.append(text, shortcut);
     button.onclick = () => onCommand(command.id);
     toolbar.appendChild(button);
   }

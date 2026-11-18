@@ -14,6 +14,7 @@ import {
   StateField,
 } from "@codemirror/state";
 import { EditorView, keymap } from "@codemirror/view";
+import type { Language } from "../types";
 import { classifyFountainLine, createFountainState } from "./fountain";
 import { FountainCommand } from "./fountainCommands";
 import {
@@ -22,7 +23,7 @@ import {
 } from "./fountainSymbols";
 
 const SCENE_PREFIX =
-  /^(?:INT\.\/EXT\.|INT\/EXT\.|EXT\/INT\.|I\/E\.|INT\.|EXT\.|EST\.)\s*/i;
+  /^(?:EXT\.\/INT\.|INT\.\/EXT\.|INT\/EXT\.|EXT\/INT\.|I\/E\.|INT\.|EXT\.|EST\.)\s*/i;
 const FORCED_SCENE = /^\.\s*/;
 const TRANSITION_STARTS = [
   "CUT TO:",
@@ -31,24 +32,38 @@ const TRANSITION_STARTS = [
   "MATCH CUT TO:",
   "FADE OUT.",
 ];
-const SCENE_TEMPLATES = ["INT. ", "EXT. ", "INT./EXT. ", "I/E. ", "EST. "];
-const MOMENTS = [
-  "DAY",
-  "NIGHT",
-  "DAWN",
-  "DUSK",
-  "CONTINUOUS",
-  "LATER",
-  "MOMENTS LATER",
+const SCENE_TEMPLATES = [
+  "INT. ",
+  "EXT. ",
+  "INT./EXT. ",
+  "EXT./INT. ",
+  "I/E. ",
+  "EST. ",
 ];
-const PARENTHETICALS = [
-  "(beat)",
-  "(V.O.)",
-  "(O.S.)",
-  "(CONT'D)",
-  "(whispering)",
-  "(pause)",
-];
+const MOMENTS: Record<Language, string[]> = {
+  es: [
+    "DÍA",
+    "NOCHE",
+    "AMANECER",
+    "ATARDECER",
+    "CONTINUO",
+    "DESPUÉS",
+    "MOMENTOS DESPUÉS",
+  ],
+  en: [
+    "DAY",
+    "NIGHT",
+    "DAWN",
+    "DUSK",
+    "CONTINUOUS",
+    "LATER",
+    "MOMENTS LATER",
+  ],
+};
+const PARENTHETICALS: Record<Language, string[]> = {
+  es: ["(pausa)", "(V.O.)", "(O.S.)", "(CONT'D)", "(susurrando)", "(ríe)"],
+  en: ["(beat)", "(V.O.)", "(O.S.)", "(CONT'D)", "(whispering)", "(laughs)"],
+};
 const SECTIONS = ["#", "##", "###"];
 
 const setFountainCompletionIntentEffect =
@@ -122,7 +137,7 @@ function scenePrefixPrefix(text: string): boolean {
   if (upper.length < 3 && !upper.includes(".") && !upper.includes("/")) {
     return false;
   }
-  return ["INT", "EXT", "EST", "I/E", "INT./EXT.", "EXT/INT."].some(
+  return ["INT", "EXT", "EST", "I/E", "INT./EXT.", "EXT./INT."].some(
     (prefix) => prefix.startsWith(upper) || upper.startsWith(prefix),
   );
 }
@@ -278,8 +293,8 @@ function sceneTemplateOptions(): Completion[] {
   }));
 }
 
-function momentOptions(): Completion[] {
-  return MOMENTS.map((moment) => ({ label: moment, apply: moment }));
+function momentOptions(language: Language): Completion[] {
+  return MOMENTS[language].map((moment) => ({ label: moment, apply: moment }));
 }
 
 function transitionOptions(): Completion[] {
@@ -291,8 +306,8 @@ function transitionOptions(): Completion[] {
   }));
 }
 
-function parentheticalOptions(): Completion[] {
-  return PARENTHETICALS.map((parenthetical) => ({
+function parentheticalOptions(language: Language): Completion[] {
+  return PARENTHETICALS[language].map((parenthetical) => ({
     label: parenthetical,
     apply: (view, _completion, from, to) => {
       replaceLine(view, from, to, parenthetical, true);
@@ -317,6 +332,7 @@ function sectionOptions(): Completion[] {
 function optionsFor(
   detected: DetectedFountainCompletion,
   symbols: FountainSymbols,
+  language: Language,
 ): Completion[] {
   switch (detected.kind) {
     case "scene-template":
@@ -324,13 +340,13 @@ function optionsFor(
     case "location":
       return locationOptions(symbols);
     case "moment":
-      return momentOptions();
+      return momentOptions(language);
     case "character":
       return characterOptions(symbols);
     case "transition":
       return transitionOptions();
     case "parenthetical":
-      return parentheticalOptions();
+      return parentheticalOptions(language);
     case "section":
       return sectionOptions();
     case "mixed":
@@ -345,6 +361,7 @@ function optionsFor(
 
 export function fountainCompletionSource(
   getSymbols: () => FountainSymbols,
+  language: Language,
 ) {
   return (context: CompletionContext): CompletionResult | null => {
     const forced =
@@ -371,7 +388,7 @@ export function fountainCompletionSource(
         (name) => name.toUpperCase() !== typed,
       );
     }
-    const options = optionsFor(detected, symbols);
+    const options = optionsFor(detected, symbols, language);
     if (options.length === 0) return null;
     return {
       from: detected.from,
@@ -387,13 +404,14 @@ export function fountainCompletionSource(
  */
 export function fountainCompletionExtension(
   getSymbols: () => FountainSymbols,
+  language: Language,
   enabled: boolean,
 ): Extension {
   if (!enabled) return [];
   return [
     fountainCompletionIntent,
     autocompletion({
-      override: [fountainCompletionSource(getSymbols)],
+      override: [fountainCompletionSource(getSymbols, language)],
       activateOnTyping: true,
     }),
     Prec.high(keymap.of([{ key: "Tab", run: acceptCompletion }])),

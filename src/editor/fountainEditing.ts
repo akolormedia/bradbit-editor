@@ -4,12 +4,12 @@ import {
   createFountainState,
   FountainLineType,
 } from "./fountain";
-import { FountainCommand } from "./fountainCommands";
+import { FountainElement } from "./fountainCommands";
 
 const SCENE_PREFIX =
   /^(?:INT\.\/EXT\.|INT\/EXT\.|EXT\/INT\.|I\/E\.|INT\.|EXT\.|EST\.)\s*/i;
 
-export function inferFountainElement(line: string): FountainCommand | null {
+export function inferFountainElement(line: string): FountainElement | null {
   const text = line.trim();
   if (!text) return null;
   if (/^#/.test(text)) return "section";
@@ -30,7 +30,7 @@ export function inferFountainElement(line: string): FountainCommand | null {
 export function fountainElementAt(
   state: EditorState,
   lineNumber: number,
-): FountainCommand | null {
+): FountainElement | null {
   let fountainState = createFountainState();
   let previousType: FountainLineType = "blank";
   for (let index = 1; index < lineNumber; index += 1) {

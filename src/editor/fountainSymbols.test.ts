@@ -17,10 +17,16 @@ describe("Fountain document symbols", () => {
       "",
       "LUIS",
       "Adiós.",
+      "",
+      "EXT./INT. CASA / ENTRADA - DÍA",
     ].join("\n");
 
     expect(extractFountainCharacters(source)).toEqual(["ANA", "LUIS"]);
-    expect(extractFountainLocations(source)).toEqual(["CASA", "CALLE"]);
+    expect(extractFountainLocations(source)).toEqual([
+      "CASA",
+      "CALLE",
+      "CASA / ENTRADA",
+    ]);
   });
 
   it("merges contributed bible symbols without duplicates", () => {

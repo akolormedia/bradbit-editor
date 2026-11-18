@@ -10,6 +10,7 @@ import {
 } from "./fountainCompletion";
 import { FountainCommand } from "./fountainCommands";
 import { FountainSymbols } from "./fountainSymbols";
+import { Language } from "../types";
 
 const symbols: FountainSymbols = {
   characters: ["ANA", "LUIS"],
@@ -36,15 +37,24 @@ function sourceAt(
   doc: string,
   explicit = false,
   forced: FountainCommand | null = null,
+  language: Language = "es",
 ) {
   const editorState = state(doc, forced);
-  return fountainCompletionSource(() => symbols)(
-    new CompletionContext(editorState, editorState.doc.length, explicit),
-  );
+  return fountainCompletionSource(
+    () => symbols,
+    language,
+  )(new CompletionContext(editorState, editorState.doc.length, explicit));
 }
 
-function labels(doc: string, explicit = false, forced: FountainCommand | null = null) {
-  return sourceAt(doc, explicit, forced)?.options.map((item) => item.label) ?? [];
+function labels(
+  doc: string,
+  explicit = false,
+  forced: FountainCommand | null = null,
+  language: Language = "es",
+) {
+  return sourceAt(doc, explicit, forced, language)?.options.map(
+    (item) => item.label,
+  ) ?? [];
 }
 
 describe("Fountain autocomplete", () => {
@@ -79,7 +89,8 @@ describe("Fountain autocomplete", () => {
         false,
       )?.kind,
     ).toBe("moment");
-    expect(labels("INT. CASA - ")).toContain("DAY");
+    expect(labels("INT. CASA - ")).toContain("DÍA");
+    expect(labels("INT. CASA - ", false, null, "en")).toContain("DAY");
   });
 
   it("never opens automatic completion inside dialogue", () => {
@@ -108,23 +119,29 @@ describe("Fountain autocomplete", () => {
       "INT.",
       "EXT.",
       "INT./EXT.",
+      "EXT./INT.",
       "I/E.",
       "EST.",
     ]);
 
     expect(labels("AN", false, "character")).toContain("ANA");
     expect(labels("", false, "section")).toEqual(["#", "##", "###"]);
-    expect(sourceAt("Hola.", false, "action")).toBeNull();
-    expect(sourceAt("Hola.", false, "dialogue")).toBeNull();
+  });
+
+  it("localizes moments and parentheticals", () => {
+    expect(labels("ANA\n(")).toContain("(pausa)");
+    expect(labels("ANA\n(", false, null, "en")).toContain("(beat)");
+    expect(labels("INT. CASA - ")).toContain("ATARDECER");
+    expect(labels("INT. CASA - ", false, null, "en")).toContain("DUSK");
   });
 
   it("offers parentheticals, transitions and explicit mixed completion", () => {
-    expect(labels("ANA\n(")).toContain("(beat)");
+    expect(labels("ANA\n(")).toContain("(pausa)");
     expect(labels("\nCUT")).toContain("CUT TO:");
     expect(labels("\n", true).length).toBeGreaterThan(3);
   });
 
   it("can be disabled without installing the extension", () => {
-    expect(fountainCompletionExtension(() => symbols, false)).toEqual([]);
+    expect(fountainCompletionExtension(() => symbols, "es", false)).toEqual([]);
   });
 });

@@ -66,10 +66,12 @@ Kit instructions are in English; the agent replies and writes in the language co
 ## Screenwriting
 
 - **Fountain commands:** the screenwriting toolbar opens the right completion list at the cursor instead of rewriting the line:
-  - **Scene** opens `INT.`, `EXT.`, `INT./EXT.`, `I/E.` and `EST.`; after choosing one, Bradbit opens the location list automatically.
+  - **Scene** opens `INT.`, `EXT.`, `INT./EXT.`, `EXT./INT.`, `I/E.` and `EST.`; after choosing one, Bradbit opens the location list automatically.
   - **Character**, **Parenthetical**, **Transition** and **Section** open their own lists.
-  - **Action**, **Dialogue** and **Note** position the cursor or insert their template.
-- Shortcuts: **⌘1** Scene, **⌘2** Action, **⌘3** Character, **⌘4** Dialogue, **⌘5** Parenthetical, **⌘6** Transition, **⌘7** Section, **⌘8** Note.
+  - **Note** inserts `[[]]` with the caret inside.
+  - Times of day and parentheticals are shown in the app language.
+- Shortcuts: **⌘1** Scene, **⌘2** Character, **⌘3** Parenthetical, **⌘4** Transition, **⌘5** Section, **⌘6** Note.
+- Scene headings are numbered automatically in the left margin.
 - Autocomplete never opens by itself inside dialogue. `Ctrl+Space` forces it, `Enter` or `Tab` accepts, `Esc` closes.
 - **Symbols are declarative:** characters and locations come from the project's optional `bradbit-kit.json` (`contributes.symbolSources`). The editor core has no hardcoded `bible/` paths. Projects without a manifest still complete characters and locations already used in the script.
 - The **Fountain suggestions** switch in Settings → Editor can turn autocomplete off.

@@ -3,6 +3,7 @@ import {
   Compartment,
   EditorState,
   Extension,
+  RangeSet,
   RangeSetBuilder,
 } from "@codemirror/state";
 import {
@@ -10,6 +11,8 @@ import {
   DecorationSet,
   drawSelection,
   EditorView,
+  gutter,
+  GutterMarker,
   highlightActiveLine,
   highlightActiveLineGutter,
   keymap,
@@ -33,6 +36,7 @@ import {
   classifyFountainLine,
   createFountainState,
   fountainLineClass,
+  fountainSceneNumbers,
 } from "./fountain";
 import {
   fountainCompletionExtension,
@@ -42,9 +46,6 @@ import {
   FOUNTAIN_COMMANDS,
   FountainCommand,
 } from "./fountainCommands";
-import {
-  fountainElementAt,
-} from "./fountainEditing";
 import {
   EMPTY_FOUNTAIN_SYMBOLS,
   FountainSymbols,
@@ -94,6 +95,39 @@ const fountainHighlighting = ViewPlugin.fromClass(
     decorations: (value) => value.decorations,
   },
 );
+
+class SceneNumberMarker extends GutterMarker {
+  constructor(readonly number: number) {
+    super();
+  }
+
+  eq(other: GutterMarker): boolean {
+    return other instanceof SceneNumberMarker && other.number === this.number;
+  }
+
+  toDOM(): Node {
+    const span = document.createElement("span");
+    span.className = "cm-scene-number";
+    span.textContent = String(this.number);
+    return span;
+  }
+}
+
+function buildSceneNumberMarkers(view: EditorView): RangeSet<GutterMarker> {
+  const builder = new RangeSetBuilder<GutterMarker>();
+  for (const scene of fountainSceneNumbers(view.state.doc.toString())) {
+    const line = view.state.doc.line(scene.line);
+    builder.add(line.from, line.from, new SceneNumberMarker(scene.number));
+  }
+  return builder.finish();
+}
+
+const fountainSceneGutter = gutter({
+  class: "cm-scene-gutter",
+  markers: buildSceneNumberMarkers,
+  initialSpacer: () => new SceneNumberMarker(999),
+  renderEmptyElements: false,
+});
 
 const writerHighlightStyle = HighlightStyle.define([
   { tag: tags.heading, fontWeight: "700", color: "var(--cm-heading)" },
@@ -162,6 +196,8 @@ function buildAppearanceExtension(settings: AppSettings): Extension {
       maxWidth: "820px",
       margin: "0",
       padding: "24px 32px 96px 18px",
+      minHeight: "100%",
+      boxSizing: "border-box",
       caretColor: "var(--accent)",
     },
     ".cm-focused": {
@@ -303,6 +339,7 @@ export class BradbitCodeMirror {
                 () =>
                   this.callbacks.getFountainBibleSymbols?.() ??
                   EMPTY_FOUNTAIN_SYMBOLS,
+                settings.language,
                 settings.fountainAutocomplete,
               )
             : [],
@@ -354,28 +391,9 @@ export class BradbitCodeMirror {
     }
     const state = this.view.state;
     const line = state.doc.lineAt(state.selection.main.from);
-    const current = fountainElementAt(state, line.number);
 
     if (command === "note") {
       this.insertFountainNote();
-      return;
-    }
-    if (command === "action") {
-      if (line.text.trim() === "" || current === "action") {
-        this.focusLine(line.from);
-      } else {
-        this.insertLineAfter(line.to);
-      }
-      return;
-    }
-    if (command === "dialogue") {
-      if (current === "character") {
-        this.moveToNextFountainLine(line.number, line.to);
-      } else if (line.text.trim() === "") {
-        this.focusLine(line.from);
-      } else {
-        this.insertLineAfter(line.to);
-      }
       return;
     }
 
@@ -441,35 +459,9 @@ export class BradbitCodeMirror {
     this.view.focus();
   }
 
-  private insertLineAfter(lineEnd: number): void {
-    if (!this.view) return;
-    const insert = "\n";
-    this.view.dispatch({
-      changes: { from: lineEnd, insert },
-      selection: { anchor: lineEnd + insert.length },
-    });
-    this.view.focus();
-  }
-
   private focusLine(position: number): void {
     if (!this.view) return;
     this.view.dispatch({ selection: { anchor: position } });
-    this.view.focus();
-  }
-
-  private moveToNextFountainLine(lineNumber: number, lineEnd: number): void {
-    if (!this.view) return;
-    const state = this.view.state;
-    if (lineNumber < state.doc.lines) {
-      const nextLine = state.doc.line(lineNumber + 1);
-      this.view.dispatch({
-        selection: { anchor: nextLine.from },
-        effects: EditorView.scrollIntoView(nextLine.from, { y: "center" }),
-      });
-    } else {
-      this.insertLineAfter(lineEnd);
-      return;
-    }
     this.view.focus();
   }
 
@@ -528,6 +520,7 @@ export class BradbitCodeMirror {
           autocapitalize: "sentences",
         }),
         this.wrapCompartment.of(settings.wordWrap ? EditorView.lineWrapping : []),
+        ...(fountain ? [fountainSceneGutter] : []),
         this.lineNumbersCompartment.of(
           settings.lineNumbers ? [cmLineNumbers(), highlightActiveLineGutter()] : [],
         ),
@@ -538,6 +531,7 @@ export class BradbitCodeMirror {
                 () =>
                   this.callbacks.getFountainBibleSymbols?.() ??
                   EMPTY_FOUNTAIN_SYMBOLS,
+                settings.language,
                 settings.fountainAutocomplete,
               )
             : [],

@@ -17,7 +17,8 @@ export function createFountainState(): FountainState {
   return { afterCue: false, previousBlank: true };
 }
 
-const SCENE_RE = /^(INT\.|EXT\.|INT\.\/EXT\.|INT\/EXT\.|I\/E\.|EST\.|EXT\/INT\.)/i;
+const SCENE_RE =
+  /^(EXT\.\/INT\.|INT\.\/EXT\.|INT\/EXT\.|EXT\/INT\.|I\/E\.|INT\.|EXT\.|EST\.)/i;
 const TRANSITION_RE =
   /^(FADE (IN|OUT)|FADE TO BLACK|CUT TO|SMASH CUT TO|DISSOLVE TO|MATCH CUT TO)/i;
 
@@ -83,4 +84,25 @@ export function estimateFountainPages(source: string): number {
   if (source.trim().length === 0) return 0;
   const lineCount = source.split(/\r?\n/).length;
   return Math.max(1, Math.ceil(lineCount / 55));
+}
+
+export interface FountainSceneNumber {
+  /** 1-based document line. */
+  line: number;
+  /** 1-based scene number. */
+  number: number;
+}
+
+/** Automatic scene numbers, derived from scene headings. */
+export function fountainSceneNumbers(source: string): FountainSceneNumber[] {
+  const scenes: FountainSceneNumber[] = [];
+  let state = createFountainState();
+  source.split(/\r?\n/).forEach((line, index) => {
+    const classified = classifyFountainLine(line, state);
+    state = classified.state;
+    if (classified.type === "scene") {
+      scenes.push({ line: index + 1, number: scenes.length + 1 });
+    }
+  });
+  return scenes;
 }

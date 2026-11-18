@@ -1,10 +1,19 @@
 import type { TranslationKey } from "../i18n";
 
-export type FountainCommand =
+export type FountainElement =
   | "scene"
   | "action"
   | "character"
   | "dialogue"
+  | "parenthetical"
+  | "transition"
+  | "section"
+  | "note";
+
+/** Commands exposed in the toolbar; Action and Dialogue add no new structure. */
+export type FountainCommand =
+  | "scene"
+  | "character"
   | "parenthetical"
   | "transition"
   | "section"
@@ -25,45 +34,33 @@ export const FOUNTAIN_COMMANDS: FountainCommandDefinition[] = [
     key: "Mod-1",
   },
   {
-    id: "action",
-    labelKey: "fountainElementAction",
+    id: "character",
+    labelKey: "fountainElementCharacter",
     shortcut: "⌘2",
     key: "Mod-2",
   },
   {
-    id: "character",
-    labelKey: "fountainElementCharacter",
+    id: "parenthetical",
+    labelKey: "fountainElementParenthetical",
     shortcut: "⌘3",
     key: "Mod-3",
   },
   {
-    id: "dialogue",
-    labelKey: "fountainElementDialogue",
+    id: "transition",
+    labelKey: "fountainElementTransition",
     shortcut: "⌘4",
     key: "Mod-4",
   },
   {
-    id: "parenthetical",
-    labelKey: "fountainElementParenthetical",
+    id: "section",
+    labelKey: "fountainElementSection",
     shortcut: "⌘5",
     key: "Mod-5",
   },
   {
-    id: "transition",
-    labelKey: "fountainElementTransition",
-    shortcut: "⌘6",
-    key: "Mod-6",
-  },
-  {
-    id: "section",
-    labelKey: "fountainElementSection",
-    shortcut: "⌘7",
-    key: "Mod-7",
-  },
-  {
     id: "note",
     labelKey: "fountainElementNote",
-    shortcut: "⌘8",
-    key: "Mod-8",
+    shortcut: "⌘6",
+    key: "Mod-6",
   },
 ];

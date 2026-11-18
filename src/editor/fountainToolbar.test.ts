@@ -19,9 +19,7 @@ describe("Fountain toolbar", () => {
       ),
     ).toEqual([
       "scene",
-      "action",
       "character",
-      "dialogue",
       "parenthetical",
       "transition",
       "section",
@@ -30,12 +28,16 @@ describe("Fountain toolbar", () => {
     expect(toolbar.querySelector('[data-command="scene"]')?.getAttribute("title"))
       .toContain("⌘1");
     expect(toolbar.querySelector('[data-command="note"]')?.getAttribute("title"))
-      .toContain("⌘8");
+      .toContain("⌘6");
+    expect(
+      toolbar.querySelector('[data-command="scene"] .fountain-toolbar-shortcut')
+        ?.textContent,
+    ).toBe("⌘1");
 
     toolbar
       .querySelector<HTMLButtonElement>('[data-command="character"]')!
       .click();
     expect(onCommand).toHaveBeenCalledWith("character");
-    expect(toolbar.title).toContain("⌘1–⌘8");
+    expect(toolbar.title).toContain("⌘1–⌘6");
   });
 });

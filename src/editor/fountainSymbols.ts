@@ -11,7 +11,7 @@ export const EMPTY_FOUNTAIN_SYMBOLS: FountainSymbols = {
 };
 
 const SCENE_PREFIX =
-  /^(?:INT\.\/EXT\.|INT\/EXT\.|EXT\/INT\.|I\/E\.|INT\.|EXT\.|EST\.)\s*/i;
+  /^(?:EXT\.\/INT\.|INT\.\/EXT\.|INT\/EXT\.|EXT\/INT\.|I\/E\.|INT\.|EXT\.|EST\.)\s*/i;
 
 function uniqueNames(values: string[]): string[] {
   const seen = new Set<string>();
