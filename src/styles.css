@@ -3056,9 +3056,17 @@ textarea.text-input {
   user-select: none;
 }
 
+.cm-scene-gutter .cm-gutterElement {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  line-height: 1;
+}
+
 .cm-scene-number {
   color: var(--cm-heading);
   opacity: 0.9;
+  line-height: 1;
 }
 
 /* Fountain screenplay preview (T-2.5.7) */

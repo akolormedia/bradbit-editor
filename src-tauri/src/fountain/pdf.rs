@@ -29,6 +29,8 @@ const LEADING: f32 = 12.0;
 const ADVANCE: f32 = 7.2;
 /// Scene numbers sit in the left margin, before the scene heading.
 const SCENE_NUMBER_X: f32 = 72.0;
+/// Optical baseline adjustment so the bold digit aligns with the heading.
+const SCENE_NUMBER_BASELINE_SHIFT: f32 = -2.0;
 /// Conventional 55-line screenplay page (top 1", bottom ~0.83").
 pub const LINES_PER_PAGE: usize = 55;
 
@@ -640,7 +642,14 @@ pub fn write_pdf(layout: &Layout) -> Vec<u8> {
             let y = PAGE_H - TOP_MARGIN - ((index + 1) as f32) * LEADING;
             if let Some(scene_number) = line.scene_number {
                 content.set_font(Name(b"F3"), 12.0);
-                content.set_text_matrix([1.0, 0.0, 0.0, 1.0, SCENE_NUMBER_X, y]);
+                content.set_text_matrix([
+                    1.0,
+                    0.0,
+                    0.0,
+                    1.0,
+                    SCENE_NUMBER_X,
+                    y + SCENE_NUMBER_BASELINE_SHIFT,
+                ]);
                 content.show(Str(&winansi(&scene_number.to_string())));
             }
             let font = match line.style {
