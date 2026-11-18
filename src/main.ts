@@ -2655,6 +2655,36 @@ class BradbitApp {
     }
   }
 
+  private async exportActiveMarkdownDocx(): Promise<void> {
+    const active = this.getActiveTab();
+    if (
+      !active ||
+      !this.folder ||
+      !isTauriEnvironment() ||
+      !isMarkdownPath(active.path)
+    ) {
+      return;
+    }
+
+    const title = active.name.replace(/\.(md|mdx|markdown)$/i, "");
+    const author = effectiveGitAuthor(this.settings).name || "Bradbit Writer";
+
+    try {
+      const output = await backend.exportMarkdownDocx(
+        this.folder.rootPath,
+        active.path,
+        active.content,
+        title,
+        author,
+      );
+      this.showStatusNotice(
+        `${t(this.settings.language, "docxExported")}: ${output}`,
+      );
+    } catch (err) {
+      this.showStatusNotice(err instanceof Error ? err.message : String(err));
+    }
+  }
+
   private async importDocx(): Promise<void> {
     const lang = this.settings.language;
     if (!this.folder) {
@@ -2935,6 +2965,9 @@ class BradbitApp {
         break;
       case "file.exportPdf":
         await this.exportActiveFountainPdf();
+        break;
+      case "file.exportDocx":
+        await this.exportActiveMarkdownDocx();
         break;
       case "file.quickOpen":
         this.openQuickOpen();

@@ -67,8 +67,9 @@ Kit instructions are in English; the agent replies and writes in the language co
 
 - **Import a Word manuscript:** with a folder open, choose **File → Import → DOCX…**. It creates a single `manuscript/imported.md` (or `imported-2.md` if needed) and shows what will be kept and what will be lost before writing. Headings, paragraphs, bold and italic are preserved; images, tables, comments, tracked changes and advanced Word styles are not.
 - **Import a Final Draft screenplay:** choose **File → Import → Final Draft (.fdx)…**. It converts the FDX to Fountain in `script/imported.fountain` and previews the result before writing.
+- **Export a Markdown manuscript to DOCX:** choose **File → Export DOCX…**. It uses the standard manuscript preset: A4, 2.5 cm margins, Times New Roman 12 pt, double spacing, title page and page numbers.
 - **Export a screenplay:** Fountain files have **Export PDF** (`⌘E`) with deterministic screenplay formatting.
-- DOCX export and book PDF export are planned in the next tickets; this alpha only imports DOCX.
+- Book PDF export (joining `manuscript/`) is planned in `T-3.8.5`.
 
 ## Documentation
 

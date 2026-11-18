@@ -4712,3 +4712,33 @@ textarea.text-input {
   padding: 28px 30px;
   font-size: 10.5px;
 }
+
+/* Compact import modals */
+.import-docx-dialog {
+  width: min(560px, calc(100vw - 32px));
+  gap: 8px;
+}
+
+.import-docx-dialog .settings-hint,
+.import-docx-summary,
+.import-docx-keep {
+  margin-top: 4px;
+  margin-bottom: 4px;
+}
+
+.import-docx-warnings {
+  margin-bottom: 8px;
+}
+
+.import-docx-rendered.markdown-preview,
+.import-docx-preview {
+  max-height: 230px;
+}
+
+.import-fdx-rendered {
+  max-height: 260px;
+}
+
+.import-docx-dialog .modal-footer {
+  margin-top: 4px;
+}
