@@ -75,6 +75,14 @@ export interface FolderPdfResult {
   outputs: string[];
 }
 
+export interface FolderPdfError {
+  code: "empty" | "mixed" | "invalidPath" | "io";
+  folder?: string;
+  markdown: number;
+  fountain: number;
+  message: string;
+}
+
 export interface RecentProject {
   path: string;
   name: string;

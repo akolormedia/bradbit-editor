@@ -4487,6 +4487,20 @@ textarea.text-input {
   font-size: 12px;
 }
 
+.folder-pdf-error-message {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.55;
+  color: var(--text-primary);
+}
+
+.folder-pdf-error-hint {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--text-secondary);
+}
+
 /* Context menus (T-3.8.1) */
 .context-menu {
   position: fixed;

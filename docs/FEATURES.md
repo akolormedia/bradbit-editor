@@ -94,7 +94,7 @@ task-by-task feature inventory; the README gives the short version.
 - **Import and export (`T-3.8.x`):**
   - **Import DOCX** into one Markdown manuscript and **import Final Draft (`.fdx`)** into Fountain, both with a rendered preview and loss warnings.
   - **Export the active Markdown file to DOCX** with the A4 manuscript preset (Times New Roman 12 pt, double spacing, title page and page numbers).
-  - **Export any folder to PDF** from its context menu: a Markdown folder becomes one A4 book PDF with chapter breaks; a Fountain folder produces one screenplay PDF per script. Mixed folders show a clear message.
+  - **Export any folder to PDF** from its context menu: a Markdown folder becomes one A4 book PDF with rendered Markdown, chapter breaks and page numbers; a Fountain folder produces one screenplay PDF per script. Mixed, empty or invalid folders show an explicit modal with the counts and how to fix it.
 - **Document header and reading preview (`T-1.2.1`):**
   - The header above the editor shows the active file's name and path, with **Copy**, **Preview / Edit** (Markdown and Fountain) and **PDF** (Fountain) actions.
   - Rendered and sanitized Markdown/MDX preview (`⌘⌥P`), with headings, lists, quotes, code, tables and links. The reading view is monochrome so the document reads like a manuscript; links keep an underline and only use the accent color on hover.

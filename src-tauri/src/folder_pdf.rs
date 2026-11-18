@@ -39,6 +39,77 @@ pub struct FolderPdfResult {
     pub outputs: Vec<String>,
 }
 
+#[derive(Debug, Clone, Copy, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub enum FolderPdfErrorCode {
+    Empty,
+    Mixed,
+    InvalidPath,
+    Io,
+}
+
+#[derive(Debug, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct FolderPdfError {
+    pub code: FolderPdfErrorCode,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub folder: Option<String>,
+    pub markdown: usize,
+    pub fountain: usize,
+    pub message: String,
+}
+
+impl FolderPdfError {
+    fn empty(folder: &str) -> Self {
+        Self {
+            code: FolderPdfErrorCode::Empty,
+            folder: Some(folder.to_string()),
+            markdown: 0,
+            fountain: 0,
+            message: format!("No Markdown or Fountain files found in '{}'", folder),
+        }
+    }
+
+    fn mixed(folder: &str, markdown: usize, fountain: usize) -> Self {
+        Self {
+            code: FolderPdfErrorCode::Mixed,
+            folder: Some(folder.to_string()),
+            markdown,
+            fountain,
+            message: format!(
+                "'{}' mixes {} Markdown and {} Fountain files. Choose a folder with a single format.",
+                folder, markdown, fountain
+            ),
+        }
+    }
+
+    fn invalid(message: impl Into<String>) -> Self {
+        Self {
+            code: FolderPdfErrorCode::InvalidPath,
+            folder: None,
+            markdown: 0,
+            fountain: 0,
+            message: message.into(),
+        }
+    }
+
+    fn io(message: impl Into<String>) -> Self {
+        Self {
+            code: FolderPdfErrorCode::Io,
+            folder: None,
+            markdown: 0,
+            fountain: 0,
+            message: message.into(),
+        }
+    }
+}
+
+impl From<String> for FolderPdfError {
+    fn from(message: String) -> Self {
+        Self::io(message)
+    }
+}
+
 /// Exports a project-relative folder to PDF. An empty `title` derives a
 /// readable title from the folder (or project) name.
 pub fn export_to_project(
@@ -46,25 +117,26 @@ pub fn export_to_project(
     rel_folder: &str,
     title: &str,
     author: &str,
-) -> Result<FolderPdfResult, String> {
-    let root_path = fs::canonicalize(root)
-        .map_err(|e| format!("Could not open the folder '{}': {}", root, e))?;
+) -> Result<FolderPdfResult, FolderPdfError> {
+    let root_path = fs::canonicalize(root).map_err(|e| {
+        FolderPdfError::invalid(format!("Could not open the folder '{}': {}", root, e))
+    })?;
     if !root_path.is_dir() {
-        return Err(format!("The path '{}' is not a folder", root));
+        return Err(FolderPdfError::invalid(format!(
+            "The path '{}' is not a folder",
+            root
+        )));
     }
 
-    let folder_path = resolve_folder(&root_path, rel_folder)?;
+    let folder_path = resolve_folder(&root_path, rel_folder).map_err(FolderPdfError::invalid)?;
     let folder_name = folder_path
         .file_name()
         .map(|value| value.to_string_lossy().to_string())
         .unwrap_or_else(|| "book".to_string());
 
-    let files = collect_files(&folder_path)?;
+    let files = collect_files(&folder_path).map_err(FolderPdfError::io)?;
     if files.is_empty() {
-        return Err(format!(
-            "No Markdown or Fountain files found in '{}'",
-            folder_name
-        ));
+        return Err(FolderPdfError::empty(&folder_name));
     }
 
     let markdown_count = files
@@ -73,16 +145,18 @@ pub fn export_to_project(
         .count();
     let fountain_count = files.len() - markdown_count;
     if markdown_count > 0 && fountain_count > 0 {
-        return Err(format!(
-            "'{}' mixes {} Markdown and {} Fountain files. Choose a folder with a single format.",
-            folder_name, markdown_count, fountain_count
+        return Err(FolderPdfError::mixed(
+            &folder_name,
+            markdown_count,
+            fountain_count,
         ));
     }
 
     if markdown_count > 0 {
         export_markdown(&root_path, rel_folder, &folder_name, &files, title, author)
+            .map_err(FolderPdfError::io)
     } else {
-        export_fountain(&root_path, rel_folder, &files)
+        export_fountain(&root_path, rel_folder, &files).map_err(FolderPdfError::io)
     }
 }
 
@@ -419,8 +493,16 @@ mod tests {
 
         assert!(export_to_project(root, "empty", "", "").is_err());
         let mixed = export_to_project(root, "mixed", "", "").unwrap_err();
-        assert!(mixed.contains("mixes 1 Markdown and 1 Fountain"));
+        assert_eq!(mixed.code, FolderPdfErrorCode::Mixed);
+        assert_eq!(mixed.folder.as_deref(), Some("mixed"));
+        assert_eq!(mixed.markdown, 1);
+        assert_eq!(mixed.fountain, 1);
+        assert!(mixed.message.contains("mixes 1 Markdown and 1 Fountain"));
         assert!(export_to_project(root, "../outside", "", "").is_err());
+
+        let json = serde_json::to_value(&mixed).unwrap();
+        assert_eq!(json["code"], "mixed");
+        assert_eq!(json["markdown"], 1);
     }
 
     #[test]

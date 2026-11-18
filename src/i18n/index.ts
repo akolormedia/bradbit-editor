@@ -47,6 +47,24 @@ export const translations = {
     newFolder: "Nueva carpeta",
     exportFolderPdf: "Exportar carpeta a PDF…",
     folderPdfExported: "{count} PDF exportados en {path}",
+    folderPdfErrorTitle: "No se pudo exportar la carpeta",
+    folderPdfErrorMixed:
+      "La carpeta «{folder}» contiene Markdown ({markdown}) y Fountain ({fountain}) a la vez. Un solo PDF no puede mezclar un libro con guiones.",
+    folderPdfErrorMixedHint:
+      "Elige una carpeta que solo tenga Markdown (por ejemplo, manuscript/) o solo Fountain (por ejemplo, script/).",
+    folderPdfErrorEmpty:
+      "La carpeta «{folder}» no contiene archivos Markdown ni Fountain.",
+    folderPdfErrorEmptyHint:
+      "Añade archivos .md, .markdown, .mdx, .fountain o .spmd y vuelve a intentarlo.",
+    folderPdfErrorInvalid:
+      "La carpeta seleccionada no es válida o está fuera del proyecto.",
+    folderPdfErrorInvalidHint:
+      "Vuelve a abrir el proyecto y elige una carpeta dentro de él.",
+    folderPdfErrorIo:
+      "No se pudieron leer o escribir los archivos de la exportación.",
+    folderPdfErrorIoHint:
+      "Comprueba que la carpeta tenga permisos de escritura y vuelve a intentarlo.",
+    folderPdfErrorClose: "Entendido",
     rename: "Renombrar",
     delete: "Eliminar",
     save: "Guardar",
@@ -594,6 +612,24 @@ export const translations = {
     newFolder: "New Folder",
     exportFolderPdf: "Export folder to PDF…",
     folderPdfExported: "{count} PDFs exported to {path}",
+    folderPdfErrorTitle: "The folder could not be exported",
+    folderPdfErrorMixed:
+      "The folder “{folder}” contains both Markdown ({markdown}) and Fountain ({fountain}) files. A single PDF cannot mix a book with screenplays.",
+    folderPdfErrorMixedHint:
+      "Choose a folder that only contains Markdown (for example, manuscript/) or only Fountain (for example, script/).",
+    folderPdfErrorEmpty:
+      "The folder “{folder}” does not contain Markdown or Fountain files.",
+    folderPdfErrorEmptyHint:
+      "Add .md, .markdown, .mdx, .fountain or .spmd files and try again.",
+    folderPdfErrorInvalid:
+      "The selected folder is not valid or is outside the project.",
+    folderPdfErrorInvalidHint:
+      "Reopen the project and choose a folder inside it.",
+    folderPdfErrorIo:
+      "The export files could not be read or written.",
+    folderPdfErrorIoHint:
+      "Check that the folder is writable and try again.",
+    folderPdfErrorClose: "Got it",
     rename: "Rename",
     delete: "Delete",
     save: "Save",

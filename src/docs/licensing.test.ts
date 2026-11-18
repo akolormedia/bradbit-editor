@@ -66,6 +66,7 @@ describe("licenses and third-party notices (T-3.6.3)", () => {
       "licenses/DOMPurify-LICENSE",
       "licenses/jumpcut-LICENSE",
       "licenses/docx-rs-LICENSE",
+      "licenses/pulldown-cmark-LICENSE",
       "licenses/mammoth-LICENSE",
       "licenses/turndown-LICENSE",
       "licenses/opentui/LICENSE",

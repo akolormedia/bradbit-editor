@@ -69,7 +69,7 @@ Kit instructions are in English; the agent replies and writes in the language co
 - **Import a Final Draft screenplay:** choose **File → Import → Final Draft (.fdx)…**. It converts the FDX to Fountain in `script/imported.fountain` and previews the result before writing.
 - **Export a Markdown manuscript to DOCX:** choose **File → Export DOCX…**. It uses the standard manuscript preset: A4, 2.5 cm margins, Times New Roman 12 pt, double spacing, title page and page numbers.
 - **Export a screenplay:** Fountain files have **Export PDF** (`⌘E`) with deterministic screenplay formatting.
-- **Export any folder to PDF:** right-click a folder under **Files** and choose **Export folder to PDF…**. A Markdown folder becomes one A4 book PDF (`exports/<folder>/<folder>.pdf`) with a title page, chapter breaks and page numbers. A Fountain folder produces one screenplay PDF per script under `exports/`. If a folder mixes both formats, Bradbit asks you to choose a single-format folder instead of guessing.
+- **Export any folder to PDF:** right-click a folder under **Files** and choose **Export folder to PDF…**. A Markdown folder becomes one A4 book PDF (`exports/<folder>/<folder>.pdf`) with a title page, chapter breaks and page numbers; Markdown is rendered (headings, emphasis, links, lists, quotes, code and tables), not printed as source. A Fountain folder produces one screenplay PDF per script under `exports/`. If a folder mixes both formats, Bradbit shows an explicit explanation with the counts and asks you to choose a single-format folder instead of guessing.
 
 ## Documentation
 

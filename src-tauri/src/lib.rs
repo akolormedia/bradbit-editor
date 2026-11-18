@@ -92,7 +92,7 @@ fn export_folder_pdf(
     rel_folder: String,
     title: String,
     author: String,
-) -> Result<folder_pdf::FolderPdfResult, String> {
+) -> Result<folder_pdf::FolderPdfResult, folder_pdf::FolderPdfError> {
     let result = folder_pdf::export_to_project(&root, &rel_folder, &title, &author)?;
     let target = if result.outputs.len() == 1 {
         result.outputs[0].clone()
@@ -104,7 +104,12 @@ fn export_folder_pdf(
     };
     app.opener()
         .open_path(&target, None::<&str>)
-        .map_err(|e| format!("PDFs saved to {} but could not be opened: {}", target, e))?;
+        .unwrap_or_else(|error| {
+            eprintln!(
+                "PDFs saved to {} but could not be opened: {}",
+                target, error
+            );
+        });
     Ok(result)
 }
 

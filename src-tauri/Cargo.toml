@@ -24,6 +24,7 @@ serde_yaml = "0.9"
 ureq = { version = "3", features = ["json"] }
 dirs = "6"
 pdf-writer = "0.15"
+pulldown-cmark = { version = "0.13", default-features = false }
 docx-rs = { version = "0.4.22", default-features = false }
 include_dir = "0.7"
 keyring = "4"
