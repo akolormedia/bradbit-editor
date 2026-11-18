@@ -79,6 +79,7 @@ describe("application menu model (T-2.4.2)", () => {
       "file.newFile",
       "file.quickOpen",
       "file.save",
+      "file.exportDocx",
       "file.closeTab",
       "file.closeFolder",
       "edit.find",
@@ -101,6 +102,7 @@ describe("application menu model (T-2.4.2)", () => {
     expect(commandItem(empty, "file.importDocx").enabled).toBe(false);
     expect(commandItem(empty, "file.importFdx").enabled).toBe(false);
     expect(commandItem(empty, "file.save").enabled).toBe(false);
+    expect(commandItem(empty, "file.exportDocx").enabled).toBe(false);
     expect(commandItem(empty, "view.togglePreview").enabled).toBe(false);
     expect(commandItem(empty, "view.wordWrap").enabled).toBe(true);
     expect(commandItem(empty, "app.settings").enabled).toBe(true);
@@ -110,6 +112,7 @@ describe("application menu model (T-2.4.2)", () => {
     expect(commandItem(ready, "file.importMenu").children).toHaveLength(2);
     expect(commandItem(ready, "file.importDocx").enabled).toBe(true);
     expect(commandItem(ready, "file.importFdx").enabled).toBe(true);
+    expect(commandItem(ready, "file.exportDocx").enabled).toBe(true);
     expect(commandItem(ready, "view.togglePreview").enabled).toBe(true);
   });
 

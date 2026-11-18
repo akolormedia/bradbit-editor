@@ -472,6 +472,25 @@ export const backend = {
     });
   },
 
+  async exportMarkdownDocx(
+    rootPath: string,
+    relPath: string,
+    content: string,
+    title: string,
+    author: string,
+  ): Promise<string> {
+    if (!isTauriEnvironment()) {
+      throw new Error("DOCX export requires the desktop app");
+    }
+    return tauriInvoke<string>("export_markdown_docx", {
+      root: rootPath,
+      relPath,
+      content,
+      title,
+      author,
+    });
+  },
+
   async searchInFolder(
     rootPath: string,
     query: string,

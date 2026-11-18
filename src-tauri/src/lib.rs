@@ -1,5 +1,6 @@
 pub mod byok;
 pub mod cancel;
+pub mod docx_export;
 pub mod fdx;
 pub mod fountain;
 pub mod fs_ops;
@@ -63,6 +64,22 @@ fn export_fountain_pdf(
     app.opener()
         .open_path(&output, None::<&str>)
         .map_err(|e| format!("PDF saved to {} but could not be opened: {}", output, e))?;
+    Ok(output)
+}
+
+#[tauri::command]
+fn export_markdown_docx(
+    app: tauri::AppHandle,
+    root: String,
+    rel_path: String,
+    content: String,
+    title: String,
+    author: String,
+) -> Result<String, String> {
+    let output = docx_export::export_to_project(&root, &rel_path, &content, &title, &author)?;
+    app.opener()
+        .open_path(&output, None::<&str>)
+        .map_err(|e| format!("DOCX saved to {} but could not be opened: {}", output, e))?;
     Ok(output)
 }
 
@@ -797,6 +814,7 @@ pub fn run() {
             remove_recent_project,
             refresh_menu,
             export_fountain_pdf,
+            export_markdown_docx,
             search_in_folder,
             list_templates,
             create_project_from_template,

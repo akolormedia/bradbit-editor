@@ -65,6 +65,7 @@ describe("licenses and third-party notices (T-3.6.3)", () => {
       "licenses/Apache-2.0.txt",
       "licenses/DOMPurify-LICENSE",
       "licenses/jumpcut-LICENSE",
+      "licenses/docx-rs-LICENSE",
       "licenses/mammoth-LICENSE",
       "licenses/turndown-LICENSE",
       "licenses/opentui/LICENSE",

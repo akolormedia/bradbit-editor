@@ -85,6 +85,11 @@ export function buildAppMenu(state: MenuUiState): AppMenuGroup[] {
           separatorBefore: true,
         },
         {
+          command: { id: "file.exportDocx" },
+          label: t(lang, "exportDocx"),
+          enabled: hasTab && state.isMarkdown,
+        },
+        {
           command: { id: "file.closeTab" },
           label: t(lang, "closeTab"),
           shortcut: "⌘W",
