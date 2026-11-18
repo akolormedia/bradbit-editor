@@ -258,6 +258,21 @@ export const backend = {
     return tauriInvoke<string>("read_docx_file", { path });
   },
 
+  async pickFdxFileDialog(): Promise<string | null> {
+    if (!isTauriEnvironment()) return null;
+    const { open } = await import("@tauri-apps/plugin-dialog");
+    const selected = await open({
+      directory: false,
+      multiple: false,
+      filters: [{ name: "Final Draft", extensions: ["fdx"] }],
+    });
+    return typeof selected === "string" ? selected : null;
+  },
+
+  async convertFdxFile(path: string): Promise<string> {
+    return tauriInvoke<string>("convert_fdx_file", { path });
+  },
+
   async discoverKit(rootPath: string): Promise<KitCatalog> {
     if (!isTauriEnvironment()) {
       return { agents: [], commands: [], skills: [] };

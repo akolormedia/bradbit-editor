@@ -174,6 +174,14 @@ type ModalState =
       previewMode?: "rendered" | "source";
       error?: string;
     }
+  | {
+      kind: "import-fdx";
+      status: "loading" | "ready" | "error";
+      sourceName: string;
+      fountain?: string;
+      previewMode?: "rendered" | "source";
+      error?: string;
+    }
   | { kind: "entry-input"; mode: "new-folder" | "rename"; targetPath: string; value: string; error?: string }
   | { kind: "branch-input"; value: string; error?: string }
   | {
@@ -233,6 +241,7 @@ class BradbitApp {
   private appMenu: AppMenu | null = null;
   private outlineRefreshTimer: number | null = null;
   private importDocxRequest = 0;
+  private importFdxRequest = 0;
   private modal: ModalState = { kind: "none" };
   private settingsCategory: SettingsCategoryId = "general";
   private settingsQuery = "";
@@ -2401,6 +2410,7 @@ class BradbitApp {
 
   private closeModal(): void {
     this.importDocxRequest += 1;
+    this.importFdxRequest += 1;
     this.modal = { kind: "none" };
     this.render();
   }
@@ -2762,6 +2772,93 @@ class BradbitApp {
     }
   }
 
+  private async importFdx(): Promise<void> {
+    const lang = this.settings.language;
+    if (!this.folder) {
+      this.showStatusNotice(t(lang, "importFdxNoFolder"));
+      return;
+    }
+
+    const source = await backend.pickFdxFileDialog();
+    if (!source) return;
+
+    const request = ++this.importFdxRequest;
+    const sourceName = source.split(/[\\/]/).pop() ?? source;
+    this.modal = { kind: "import-fdx", status: "loading", sourceName };
+    this.render();
+
+    try {
+      const fountain = await backend.convertFdxFile(source);
+      if (request !== this.importFdxRequest) return;
+      if (!fountain.trim()) {
+        throw new Error(t(lang, "importFdxEmpty"));
+      }
+      this.modal = {
+        kind: "import-fdx",
+        status: "ready",
+        sourceName,
+        fountain,
+        previewMode: "rendered",
+      };
+      this.render();
+    } catch (err) {
+      if (request !== this.importFdxRequest) return;
+      this.modal = {
+        kind: "import-fdx",
+        status: "error",
+        sourceName,
+        error: err instanceof Error ? err.message : String(err),
+      };
+      this.render();
+    }
+  }
+
+  private async submitFdxImport(): Promise<void> {
+    if (
+      this.modal.kind !== "import-fdx" ||
+      this.modal.status !== "ready" ||
+      !this.folder
+    ) {
+      return;
+    }
+
+    const current = this.modal;
+    const fountain = current.fountain ?? "";
+    const existing = new Set(
+      flattenFileTree(this.folder.tree).map((file) => file.path),
+    );
+    let relativePath = "script/imported.fountain";
+    let suffix = 2;
+    while (existing.has(relativePath)) {
+      relativePath = `script/imported-${suffix}.fountain`;
+      suffix += 1;
+    }
+
+    try {
+      await backend.writeTextFile(
+        this.folder.rootPath,
+        relativePath,
+        fountain,
+      );
+      this.importFdxRequest += 1;
+      this.modal = { kind: "none" };
+      await this.refreshTree();
+      this.render();
+      await this.openFileFromTree(relativePath, true);
+      this.showStatusNotice(
+        t(this.settings.language, "importFdxDone", {
+          path: relativePath,
+        }),
+      );
+    } catch (err) {
+      this.modal = {
+        ...current,
+        error: err instanceof Error ? err.message : String(err),
+      };
+      this.render();
+    }
+  }
+
   private showStatusNotice(message: string): void {
     this.statusNotice = message;
     const active = this.getActiveTab();
@@ -2823,6 +2920,9 @@ class BradbitApp {
         break;
       case "file.importDocx":
         await this.importDocx();
+        break;
+      case "file.importFdx":
+        await this.importFdx();
         break;
       case "file.saveAsTemplate":
         this.openSaveTemplateModal();
@@ -4688,6 +4788,148 @@ class BradbitApp {
     dialog.appendChild(footer);
   }
 
+  private renderImportFdxModal(
+    lang: AppSettings["language"],
+    dialog: HTMLElement,
+  ): void {
+    if (this.modal.kind !== "import-fdx") return;
+    const state = this.modal;
+    dialog.classList.add("import-docx-dialog", "import-fdx-dialog");
+
+    const header = document.createElement("div");
+    header.className = "import-docx-header";
+    const title = document.createElement("h3");
+    title.textContent = t(lang, "importFdxTitle");
+    header.appendChild(title);
+    dialog.appendChild(header);
+
+    if (state.status === "loading") {
+      const loading = document.createElement("p");
+      loading.className = "settings-hint";
+      loading.textContent = t(lang, "importFdxLoading", {
+        name: state.sourceName,
+      });
+      dialog.appendChild(loading);
+    } else if (state.status === "error") {
+      const error = document.createElement("div");
+      error.className = "error-banner";
+      error.textContent = state.error || t(lang, "importFdxError");
+      dialog.appendChild(error);
+    } else {
+      const source = document.createElement("p");
+      source.className = "settings-hint";
+      source.textContent = t(lang, "importFdxSource", {
+        name: state.sourceName,
+      });
+
+      const keep = document.createElement("p");
+      keep.className = "import-docx-keep";
+      keep.textContent = t(lang, "importFdxKeep");
+
+      const lose = document.createElement("p");
+      lose.className = "settings-hint";
+      lose.textContent = t(lang, "importFdxLose");
+
+      const previewMode = state.previewMode ?? "rendered";
+      const previewTabs = document.createElement("div");
+      previewTabs.className = "import-docx-preview-tabs";
+      previewTabs.setAttribute("role", "tablist");
+
+      const renderedTab = document.createElement("button");
+      renderedTab.type = "button";
+      renderedTab.className = "import-docx-preview-tab";
+      renderedTab.dataset.testid = "import-fdx-preview-rendered";
+      renderedTab.setAttribute("role", "tab");
+      renderedTab.setAttribute(
+        "aria-selected",
+        String(previewMode === "rendered"),
+      );
+      renderedTab.classList.toggle("active", previewMode === "rendered");
+      renderedTab.appendChild(createIcon("eye", 14));
+      renderedTab.appendChild(
+        document.createTextNode(t(lang, "importFdxPreview")),
+      );
+      renderedTab.onclick = () => {
+        if (this.modal.kind !== "import-fdx") return;
+        this.modal = { ...this.modal, previewMode: "rendered" };
+        this.render();
+      };
+
+      const sourceTab = document.createElement("button");
+      sourceTab.type = "button";
+      sourceTab.className = "import-docx-preview-tab";
+      sourceTab.dataset.testid = "import-fdx-preview-source";
+      sourceTab.setAttribute("role", "tab");
+      sourceTab.setAttribute(
+        "aria-selected",
+        String(previewMode === "source"),
+      );
+      sourceTab.classList.toggle("active", previewMode === "source");
+      sourceTab.appendChild(createIcon("code", 14));
+      sourceTab.appendChild(
+        document.createTextNode(t(lang, "importFdxSourceView")),
+      );
+      sourceTab.onclick = () => {
+        if (this.modal.kind !== "import-fdx") return;
+        this.modal = { ...this.modal, previewMode: "source" };
+        this.render();
+      };
+
+      previewTabs.append(renderedTab, sourceTab);
+
+      const previewPanel = document.createElement("div");
+      previewPanel.className = "import-docx-preview-panel";
+      previewPanel.setAttribute("role", "tabpanel");
+      if (previewMode === "rendered") {
+        previewPanel.classList.add("import-fdx-rendered");
+        previewPanel.appendChild(
+          renderFountainPreview(state.fountain ?? ""),
+        );
+      } else {
+        const sourceView = document.createElement("pre");
+        sourceView.className = "import-docx-preview";
+        sourceView.textContent = state.fountain ?? "";
+        previewPanel.appendChild(sourceView);
+      }
+
+      const destination = document.createElement("p");
+      destination.className = "settings-hint";
+      destination.textContent = `${t(lang, "importFdxDestination", {
+        path: "script/imported.fountain",
+      })} ${t(lang, "importFdxDestinationHint")}`;
+
+      dialog.append(source, keep, lose, previewTabs, previewPanel, destination);
+
+      if (state.error) {
+        const error = document.createElement("div");
+        error.className = "error-banner";
+        error.textContent = state.error;
+        dialog.appendChild(error);
+      }
+    }
+
+    const footer = document.createElement("div");
+    footer.className = "modal-footer";
+    const cancel = document.createElement("button");
+    cancel.type = "button";
+    cancel.className = "toolbar-btn";
+    cancel.textContent = t(lang, "cancel");
+    cancel.onclick = () => this.closeModal();
+    footer.appendChild(cancel);
+
+    if (state.status === "ready") {
+      const submit = document.createElement("button");
+      submit.type = "button";
+      submit.className = "toolbar-btn primary";
+      submit.dataset.testid = "import-fdx-submit";
+      submit.textContent = t(lang, "importFdxImport");
+      submit.onclick = () => void this.submitFdxImport();
+      footer.appendChild(submit);
+    }
+
+    dialog.appendChild(footer);
+  }
+
   private renderManageModels(
     lang: AppSettings["language"],
     dialog: HTMLElement,
@@ -4960,6 +5202,8 @@ class BradbitApp {
       this.renderSaveTemplateModal(dialog, lang);
     } else if (this.modal.kind === "import-docx") {
       this.renderImportDocxModal(lang, dialog);
+    } else if (this.modal.kind === "import-fdx") {
+      this.renderImportFdxModal(lang, dialog);
     } else if (this.modal.kind === "entry-input") {
       const modalState = this.modal;
       const h3 = document.createElement("h3");

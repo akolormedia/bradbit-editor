@@ -30,6 +30,7 @@ notify-debouncer-mini = "0.7"
 thiserror = "2"
 portable-pty = "0.9.0"
 git2 = { version = "0.21", features = ["https", "vendored-libgit2", "vendored-openssl"] }
+jumpcut = { version = "2.1", default-features = false }
 time = { version = "0.3", features = ["formatting"] }
 
 [target.'cfg(target_os = "macos")'.dependencies]

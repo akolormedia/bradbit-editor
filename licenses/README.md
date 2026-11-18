@@ -12,6 +12,7 @@ This folder contains the license texts referenced by
 | `Apache-2.0.txt` | Apache License 2.0, used by several Rust and npm packages. |
 | `MIT.txt` | Generic MIT license text for the MIT-licensed components listed in the notices. |
 | `DOMPurify-LICENSE` | DOMPurify (MPL-2.0 OR Apache-2.0). |
+| `jumpcut-LICENSE` | JumpCut Final Draft converter (MIT). |
 | `mammoth-LICENSE` | Mammoth DOCX parser (BSD-2-Clause). |
 | `turndown-LICENSE` | Turndown HTML-to-Markdown converter (MIT). |
 | `opentui/` | OpenTUI, FFmpeg, libwebp, LittleCMS, Ghostty, zlib, stb and Wuffs notices and source information. |
