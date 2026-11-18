@@ -3046,17 +3046,19 @@ textarea.text-input {
 }
 
 .cm-scene-gutter {
-  min-width: 30px;
+  min-width: 26px;
   padding-right: 6px;
-  color: var(--text-muted);
+  color: var(--cm-heading);
   font-family: var(--font-mono);
   font-size: 11px;
+  font-weight: 600;
   text-align: right;
   user-select: none;
 }
 
 .cm-scene-number {
-  opacity: 0.72;
+  color: var(--cm-heading);
+  opacity: 0.9;
 }
 
 /* Fountain screenplay preview (T-2.5.7) */

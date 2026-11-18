@@ -520,10 +520,10 @@ export class BradbitCodeMirror {
           autocapitalize: "sentences",
         }),
         this.wrapCompartment.of(settings.wordWrap ? EditorView.lineWrapping : []),
-        ...(fountain ? [fountainSceneGutter] : []),
         this.lineNumbersCompartment.of(
           settings.lineNumbers ? [cmLineNumbers(), highlightActiveLineGutter()] : [],
         ),
+        ...(fountain ? [fountainSceneGutter] : []),
         this.appearanceCompartment.of(buildAppearanceExtension(settings)),
         this.completionCompartment.of(
           fountain
