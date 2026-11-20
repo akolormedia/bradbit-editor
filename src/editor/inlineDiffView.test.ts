@@ -190,6 +190,33 @@ describe("inline diff view (T-3.9.2)", () => {
     holder.view?.destroy();
   });
 
+  it("grows ruler bands with the expanded ghost rows", () => {
+    const { parent, holder, diff } = mount("uno\ndos\ntres");
+    diff.setHunks([
+      {
+        kind: "modified",
+        from: 0,
+        to: 3,
+        originalFrom: 0,
+        originalTo: 12,
+        addedLines: 1,
+        deletedLines: 3,
+        originalText: "uno\ndos\ntres\n",
+      },
+    ]);
+    const tick = parent.querySelector<HTMLElement>(".git-diff-ruler-tick");
+    const collapsedHeight = parseFloat(tick?.style.height ?? "0");
+    expect(collapsedHeight).toBeCloseTo(100 / 3, 1);
+
+    click(parent.querySelector(".cm-git-marker-modified"));
+    const expandedTick = parent.querySelector<HTMLElement>(
+      ".git-diff-ruler-tick",
+    );
+    const expandedHeight = parseFloat(expandedTick?.style.height ?? "0");
+    expect(expandedHeight).toBeCloseTo((4 / 6) * 100, 1);
+    holder.view?.destroy();
+  });
+
   it("restores deleted lines from the hover controls", () => {
     const { parent, holder, diff } = mount("dos\n");
     diff.setHunks(buildInlineDiffHunks("uno\ndos\n", "dos\n"));
