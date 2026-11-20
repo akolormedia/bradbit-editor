@@ -1,5 +1,6 @@
 import { Chunk } from "@codemirror/merge";
 import { Text } from "@codemirror/state";
+import { LineDiffHunk } from "../types";
 
 /** A changed block between the last committed version and the open document. */
 export interface InlineDiffHunk {
@@ -81,6 +82,46 @@ export function buildInlineDiffHunks(
   }
 
   return hunks;
+}
+
+function lineOffsets(text: string): number[] {
+  const offsets = [0];
+  for (let index = 0; index < text.length; index += 1) {
+    if (text.charCodeAt(index) === 10) offsets.push(index + 1);
+  }
+  return offsets;
+}
+
+/**
+ * Converts line-oriented hunks (computed by the Rust backend with Zed's
+ * imara-diff/Histogram algorithm) into editor positions.
+ */
+export function buildInlineDiffHunksFromLines(
+  original: string,
+  current: string,
+  lineHunks: readonly LineDiffHunk[],
+): InlineDiffHunk[] {
+  const before = lineOffsets(original);
+  const after = lineOffsets(current);
+  const offset = (offsets: number[], line: number, length: number) =>
+    Math.min(offsets[line] ?? length, length);
+
+  return lineHunks.map((lineHunk) => {
+    const originalFrom = offset(before, lineHunk.originalStart, original.length);
+    const originalTo = offset(before, lineHunk.originalEnd, original.length);
+    const from = offset(after, lineHunk.currentStart, current.length);
+    const to = offset(after, lineHunk.currentEnd, current.length);
+    return {
+      kind: lineHunk.kind,
+      from,
+      to,
+      originalFrom,
+      originalTo,
+      addedLines: Math.max(0, lineHunk.currentEnd - lineHunk.currentStart),
+      deletedLines: Math.max(0, lineHunk.originalEnd - lineHunk.originalStart),
+      originalText: original.slice(originalFrom, originalTo),
+    };
+  });
 }
 
 /** Current-document line range covered by a hunk. */

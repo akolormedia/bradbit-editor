@@ -19,6 +19,7 @@ import {
   GitHubRepository,
   GitHubUser,
   KitCatalog,
+  LineDiffHunk,
   MenuCommand,
   MenuUiState,
   OpenCodeChatMessage,
@@ -653,6 +654,17 @@ export const backend = {
       throw new Error("Git requires the desktop app");
     }
     return tauriInvoke<GitStatus>("git_init", { root: rootPath });
+  },
+
+  async diffLineHunks(
+    original: string,
+    current: string,
+  ): Promise<LineDiffHunk[] | null> {
+    if (!isTauriEnvironment()) return null;
+    return tauriInvoke<LineDiffHunk[]>("diff_line_hunks", {
+      original,
+      current,
+    });
   },
 
   async gitDiffFile(rootPath: string, relPath: string): Promise<string> {

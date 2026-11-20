@@ -2,6 +2,7 @@ import { Text } from "@codemirror/state";
 import { describe, expect, it } from "vitest";
 import {
   buildInlineDiffHunks,
+  buildInlineDiffHunksFromLines,
   deletedRestoreText,
   hunkAnchorLine,
   hunkLineRange,
@@ -64,6 +65,47 @@ describe("inline Git diff hunks (T-3.9.2)", () => {
     });
     const doc = Text.of(["uno", ""]);
     expect(hunkAnchorLine(hunks[0], doc)).toBe(2);
+  });
+
+  it("converts Zed-style line hunks into editor ranges", () => {
+    const original = "uno\ndos\ntres\ncuatro\n";
+    const current = "uno\nDOS\ntres\ncuatro\ncinco\n";
+    const hunks = buildInlineDiffHunksFromLines(original, current, [
+      {
+        kind: "modified",
+        originalStart: 1,
+        originalEnd: 2,
+        currentStart: 1,
+        currentEnd: 2,
+      },
+      {
+        kind: "added",
+        originalStart: 4,
+        originalEnd: 4,
+        currentStart: 4,
+        currentEnd: 5,
+      },
+    ]);
+
+    expect(hunks[0]).toMatchObject({
+      kind: "modified",
+      originalFrom: 4,
+      originalTo: 8,
+      from: 4,
+      to: 8,
+      originalText: "dos\n",
+    });
+    expect(hunks[1]).toMatchObject({
+      kind: "added",
+      addedLines: 1,
+      deletedLines: 0,
+      from: 20,
+      to: 26,
+    });
+    expect(hunkLineRange(hunks[1], Text.of(current.split("\n")))).toEqual({
+      fromLine: 5,
+      toLine: 5,
+    });
   });
 
   it("restores a deletion between lines without merging paragraphs", () => {

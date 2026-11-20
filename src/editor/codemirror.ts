@@ -28,7 +28,7 @@ import {
   syntaxHighlighting,
 } from "@codemirror/language";
 import { tags } from "@lezer/highlight";
-import { AppSettings } from "../types";
+import { AppSettings, LineDiffHunk } from "../types";
 import { isFountainPath, isMarkdownPath } from "../workspace/state";
 import {
   classifyFountainLine,
@@ -48,7 +48,10 @@ import {
   EMPTY_FOUNTAIN_SYMBOLS,
   FountainSymbols,
 } from "./fountainSymbols";
-import { buildInlineDiffHunks } from "./inlineDiff";
+import {
+  buildInlineDiffHunks,
+  buildInlineDiffHunksFromLines,
+} from "./inlineDiff";
 import { InlineDiffView } from "./inlineDiffView";
 import { computeWrapEdit } from "./markdownFormat";
 
@@ -248,6 +251,10 @@ export interface EditorCallbacks {
   onContentChange: (path: string, content: string) => void;
   onCursorChange: (path: string, line: number, col: number) => void;
   onSaveShortcut: () => void;
+  computeDiffHunks?: (
+    original: string,
+    current: string,
+  ) => Promise<LineDiffHunk[] | null>;
   getFountainBibleSymbols?: () => FountainSymbols;
 }
 
@@ -258,6 +265,7 @@ export class BradbitCodeMirror {
   private scrollPositions = new Map<string, { top: number; left: number }>();
   private gitOriginals = new Map<string, string | null>();
   private inlineDiffTimer: number | null = null;
+  private inlineDiffRequest = 0;
   private inlineDiff: InlineDiffView;
   private settings: AppSettings;
 
@@ -321,7 +329,7 @@ export class BradbitCodeMirror {
       }
     }
     this.reportCursor(this.view.state);
-    this.refreshInlineDiff();
+    void this.refreshInlineDiff();
   }
 
   /** Baseline (HEAD) content used for the inline Git diff; `null` = new file. */
@@ -331,37 +339,82 @@ export class BradbitCodeMirror {
     } else {
       this.gitOriginals.set(path, original);
     }
-    if (this.currentPath === path) this.refreshInlineDiff();
+    if (this.currentPath === path) void this.refreshInlineDiff();
   }
 
   public clearGitOriginals(): void {
+    this.inlineDiffRequest += 1;
     this.gitOriginals.clear();
     this.inlineDiff.clear();
   }
 
-  private refreshInlineDiff(): void {
-    if (!this.view || !this.currentPath) return;
+  private async refreshInlineDiff(): Promise<void> {
+    const view = this.view;
+    const path = this.currentPath;
+    if (!view || !path) return;
     if (this.inlineDiffTimer !== null) {
       window.clearTimeout(this.inlineDiffTimer);
       this.inlineDiffTimer = null;
     }
-    const original = this.gitOriginals.get(this.currentPath);
+    const original = this.gitOriginals.get(path);
     if (original === undefined) {
+      this.inlineDiffRequest += 1;
       this.inlineDiff.clear();
       return;
     }
-    this.inlineDiff.setHunks(
-      buildInlineDiffHunks(original ?? "", this.view.state.doc.toString()),
-    );
+
+    const current = view.state.doc.toString();
+    const token = ++this.inlineDiffRequest;
+    const baseline = original ?? "";
+    const applyLocal = () => {
+      if (
+        token !== this.inlineDiffRequest ||
+        this.currentPath !== path ||
+        this.view !== view ||
+        view.state.doc.toString() !== current
+      ) {
+        return;
+      }
+      this.inlineDiff.setHunks(buildInlineDiffHunks(baseline, current));
+    };
+
+    const compute = this.callbacks.computeDiffHunks;
+    if (!compute) {
+      applyLocal();
+      return;
+    }
+
+    try {
+      const lineHunks = await compute(baseline, current);
+      if (
+        token !== this.inlineDiffRequest ||
+        this.currentPath !== path ||
+        this.view !== view ||
+        view.state.doc.toString() !== current
+      ) {
+        return;
+      }
+      if (lineHunks === null) {
+        this.inlineDiff.setHunks(buildInlineDiffHunks(baseline, current));
+        return;
+      }
+      this.inlineDiff.setHunks(
+        buildInlineDiffHunksFromLines(baseline, current, lineHunks),
+      );
+    } catch (error) {
+      console.error("Could not compute the inline diff", error);
+      applyLocal();
+    }
   }
 
   private scheduleInlineDiff(): void {
+    this.inlineDiffRequest += 1;
     if (this.inlineDiffTimer !== null) {
       window.clearTimeout(this.inlineDiffTimer);
     }
     this.inlineDiffTimer = window.setTimeout(() => {
       this.inlineDiffTimer = null;
-      this.refreshInlineDiff();
+      void this.refreshInlineDiff();
     }, 240);
   }
 

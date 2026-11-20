@@ -3483,6 +3483,8 @@ class BradbitApp {
           onSaveShortcut: () => {
             void this.saveActiveTab();
           },
+          computeDiffHunks: (original, current) =>
+            backend.diffLineHunks(original, current),
           getFountainBibleSymbols: () => this.getFountainSymbols(),
         });
       }
