@@ -166,9 +166,18 @@ export interface GitStatusEntry {
   worktree: string;
 }
 
+export interface LineDiffHunk {
+  kind: "added" | "modified" | "deleted";
+  originalStart: number;
+  originalEnd: number;
+  currentStart: number;
+  currentEnd: number;
+}
+
 export interface GitStatus {
   isRepository: boolean;
   branch: string | null;
+  head: string | null;
   ahead: number;
   behind: number;
   entries: GitStatusEntry[];

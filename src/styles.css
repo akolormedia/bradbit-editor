@@ -18,6 +18,12 @@
   --accent-hover: #919fff;
   --danger: #f36c6c;
   --success: #58c488;
+  --git-added: #58c488;
+  --git-modified: #e0af68;
+  --git-deleted: #f36c6c;
+  --git-added-bg: rgba(88, 196, 136, 0.12);
+  --git-modified-bg: rgba(224, 175, 104, 0.13);
+  --git-deleted-bg: rgba(243, 108, 108, 0.14);
   --cm-heading: #8bd49c;
   --cm-keyword: #f5a97f;
   --cm-character: #a6da95;
@@ -49,6 +55,12 @@
   --accent-hover: #364cd6;
   --danger: #d93838;
   --success: #2a8f56;
+  --git-added: #2a8f56;
+  --git-modified: #a96f0a;
+  --git-deleted: #d93838;
+  --git-added-bg: rgba(42, 143, 86, 0.1);
+  --git-modified-bg: rgba(169, 111, 10, 0.1);
+  --git-deleted-bg: rgba(217, 56, 56, 0.1);
   --cm-heading: #2a8f56;
   --cm-keyword: #b8561b;
   --cm-character: #2f7d4f;
@@ -2890,6 +2902,242 @@ textarea.text-input {
   color: var(--text-muted);
 }
 
+/* Inline Git diff (T-3.9.2) */
+
+.tree-row.tree-git-added .tree-row-name {
+  color: var(--git-added);
+}
+
+.tree-row.tree-git-modified .tree-row-name {
+  color: var(--git-modified);
+}
+
+.tree-row.tree-git-deleted .tree-row-name,
+.tree-row.tree-git-conflicted .tree-row-name {
+  color: var(--git-deleted);
+}
+
+.tree-row.tree-git-renamed .tree-row-name {
+  color: var(--accent);
+}
+
+.cm-git-diff-gutter {
+  width: 10px;
+  padding-right: 0;
+}
+
+.cm-git-diff-gutter .cm-gutterElement {
+  display: flex;
+  align-items: stretch;
+  justify-content: center;
+  padding: 0;
+  overflow: visible;
+}
+
+.cm-git-gutter-spacer {
+  display: block;
+  width: 6px;
+  height: 1em;
+}
+
+.cm-git-marker {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 8px;
+  min-height: 1.68em;
+  height: 100%;
+  cursor: pointer;
+}
+
+.cm-git-bar {
+  display: block;
+  width: 3px;
+  height: 100%;
+  min-height: 1.1em;
+  border-radius: 0;
+}
+
+.cm-git-marker-added .cm-git-bar {
+  background: var(--git-added);
+}
+
+.cm-git-marker-modified .cm-git-bar {
+  background: var(--git-modified);
+}
+
+.cm-git-triangle {
+  width: 0;
+  height: 0;
+  border-left: 5px solid transparent;
+  border-right: 5px solid transparent;
+  border-top: 7px solid var(--git-deleted);
+}
+
+.cm-git-marker-deleted.between .cm-git-triangle,
+.cm-git-marker-deleted.at-end .cm-git-triangle {
+  align-self: flex-end;
+  margin-bottom: -2px;
+}
+
+.cm-git-marker-deleted.at-start .cm-git-triangle {
+  align-self: flex-start;
+  margin-top: -2px;
+  transform: rotate(180deg);
+}
+
+.git-diff-ruler {
+  position: absolute;
+  top: 6px;
+  bottom: 6px;
+  right: 3px;
+  z-index: 6;
+  width: 8px;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.15s ease;
+}
+
+.git-diff-ruler.visible {
+  opacity: 1;
+}
+
+.git-diff-ruler-tick {
+  position: absolute;
+  left: 2px;
+  width: 4px;
+  min-height: 3px;
+  padding: 0;
+  border: none;
+  border-radius: 2px;
+  pointer-events: none;
+  opacity: 0.85;
+}
+
+.git-diff-ruler-added {
+  background: var(--git-added);
+}
+
+.git-diff-ruler-modified {
+  background: var(--git-modified);
+}
+
+.git-diff-ruler-deleted {
+  background: var(--git-deleted);
+}
+
+.cm-line.cm-git-line-expanded {
+  background: var(--git-added-bg);
+}
+
+.cm-git-line-number-expanded {
+  color: var(--git-added) !important;
+}
+
+.cm-git-deleted-ghost {
+  position: relative;
+  padding: 0 2px;
+  background: var(--git-deleted-bg);
+  color: var(--text-secondary);
+  font-family: var(--font-editor);
+  font-size: inherit;
+  line-height: 1.68;
+  user-select: none;
+}
+
+.cm-git-deleted-ghost-line {
+  min-height: 1.68em;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.git-diff-expanded-bar {
+  position: absolute;
+  z-index: 6;
+  width: 3px;
+  border-radius: 0;
+  pointer-events: auto;
+  cursor: pointer;
+  transform: translateX(-50%);
+}
+
+.git-diff-expanded-bar::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: -4px;
+  right: -4px;
+}
+
+.git-diff-expanded-bar-added {
+  background: var(--git-added);
+}
+
+.git-diff-expanded-bar-modified {
+  background: var(--git-modified);
+}
+
+.git-diff-expanded-bar-deleted {
+  background: var(--git-deleted);
+}
+
+.git-diff-nav {
+  position: absolute;
+  top: 8px;
+  right: 16px;
+  z-index: 7;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 2px;
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  background: var(--bg-elevated);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.18);
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(-2px);
+  transition: opacity 0.12s ease, transform 0.12s ease;
+}
+
+.cm-host:hover .git-diff-nav.visible,
+.git-diff-nav.visible:hover,
+.git-diff-nav.visible:focus-within {
+  opacity: 1;
+  pointer-events: auto;
+  transform: none;
+}
+
+.git-diff-nav-button {
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: none;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--text-secondary);
+  font-family: var(--font-ui);
+  font-size: 13px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.git-diff-nav-button:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+
+.git-diff-nav-restore {
+  color: var(--git-deleted);
+  font-size: 14px;
+}
+
+.git-diff-nav-restore[hidden] {
+  display: none;
+}
+
 .git-branch {
   display: inline-flex;
   align-items: center;
@@ -2944,8 +3192,10 @@ textarea.text-input {
 }
 
 .cm-host {
+  position: relative;
   width: 100%;
   height: 100%;
+  min-width: 0;
 }
 
 /* Fountain line highlighting (T-2.5.5) */

@@ -17,6 +17,8 @@ pub struct GitStatusEntry {
 pub struct GitStatus {
     pub is_repository: bool,
     pub branch: Option<String>,
+    /// Current HEAD commit id, used to invalidate cached inline diffs.
+    pub head: Option<String>,
     pub ahead: u32,
     pub behind: u32,
     pub entries: Vec<GitStatusEntry>,
@@ -27,6 +29,7 @@ impl GitStatus {
         Self {
             is_repository: false,
             branch: None,
+            head: None,
             ahead: 0,
             behind: 0,
             entries: Vec::new(),
@@ -48,6 +51,7 @@ pub fn status(root: &str) -> Result<GitStatus, String> {
     Ok(GitStatus {
         is_repository: true,
         branch: branch.as_ref().and_then(|info| info.head.clone()),
+        head: branch.as_ref().and_then(|info| info.oid.clone()),
         ahead: branch.as_ref().map(|info| info.ahead).unwrap_or(0),
         behind: branch.as_ref().map(|info| info.behind).unwrap_or(0),
         entries: entries

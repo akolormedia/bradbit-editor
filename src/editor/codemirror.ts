@@ -28,7 +28,7 @@ import {
   syntaxHighlighting,
 } from "@codemirror/language";
 import { tags } from "@lezer/highlight";
-import { AppSettings } from "../types";
+import { AppSettings, LineDiffHunk } from "../types";
 import { isFountainPath, isMarkdownPath } from "../workspace/state";
 import {
   classifyFountainLine,
@@ -48,6 +48,11 @@ import {
   EMPTY_FOUNTAIN_SYMBOLS,
   FountainSymbols,
 } from "./fountainSymbols";
+import {
+  buildInlineDiffHunks,
+  buildInlineDiffHunksFromLines,
+} from "./inlineDiff";
+import { InlineDiffView } from "./inlineDiffView";
 import { computeWrapEdit } from "./markdownFormat";
 
 /**
@@ -246,6 +251,10 @@ export interface EditorCallbacks {
   onContentChange: (path: string, content: string) => void;
   onCursorChange: (path: string, line: number, col: number) => void;
   onSaveShortcut: () => void;
+  computeDiffHunks?: (
+    original: string,
+    current: string,
+  ) => Promise<LineDiffHunk[] | null>;
   getFountainBibleSymbols?: () => FountainSymbols;
 }
 
@@ -254,6 +263,11 @@ export class BradbitCodeMirror {
   private currentPath: string | null = null;
   private statesByPath = new Map<string, EditorState>();
   private scrollPositions = new Map<string, { top: number; left: number }>();
+  private gitOriginals = new Map<string, string | null>();
+  private inlineDiffTimer: number | null = null;
+  private inlineDiffRequest = 0;
+  private inlineDiff: InlineDiffView;
+  private settings: AppSettings;
 
   private wrapCompartment = new Compartment();
   private lineNumbersCompartment = new Compartment();
@@ -263,11 +277,19 @@ export class BradbitCodeMirror {
 
   constructor(
     private parent: HTMLElement,
-    _initialSettings: AppSettings,
+    initialSettings: AppSettings,
     private callbacks: EditorCallbacks,
-  ) {}
+  ) {
+    this.settings = initialSettings;
+    this.inlineDiff = new InlineDiffView({
+      parent: this.parent,
+      getView: () => this.view,
+      getLanguage: () => this.settings.language,
+    });
+  }
 
   public openDocument(path: string, content: string, settings: AppSettings): void {
+    this.settings = settings;
     const switched = this.currentPath !== path;
     if (this.view && this.currentPath) {
       this.statesByPath.set(this.currentPath, this.view.state);
@@ -307,11 +329,99 @@ export class BradbitCodeMirror {
       }
     }
     this.reportCursor(this.view.state);
+    void this.refreshInlineDiff();
+  }
+
+  /** Baseline (HEAD) content used for the inline Git diff; `null` = new file. */
+  public setGitOriginal(path: string, original: string | null | undefined): void {
+    if (original === undefined) {
+      this.gitOriginals.delete(path);
+    } else {
+      this.gitOriginals.set(path, original);
+    }
+    if (this.currentPath === path) void this.refreshInlineDiff();
+  }
+
+  public clearGitOriginals(): void {
+    this.inlineDiffRequest += 1;
+    this.gitOriginals.clear();
+    this.inlineDiff.clear();
+  }
+
+  private async refreshInlineDiff(): Promise<void> {
+    const view = this.view;
+    const path = this.currentPath;
+    if (!view || !path) return;
+    if (this.inlineDiffTimer !== null) {
+      window.clearTimeout(this.inlineDiffTimer);
+      this.inlineDiffTimer = null;
+    }
+    const original = this.gitOriginals.get(path);
+    if (original === undefined) {
+      this.inlineDiffRequest += 1;
+      this.inlineDiff.clear();
+      return;
+    }
+
+    const current = view.state.doc.toString();
+    const token = ++this.inlineDiffRequest;
+    const baseline = original ?? "";
+    const applyLocal = () => {
+      if (
+        token !== this.inlineDiffRequest ||
+        this.currentPath !== path ||
+        this.view !== view ||
+        view.state.doc.toString() !== current
+      ) {
+        return;
+      }
+      this.inlineDiff.setHunks(buildInlineDiffHunks(baseline, current));
+    };
+
+    const compute = this.callbacks.computeDiffHunks;
+    if (!compute) {
+      applyLocal();
+      return;
+    }
+
+    try {
+      const lineHunks = await compute(baseline, current);
+      if (
+        token !== this.inlineDiffRequest ||
+        this.currentPath !== path ||
+        this.view !== view ||
+        view.state.doc.toString() !== current
+      ) {
+        return;
+      }
+      if (lineHunks === null) {
+        this.inlineDiff.setHunks(buildInlineDiffHunks(baseline, current));
+        return;
+      }
+      this.inlineDiff.setHunks(
+        buildInlineDiffHunksFromLines(baseline, current, lineHunks),
+      );
+    } catch (error) {
+      console.error("Could not compute the inline diff", error);
+      applyLocal();
+    }
+  }
+
+  private scheduleInlineDiff(): void {
+    this.inlineDiffRequest += 1;
+    if (this.inlineDiffTimer !== null) {
+      window.clearTimeout(this.inlineDiffTimer);
+    }
+    this.inlineDiffTimer = window.setTimeout(() => {
+      this.inlineDiffTimer = null;
+      void this.refreshInlineDiff();
+    }, 240);
   }
 
   public closeDocumentState(path: string): void {
     this.statesByPath.delete(path);
     this.scrollPositions.delete(path);
+    this.gitOriginals.delete(path);
     if (this.currentPath === path) {
       this.currentPath = null;
     }
@@ -328,6 +438,11 @@ export class BradbitCodeMirror {
       this.scrollPositions.delete(oldPath);
       this.scrollPositions.set(newPath, scroll);
     }
+    if (this.gitOriginals.has(oldPath)) {
+      const original = this.gitOriginals.get(oldPath) ?? null;
+      this.gitOriginals.delete(oldPath);
+      this.gitOriginals.set(newPath, original);
+    }
     if (this.currentPath === oldPath) {
       this.currentPath = newPath;
     }
@@ -336,14 +451,23 @@ export class BradbitCodeMirror {
   /**
    * Clicking the blank area below the last line can leave the native selection
    * anchored to a previous line. Put the caret at the nearest document
-   * position and prevent the browser's multi-line selection.
+   * position and prevent the browser's multi-line selection. Expanded diff
+   * ghost rows are not document text either, so they must never start a
+   * native selection.
    */
   private installClickGuard(view: EditorView): void {
     view.scrollDOM.addEventListener(
       "mousedown",
       (event) => {
         if (event.button !== 0 || event.shiftKey) return;
-        if (event.target !== view.contentDOM) return;
+        const target = event.target as HTMLElement | null;
+        if (target?.closest(".cm-git-deleted-ghost")) {
+          if (target.closest("button")) return;
+          event.preventDefault();
+          view.focus();
+          return;
+        }
+        if (target !== view.contentDOM) return;
         const position = view.posAtCoords({
           x: event.clientX,
           y: event.clientY,
@@ -358,6 +482,7 @@ export class BradbitCodeMirror {
   }
 
   public applySettings(settings: AppSettings): void {
+    this.settings = settings;
     if (!this.view) return;
     const fountain = Boolean(
       this.currentPath && isFountainPath(this.currentPath),
@@ -534,6 +659,11 @@ export class BradbitCodeMirror {
   }
 
   public destroy(): void {
+    if (this.inlineDiffTimer !== null) {
+      window.clearTimeout(this.inlineDiffTimer);
+      this.inlineDiffTimer = null;
+    }
+    this.inlineDiff.destroy();
     this.view?.destroy();
     this.view = null;
   }
@@ -572,6 +702,7 @@ export class BradbitCodeMirror {
             : [],
         ),
         this.languageCompartment.of(languageExtensionForPath(path)),
+        this.inlineDiff.extension(),
         keymap.of([
           {
             key: "Mod-s",
@@ -616,6 +747,7 @@ export class BradbitCodeMirror {
           if (!this.currentPath) return;
           if (update.docChanged) {
             this.callbacks.onContentChange(this.currentPath, update.state.doc.toString());
+            this.scheduleInlineDiff();
           }
           if (update.selectionSet || update.docChanged) {
             this.reportCursor(update.state);

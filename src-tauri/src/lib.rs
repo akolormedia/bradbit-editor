@@ -11,6 +11,7 @@ pub mod git_assistant;
 pub mod github;
 pub mod kit;
 pub mod language;
+pub mod line_diff;
 pub mod menu;
 pub mod opencode;
 pub mod pty;
@@ -19,6 +20,8 @@ pub mod settings;
 pub mod templates;
 pub mod watcher;
 pub mod workspace_state;
+
+use line_diff::diff_line_hunks;
 
 use fs_ops::{FileTreeNode, OpenedFolder};
 use menu::{MenuContext, MenuUiState};
@@ -857,6 +860,7 @@ pub fn run() {
             start_watching,
             stop_watching,
             git_status,
+            diff_line_hunks,
             git_engine_status,
             git_init,
             git_diff_file,
