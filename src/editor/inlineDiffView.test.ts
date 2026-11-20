@@ -104,21 +104,6 @@ describe("inline diff view (T-3.9.2)", () => {
     holder.view?.destroy();
   });
 
-  it("sizes the overview ruler with deleted original lines", () => {
-    const { parent, holder, diff } = mount("linea 0\nlinea 99");
-    const original = Array.from(
-      { length: 100 },
-      (_, index) => `linea ${index}`,
-    ).join("\n");
-    diff.setHunks(buildInlineDiffHunks(original, "linea 0\nlinea 99"));
-
-    const tick = parent.querySelector<HTMLElement>(
-      ".git-diff-ruler-tick",
-    );
-    expect(parseFloat(tick?.style.height ?? "0")).toBeGreaterThan(50);
-    holder.view?.destroy();
-  });
-
   it("collapses an expanded hunk by clicking its solid rail", async () => {
     const { parent, holder, diff } = mount("uno\ndos");
     diff.setHunks(buildInlineDiffHunks("uno\ndos", "UNO\ndos"));

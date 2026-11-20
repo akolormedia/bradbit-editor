@@ -489,22 +489,28 @@ export class InlineDiffView {
     if (!view) return;
     this.positionRuler(view);
     if (hunks.length === 0) return;
-    const totalDeleted = hunks.reduce(
-      (sum, hunk) => sum + hunk.deletedLines,
-      0,
-    );
-    const total = Math.max(1, view.state.doc.lines + totalDeleted);
-    let deletedBefore = 0;
+    const expanded = expandedHunks(view.state);
+    const ghostRows = [...expanded].reduce((sum, key) => {
+      const hunk = hunks.find((candidate) => hunkKey(candidate) === key);
+      return sum + (hunk?.deletedLines ?? 0);
+    }, 0);
+    const total = Math.max(1, view.state.doc.lines + ghostRows);
+    let ghostBefore = 0;
 
     for (const hunk of hunks) {
+      const key = hunkKey(hunk);
+      const isExpanded = expanded.has(key);
       const range = hunkLineRange(hunk, view.state.doc);
       const currentRows =
         hunk.kind === "deleted" ? 0 : range.toLine - range.fromLine + 1;
-      const virtualTop = range.fromLine - 1 + deletedBefore;
-      const virtualHeight = currentRows + hunk.deletedLines;
-      deletedBefore += hunk.deletedLines;
-      const top = (virtualTop / total) * 100;
-      const height = Math.max(0.35, (virtualHeight / total) * 100);
+      const displayTop = range.fromLine - 1 + ghostBefore;
+      const displayHeight = Math.max(
+        1,
+        currentRows + (isExpanded ? hunk.deletedLines : 0),
+      );
+      if (isExpanded) ghostBefore += hunk.deletedLines;
+      const top = (displayTop / total) * 100;
+      const height = Math.min(100 - top, (displayHeight / total) * 100);
       const tick = document.createElement("span");
       tick.className = `git-diff-ruler-tick git-diff-ruler-${hunk.kind}`;
       tick.style.top = `${top}%`;
