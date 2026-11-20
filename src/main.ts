@@ -4010,13 +4010,20 @@ class BradbitApp {
 
     const icon = document.createElement("span");
     icon.className = "outline-icon";
-    if (item.kind === "scene") {
-      icon.appendChild(createIcon("clapperboard", 13));
-    } else if (item.kind === "section") {
-      icon.appendChild(createIcon("hash", 13));
-    }
-    if (icon.childElementCount > 0) {
-      row.appendChild(icon);
+    if (item.kind === "scene" && item.number !== undefined) {
+      const number = document.createElement("span");
+      number.className = "outline-scene-number";
+      number.textContent = `${item.number}-`;
+      row.appendChild(number);
+    } else {
+      if (item.kind === "scene") {
+        icon.appendChild(createIcon("clapperboard", 13));
+      } else if (item.kind === "section") {
+        icon.appendChild(createIcon("hash", 13));
+      }
+      if (icon.childElementCount > 0) {
+        row.appendChild(icon);
+      }
     }
 
     const label = document.createElement("span");

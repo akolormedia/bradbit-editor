@@ -12,6 +12,8 @@ export interface OutlineItem {
   /** 1-based line number in the document. */
   line: number;
   kind: OutlineKind;
+  /** 1-based scene number for Fountain scene items. */
+  number?: number;
 }
 
 export interface DocumentOutline {
@@ -63,6 +65,7 @@ function extractFountainOutline(content: string): DocumentOutline {
   const lines = content.split(/\r?\n/);
   let state = createFountainState();
   let sectionLevel = 0;
+  let sceneNumber = 0;
 
   for (let index = 0; index < lines.length; index += 1) {
     const line = lines[index];
@@ -84,11 +87,13 @@ function extractFountainOutline(content: string): DocumentOutline {
     } else if (classified.type === "scene") {
       const title = line.trim().replace(/^\./, "");
       if (title.length > 0) {
+        sceneNumber += 1;
         items.push({
           level: sectionLevel > 0 ? Math.min(6, sectionLevel + 1) : 1,
           title,
           line: index + 1,
           kind: "scene",
+          number: sceneNumber,
         });
       }
     }

@@ -95,7 +95,7 @@ task-by-task feature inventory; the README gives the short version.
     - **⌘1–⌘6** open Scene, Character, Parenthetical, Transition, Section and Note commands.
     - Scene opens `INT.`, `EXT.`, `INT./EXT.`, `EXT./INT.`, `I/E.` and `EST.`; choosing one opens the location list automatically. The other elements open their own lists.
     - Moments and parentheticals are localized to the app language.
-    - Scene headings receive automatic numbers in the left margin, in the editor and in the exported PDF. In the editor the number sits between the line number and the heading, using the scene-heading color.
+    - Scene headings are numbered automatically in the Outline (e.g. `1- INT. LUGAR - DÍA`), in the Preview and in the exported PDF. In code mode the number appears when hovering the scene line, keeping the normal left margin.
     - `Ctrl+Space` forces completion, `Enter`/`Tab` accepts, `Esc` closes. Automatic suggestions never open inside dialogue.
     - Symbol sources are declared by the template or extension in `contributes.symbolSources`; the editor does not hardcode `bible/` paths.
     - Projects without a manifest still complete characters and locations already present in the script.

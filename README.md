@@ -71,7 +71,7 @@ Kit instructions are in English; the agent replies and writes in the language co
   - **Note** inserts `[[]]` with the caret inside.
   - Times of day and parentheticals are shown in the app language.
 - Shortcuts: **⌘1** Scene, **⌘2** Character, **⌘3** Parenthetical, **⌘4** Transition, **⌘5** Section, **⌘6** Note.
-- Scene headings are numbered automatically in the left margin, in the editor and in exported screenplay PDFs. In the editor the scene number sits between the line number and the heading, using the scene-heading color.
+- Scene headings are numbered automatically in the Outline, in the Preview and in exported screenplay PDFs. In code mode the number appears when hovering the scene line, so the editor keeps its normal left margin.
 - Autocomplete never opens by itself inside dialogue. `Ctrl+Space` forces it, `Enter` or `Tab` accepts, `Esc` closes.
 - **Symbols are declarative:** characters and locations come from the project's optional `bradbit-kit.json` (`contributes.symbolSources`). The editor core has no hardcoded `bible/` paths. Projects without a manifest still complete characters and locations already used in the script.
 - The **Fountain suggestions** switch in Settings → Editor can turn autocomplete off.

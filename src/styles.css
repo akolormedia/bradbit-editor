@@ -546,6 +546,14 @@ body,
   height: 13px;
 }
 
+.outline-scene-number {
+  flex-shrink: 0;
+  color: var(--cm-heading);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 600;
+}
+
 .outline-label {
   overflow: hidden;
   text-overflow: ellipsis;
@@ -3045,28 +3053,16 @@ textarea.text-input {
   opacity: 0.8;
 }
 
-.cm-scene-gutter {
-  min-width: 26px;
-  padding-right: 6px;
+.cm-scene-hover {
+  padding: 2px 7px;
+  border: 1px solid var(--border-color);
+  border-radius: 5px;
+  background: var(--bg-elevated);
   color: var(--cm-heading);
   font-family: var(--font-mono);
   font-size: 11px;
   font-weight: 600;
-  text-align: right;
-  user-select: none;
-}
-
-.cm-scene-gutter .cm-gutterElement {
-  display: flex;
-  align-items: center;
-  justify-content: flex-end;
-  line-height: 1;
-}
-
-.cm-scene-number {
-  color: var(--cm-heading);
-  opacity: 0.9;
-  line-height: 1;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.18);
 }
 
 /* Fountain screenplay preview (T-2.5.7) */
@@ -3115,6 +3111,19 @@ textarea.text-input {
   margin-top: 1.2em;
   font-weight: 700;
   text-transform: uppercase;
+}
+
+.fountain-scene.has-scene-number {
+  position: relative;
+}
+
+.fountain-scene.has-scene-number::before {
+  content: attr(data-scene-number) ".";
+  position: absolute;
+  right: calc(100% + 14px);
+  color: #1c1c1c;
+  font-weight: 700;
+  white-space: nowrap;
 }
 
 .fountain-character {

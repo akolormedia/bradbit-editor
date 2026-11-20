@@ -3,7 +3,6 @@ import {
   Compartment,
   EditorState,
   Extension,
-  RangeSet,
   RangeSetBuilder,
 } from "@codemirror/state";
 import {
@@ -11,10 +10,9 @@ import {
   DecorationSet,
   drawSelection,
   EditorView,
-  gutter,
-  GutterMarker,
   highlightActiveLine,
   highlightActiveLineGutter,
+  hoverTooltip,
   keymap,
   lineNumbers as cmLineNumbers,
   ViewPlugin,
@@ -96,38 +94,27 @@ const fountainHighlighting = ViewPlugin.fromClass(
   },
 );
 
-class SceneNumberMarker extends GutterMarker {
-  constructor(readonly number: number) {
-    super();
-  }
-
-  eq(other: GutterMarker): boolean {
-    return other instanceof SceneNumberMarker && other.number === this.number;
-  }
-
-  toDOM(): Node {
-    const span = document.createElement("span");
-    span.className = "cm-scene-number";
-    span.textContent = String(this.number);
-    return span;
-  }
-}
-
-function buildSceneNumberMarkers(view: EditorView): RangeSet<GutterMarker> {
-  const builder = new RangeSetBuilder<GutterMarker>();
-  for (const scene of fountainSceneNumbers(view.state.doc.toString())) {
-    const line = view.state.doc.line(scene.line);
-    builder.add(line.from, line.from, new SceneNumberMarker(scene.number));
-  }
-  return builder.finish();
-}
-
-const fountainSceneGutter = gutter({
-  class: "cm-scene-gutter",
-  markers: buildSceneNumberMarkers,
-  initialSpacer: () => new SceneNumberMarker(999),
-  renderEmptyElements: false,
-});
+const sceneHoverTooltip = hoverTooltip(
+  (view, pos) => {
+    const line = view.state.doc.lineAt(pos);
+    const scene = fountainSceneNumbers(view.state.doc.toString()).find(
+      (candidate) => candidate.line === line.number,
+    );
+    if (!scene) return null;
+    return {
+      pos: line.from,
+      end: line.to,
+      above: true,
+      create: () => {
+        const dom = document.createElement("div");
+        dom.className = "cm-scene-hover";
+        dom.textContent = `${scene.number}.`;
+        return { dom };
+      },
+    };
+  },
+  { hoverTime: 250 },
+);
 
 const writerHighlightStyle = HighlightStyle.define([
   { tag: tags.heading, fontWeight: "700", color: "var(--cm-heading)" },
@@ -170,7 +157,7 @@ const writerHighlightStyle = HighlightStyle.define([
 function languageExtensionForPath(path: string): Extension {
   const lower = path.toLowerCase();
   if (lower.endsWith(".fountain") || lower.endsWith(".spmd")) {
-    return fountainHighlighting;
+    return [fountainHighlighting, sceneHoverTooltip];
   }
   if (lower.endsWith(".md") || lower.endsWith(".mdx") || lower.endsWith(".markdown")) {
     return markdown();
@@ -523,7 +510,6 @@ export class BradbitCodeMirror {
         this.lineNumbersCompartment.of(
           settings.lineNumbers ? [cmLineNumbers(), highlightActiveLineGutter()] : [],
         ),
-        ...(fountain ? [fountainSceneGutter] : []),
         this.appearanceCompartment.of(buildAppearanceExtension(settings)),
         this.completionCompartment.of(
           fountain

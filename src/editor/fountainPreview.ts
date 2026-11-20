@@ -7,6 +7,8 @@ import {
 export interface FountainPreviewLine {
   type: FountainLineType;
   text: string;
+  /** 1-based scene number for scene headings. */
+  sceneNumber?: number;
 }
 
 export interface FountainPreviewPage {
@@ -19,6 +21,7 @@ const ACTION_CHARS_PER_LINE = 58;
 
 export function classifyFountainLines(source: string): FountainPreviewLine[] {
   let state = createFountainState();
+  let sceneNumber = 0;
   return source.split(/\r?\n/).map((raw) => {
     const classified = classifyFountainLine(raw, state);
     state = classified.state;
@@ -26,6 +29,10 @@ export function classifyFountainLines(source: string): FountainPreviewLine[] {
       classified.type === "section"
         ? raw.replace(/^#+\s*/, "").trimEnd()
         : raw.trimEnd();
+    if (classified.type === "scene") {
+      sceneNumber += 1;
+      return { type: classified.type, text, sceneNumber };
+    }
     return { type: classified.type, text };
   });
 }
@@ -88,6 +95,10 @@ export function renderFountainPreview(source: string): HTMLElement {
     for (const line of page.lines) {
       const lineEl = document.createElement("div");
       lineEl.className = `fountain-line fountain-${line.type}`;
+      if (line.sceneNumber !== undefined) {
+        lineEl.classList.add("has-scene-number");
+        lineEl.dataset.sceneNumber = String(line.sceneNumber);
+      }
       lineEl.textContent = line.text || "\u00a0";
       body.appendChild(lineEl);
     }
