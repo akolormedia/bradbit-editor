@@ -203,7 +203,6 @@ class GitLineMarker extends GutterMarker {
     private readonly title: string,
     private readonly atStart: boolean,
     private readonly atEnd: boolean,
-    private readonly restoreTitle: string,
     private readonly expanded: boolean,
     private readonly deletedLines: number,
   ) {
@@ -243,12 +242,6 @@ class GitLineMarker extends GutterMarker {
       const triangle = document.createElement("span");
       triangle.className = "cm-git-triangle";
       marker.appendChild(triangle);
-
-      const restore = document.createElement("span");
-      restore.className = "cm-git-restore";
-      restore.textContent = "↺";
-      restore.title = this.restoreTitle;
-      marker.appendChild(restore);
       return marker;
     }
 
@@ -557,7 +550,6 @@ export class InlineDiffView {
       title: string;
       atStart: boolean;
       atEnd: boolean;
-      restoreTitle: string;
       expanded: boolean;
       deletedLines: number;
     }> = [];
@@ -575,7 +567,6 @@ export class InlineDiffView {
           title,
           atStart: hunk.from === 0,
           atEnd: hunk.from >= doc.length,
-          restoreTitle: t(lang, "gitDiffRestoreDeleted"),
           expanded: expanded.has(hunkKey(hunk)),
           deletedLines: hunk.deletedLines,
         });
@@ -592,7 +583,6 @@ export class InlineDiffView {
           title,
           atStart: false,
           atEnd: false,
-          restoreTitle: "",
           expanded: expanded.has(hunkKey(hunk)),
           deletedLines:
             hunk.kind === "modified" && number === range.fromLine
@@ -613,7 +603,6 @@ export class InlineDiffView {
           info.title,
           info.atStart,
           info.atEnd,
-          info.restoreTitle,
           info.expanded,
           info.deletedLines,
         ),
@@ -648,12 +637,6 @@ export class InlineDiffView {
     const hunk = this.findHunkAtLine(view, lineFrom);
     if (!hunk) return false;
     event.preventDefault();
-
-    if (target.closest(".cm-git-restore")) {
-      const current = currentHunk(view, hunkKey(hunk));
-      if (current) restoreHunk(view, current);
-      return true;
-    }
 
     const current = expandedHunks(view.state);
     const key = hunkKey(hunk);

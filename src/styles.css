@@ -2987,33 +2987,6 @@ textarea.text-input {
   transform: rotate(180deg);
 }
 
-.cm-git-restore {
-  position: absolute;
-  left: 9px;
-  top: 50%;
-  z-index: 20;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 15px;
-  height: 15px;
-  border-radius: 4px;
-  background: var(--bg-elevated);
-  border: 1px solid var(--border-color);
-  color: var(--git-deleted);
-  font-size: 10px;
-  line-height: 1;
-  opacity: 0;
-  pointer-events: none;
-  transform: translateY(-50%);
-  transition: opacity 0.1s ease;
-}
-
-.cm-git-marker:hover .cm-git-restore {
-  opacity: 1;
-  pointer-events: auto;
-}
-
 .git-diff-ruler {
   position: absolute;
   top: 6px;
