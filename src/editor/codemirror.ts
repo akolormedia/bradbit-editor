@@ -398,14 +398,23 @@ export class BradbitCodeMirror {
   /**
    * Clicking the blank area below the last line can leave the native selection
    * anchored to a previous line. Put the caret at the nearest document
-   * position and prevent the browser's multi-line selection.
+   * position and prevent the browser's multi-line selection. Expanded diff
+   * ghost rows are not document text either, so they must never start a
+   * native selection.
    */
   private installClickGuard(view: EditorView): void {
     view.scrollDOM.addEventListener(
       "mousedown",
       (event) => {
         if (event.button !== 0 || event.shiftKey) return;
-        if (event.target !== view.contentDOM) return;
+        const target = event.target as HTMLElement | null;
+        if (target?.closest(".cm-git-deleted-ghost")) {
+          if (target.closest("button")) return;
+          event.preventDefault();
+          view.focus();
+          return;
+        }
+        if (target !== view.contentDOM) return;
         const position = view.posAtCoords({
           x: event.clientX,
           y: event.clientY,

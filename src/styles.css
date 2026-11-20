@@ -3060,20 +3060,12 @@ textarea.text-input {
   background: var(--git-deleted);
 }
 
-.cm-line.cm-git-line-added {
+.cm-line.cm-git-line-expanded {
   background: var(--git-added-bg);
 }
 
-.cm-line.cm-git-line-modified {
-  background: var(--git-modified-bg);
-}
-
-.cm-git-line-number-added {
+.cm-git-line-number-expanded {
   color: var(--git-added) !important;
-}
-
-.cm-git-line-number-modified {
-  color: var(--git-modified) !important;
 }
 
 .cm-git-deleted-ghost {
@@ -3093,33 +3085,42 @@ textarea.text-input {
   overflow-wrap: anywhere;
 }
 
-.cm-git-ghost-restore {
-  position: absolute;
-  top: 3px;
-  right: 8px;
-  z-index: 5;
-  display: inline-flex;
+.cm-git-hunk-actions {
+  display: flex;
   align-items: center;
-  justify-content: center;
-  width: 17px;
-  height: 17px;
-  padding: 0;
+  gap: 4px;
+  margin: 2px -2px 0;
+  padding: 3px 6px;
+  border-top: 1px solid rgba(243, 108, 108, 0.22);
+  background: rgba(243, 108, 108, 0.08);
+}
+
+.cm-git-hunk-action {
+  min-width: 20px;
+  height: 20px;
+  padding: 0 6px;
   border: 1px solid var(--border-color);
   border-radius: 4px;
   background: var(--bg-elevated);
-  color: var(--git-deleted);
+  color: var(--text-secondary);
   font-family: var(--font-ui);
   font-size: 11px;
   line-height: 1;
-  opacity: 0;
-  pointer-events: none;
   cursor: pointer;
-  transition: opacity 0.1s ease;
 }
 
-.cm-git-deleted-ghost:hover .cm-git-ghost-restore {
-  opacity: 1;
-  pointer-events: auto;
+.cm-git-hunk-action:hover {
+  color: var(--text-primary);
+  background: var(--bg-hover);
+}
+
+.cm-git-hunk-restore {
+  margin-left: 6px;
+  color: var(--git-deleted);
+}
+
+.cm-git-hunk-collapse {
+  color: var(--text-muted);
 }
 
 .git-diff-nav {

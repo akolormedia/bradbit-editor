@@ -24,44 +24,78 @@ function mount(doc = "uno\ndos\ntres") {
   return { parent, holder, diff };
 }
 
+function click(element: Element | null) {
+  element?.dispatchEvent(
+    new MouseEvent("mousedown", { bubbles: true, cancelable: true }),
+  );
+  element?.dispatchEvent(
+    new MouseEvent("click", { bubbles: true, cancelable: true }),
+  );
+}
+
 afterEach(() => {
   document.body.replaceChildren();
 });
 
 describe("inline diff view (T-3.9.2)", () => {
-  it("renders gutter bars and shaded lines for modified lines", () => {
-    const { parent, holder, diff } = mount();
-    diff.setHunks(
-      buildInlineDiffHunks("uno\ndos\ntres", "uno\nDOS\ntres"),
-    );
+  it("shows only gutter marks until a changed bar is clicked", () => {
+    const { parent, holder, diff } = mount("uno\ndos");
+    diff.setHunks(buildInlineDiffHunks("uno\ndos", "UNO\ndos"));
 
     expect(parent.querySelector(".cm-git-marker-modified")).not.toBeNull();
-    expect(parent.querySelector(".cm-git-line-modified")).not.toBeNull();
-    expect(parent.querySelector(".cm-git-line-number-modified")).not.toBeNull();
+    expect(parent.querySelector(".cm-git-line-expanded")).toBeNull();
+    expect(parent.querySelector(".cm-git-deleted-ghost")).toBeNull();
     expect(parent.querySelectorAll(".git-diff-ruler-tick")).toHaveLength(1);
-    expect(
-      parent.querySelector(".git-diff-ruler")?.classList.contains("visible"),
-    ).toBe(true);
+
+    click(parent.querySelector(".cm-git-marker-modified"));
+
+    expect(parent.querySelector(".cm-git-line-expanded")).not.toBeNull();
+    expect(parent.querySelector(".cm-git-line-number-expanded")).not.toBeNull();
+    const ghost = parent.querySelector(".cm-git-deleted-ghost");
+    expect(ghost?.textContent).toContain("uno");
+    expect(ghost?.querySelector(".cm-git-hunk-restore")).not.toBeNull();
     holder.view?.destroy();
   });
 
-  it("renders deleted lines inline as a ghost block without a popover", () => {
-    const { parent, holder, diff } = mount();
-    diff.setHunks(buildInlineDiffHunks("uno\ndos\ntres", "uno\ntres"));
+  it("marks added lines green when their bar is clicked and offers no restore", () => {
+    const { parent, holder, diff } = mount("uno");
+    diff.setHunks(buildInlineDiffHunks("", "uno"));
 
-    const marker = parent.querySelector(".cm-git-marker-deleted");
-    expect(marker).not.toBeNull();
-    expect(marker?.querySelector(".cm-git-restore")).not.toBeNull();
+    expect(parent.querySelector(".cm-git-line-expanded")).toBeNull();
+    click(parent.querySelector(".cm-git-marker-added"));
+
+    expect(parent.querySelector(".cm-git-line-expanded")).not.toBeNull();
+    expect(parent.querySelector(".cm-git-deleted-ghost")).toBeNull();
+    expect(parent.querySelector(".cm-git-hunk-restore")).toBeNull();
+    holder.view?.destroy();
+  });
+
+  it("expands a red triangle into deleted lines with restore", () => {
+    const { parent, holder, diff } = mount("dos");
+    diff.setHunks(buildInlineDiffHunks("uno\ndos", "dos"));
+
+    click(parent.querySelector(".cm-git-marker-deleted"));
 
     const ghost = parent.querySelector(".cm-git-deleted-ghost");
-    expect(ghost?.textContent).toContain("dos");
-    expect(ghost?.querySelector(".cm-git-ghost-restore")).not.toBeNull();
-    expect(parent.querySelector(".git-diff-ruler-deleted")).not.toBeNull();
-    expect(parent.querySelector(".cm-git-popover")).toBeNull();
+    expect(ghost?.textContent).toContain("uno");
+    expect(ghost?.querySelector(".cm-git-hunk-restore")).not.toBeNull();
+    expect(parent.querySelector(".cm-git-line-expanded")).toBeNull();
     holder.view?.destroy();
   });
 
-  it("navigates to the next and previous changed line", () => {
+  it("collapses an expanded hunk when its bar is clicked again", () => {
+    const { parent, holder, diff } = mount("uno\ndos");
+    diff.setHunks(buildInlineDiffHunks("uno\ndos", "UNO\ndos"));
+    const marker = parent.querySelector(".cm-git-marker-modified");
+
+    click(marker);
+    expect(parent.querySelector(".cm-git-deleted-ghost")).not.toBeNull();
+    click(marker);
+    expect(parent.querySelector(".cm-git-deleted-ghost")).toBeNull();
+    holder.view?.destroy();
+  });
+
+  it("navigates to the next and previous changed line and reveals it", () => {
     const { parent, holder, diff } = mount("uno\ndos\ntres\ncuatro");
     diff.setHunks(
       buildInlineDiffHunks(
@@ -80,6 +114,7 @@ describe("inline diff view (T-3.9.2)", () => {
 
     buttons[1].click();
     expect(line()).toBe(2);
+    expect(parent.querySelector(".cm-git-deleted-ghost")).not.toBeNull();
     buttons[1].click();
     expect(line()).toBe(4);
     buttons[0].click();
@@ -87,20 +122,18 @@ describe("inline diff view (T-3.9.2)", () => {
     holder.view?.destroy();
   });
 
-  it("restores deleted lines when the hover action is clicked", () => {
-    const { parent, holder, diff } = mount();
-    holder.view?.dispatch({
-      changes: { from: 0, to: holder.view.state.doc.length, insert: "dos\ntres" },
-    });
-    diff.setHunks(buildInlineDiffHunks("uno\ndos\ntres", "dos\ntres"));
+  it("restores deleted lines from the expanded hunk action", () => {
+    const { parent, holder, diff } = mount("dos\n");
+    diff.setHunks(buildInlineDiffHunks("uno\ndos\n", "dos\n"));
+    click(parent.querySelector(".cm-git-marker-deleted"));
 
-    const restore = parent.querySelector<HTMLElement>(".cm-git-restore");
-    expect(restore).not.toBeNull();
-    restore?.dispatchEvent(
-      new MouseEvent("mousedown", { bubbles: true, cancelable: true }),
+    const restore = parent.querySelector<HTMLButtonElement>(
+      ".cm-git-hunk-restore",
     );
+    expect(restore).not.toBeNull();
+    restore?.click();
 
-    expect(holder.view?.state.doc.toString()).toBe("uno\ndos\ntres");
+    expect(holder.view?.state.doc.toString()).toBe("uno\ndos\n");
     holder.view?.destroy();
   });
 
