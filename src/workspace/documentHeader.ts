@@ -16,6 +16,7 @@ export interface DocumentHeaderOptions {
   onToggleDiff?: () => void;
   canDiscard?: boolean;
   onDiscard?: () => void;
+  onFileMenu?: (event: MouseEvent) => void;
 }
 
 /**
@@ -130,6 +131,20 @@ export function createDocumentHeader(options: DocumentHeaderOptions): HTMLElemen
     });
   };
   actions.appendChild(copyBtn);
+
+  if (options.onFileMenu) {
+    const menuBtn = createIconButton({
+      icon: "more-horizontal",
+      label: t(language, "fileOptions"),
+      className: "document-action",
+    });
+    menuBtn.dataset.action = "file-menu";
+    menuBtn.onclick = (event) => {
+      event.stopPropagation();
+      options.onFileMenu?.(event);
+    };
+    actions.appendChild(menuBtn);
+  }
 
   header.append(info, actions);
   return header;

@@ -1,6 +1,7 @@
 //! Per-project workspace state persisted outside the project folder.
 //!
-//! Only open session IDs, the active session and layout sizes are stored.
+//! Only open session IDs, the active session, layout sizes and the inline
+//! blame preference are stored.
 //! Messages and secrets remain in OpenCode/Keychain respectively.
 
 use std::collections::BTreeMap;
@@ -67,6 +68,8 @@ pub struct ProjectWorkspaceState {
     pub active_session_id: Option<String>,
     #[serde(default)]
     pub layout: WorkspaceLayout,
+    #[serde(default)]
+    pub inline_blame: bool,
 }
 
 impl ProjectWorkspaceState {
@@ -150,6 +153,7 @@ mod tests {
                 chat_visible: false,
                 editor_visible: true,
             },
+            inline_blame: true,
         };
         save_to(&path, "/proyecto/a", &state).unwrap();
         assert_eq!(load_from(&path, "/proyecto/a").unwrap(), state);
@@ -185,6 +189,7 @@ mod tests {
                 chat_visible: false,
                 editor_visible: false,
             },
+            inline_blame: false,
         };
         save_to(&path, "/proyecto", &state).unwrap();
         let loaded = load_from(&path, "/proyecto").unwrap();

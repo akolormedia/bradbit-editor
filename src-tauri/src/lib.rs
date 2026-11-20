@@ -275,6 +275,11 @@ fn git_head_file(root: String, rel_path: String) -> Result<Option<String>, Strin
 }
 
 #[tauri::command]
+fn git_blame_file(root: String, rel_path: String) -> Result<Vec<git::api::GitBlameLine>, String> {
+    git::api::blame_file(&root, &rel_path)
+}
+
+#[tauri::command]
 fn git_discard_file(root: String, rel_path: String) -> Result<git::api::DiscardResult, String> {
     git::api::discard_file(&root, &rel_path)
 }
@@ -866,6 +871,7 @@ pub fn run() {
             git_diff_file,
             git_restore_file,
             git_head_file,
+            git_blame_file,
             git_discard_file,
             git_save_version,
             git_history,

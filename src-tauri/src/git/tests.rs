@@ -92,6 +92,25 @@ fn status_reports_modified_untracked_and_deleted_files() {
 }
 
 #[test]
+fn blame_reports_authors_for_working_tree_lines() {
+    let (dir, repo) = initialized_repo();
+    fs::write(dir.path().join("a.md"), "uno\ndos\n").unwrap();
+    repo.stage_all(options()).unwrap();
+    repo.commit("inicial", "Ana", "ana@example.com", options())
+        .unwrap();
+
+    let lines = repo.blame("a.md", options()).unwrap();
+    assert_eq!(lines.len(), 2);
+    assert_eq!(lines[0].line, 1);
+    assert_eq!(lines[1].line, 2);
+    assert_eq!(lines[0].author, "Ana");
+    assert_eq!(lines[0].email, "ana@example.com");
+    assert!(lines[0].date.contains('T'));
+    assert_eq!(lines[0].summary, "inicial");
+    assert!(!lines[0].commit.is_empty());
+}
+
+#[test]
 fn diff_and_restore_return_a_tracked_file_to_head() {
     let (dir, repo) = initialized_repo();
     fs::write(dir.path().join("a.md"), "original").unwrap();

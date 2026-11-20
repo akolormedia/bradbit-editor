@@ -28,7 +28,7 @@ import {
   syntaxHighlighting,
 } from "@codemirror/language";
 import { tags } from "@lezer/highlight";
-import { AppSettings, LineDiffHunk } from "../types";
+import { AppSettings, GitBlameLine, LineDiffHunk } from "../types";
 import { isFountainPath, isMarkdownPath } from "../workspace/state";
 import {
   classifyFountainLine,
@@ -52,6 +52,7 @@ import {
   buildInlineDiffHunks,
   buildInlineDiffHunksFromLines,
 } from "./inlineDiff";
+import { InlineBlameView } from "./inlineBlame";
 import { InlineDiffView } from "./inlineDiffView";
 import { computeWrapEdit } from "./markdownFormat";
 
@@ -267,6 +268,7 @@ export class BradbitCodeMirror {
   private inlineDiffTimer: number | null = null;
   private inlineDiffRequest = 0;
   private inlineDiff: InlineDiffView;
+  private inlineBlame: InlineBlameView;
   private settings: AppSettings;
 
   private wrapCompartment = new Compartment();
@@ -286,6 +288,10 @@ export class BradbitCodeMirror {
       getView: () => this.view,
       getLanguage: () => this.settings.language,
     });
+    this.inlineBlame = new InlineBlameView(
+      () => this.settings.language,
+      () => this.view,
+    );
   }
 
   public openDocument(path: string, content: string, settings: AppSettings): void {
@@ -340,6 +346,14 @@ export class BradbitCodeMirror {
       this.gitOriginals.set(path, original);
     }
     if (this.currentPath === path) void this.refreshInlineDiff();
+  }
+
+  public setInlineBlame(lines: readonly GitBlameLine[]): void {
+    this.inlineBlame.setBlame(lines);
+  }
+
+  public setInlineBlameEnabled(enabled: boolean): void {
+    this.inlineBlame.setEnabled(enabled);
   }
 
   public clearGitOriginals(): void {
@@ -703,6 +717,7 @@ export class BradbitCodeMirror {
         ),
         this.languageCompartment.of(languageExtensionForPath(path)),
         this.inlineDiff.extension(),
+        this.inlineBlame.extension(),
         keymap.of([
           {
             key: "Mod-s",

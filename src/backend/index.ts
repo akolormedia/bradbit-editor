@@ -7,6 +7,7 @@ import {
   FileTreeNode,
   FolderPdfResult,
   FsChangeEvent,
+  GitBlameLine,
   GitBranch,
   GitCommit,
   GitCommitFile,
@@ -679,6 +680,17 @@ export const backend = {
     return tauriInvoke<GitStatus>("git_restore_file", { root: rootPath, relPath });
   },
 
+  async gitBlameFile(
+    rootPath: string,
+    relPath: string,
+  ): Promise<GitBlameLine[]> {
+    if (!isTauriEnvironment()) return [];
+    return tauriInvoke<GitBlameLine[]>("git_blame_file", {
+      root: rootPath,
+      relPath,
+    });
+  },
+
   async gitHeadFile(rootPath: string, relPath: string): Promise<string | null> {
     if (!isTauriEnvironment()) return null;
     return tauriInvoke<string | null>("git_head_file", {
@@ -1198,6 +1210,7 @@ export const backend = {
           chatVisible: true,
           editorVisible: true,
         },
+        inlineBlame: false,
       };
     }
     return tauriInvoke<ProjectWorkspaceState>("load_workspace_state", {
