@@ -339,7 +339,7 @@ class BradbitApp {
   private symbolIndex: SymbolIndex = new Map();
   private primaryPaths: string[] = [];
   private treeScrollTop = 0;
-  private animateNextSurface = false;
+  private openingSurface: "chat" | "editor" | null = null;
   private layoutAnimating = false;
 
   constructor(rootEl: HTMLElement) {
@@ -2013,18 +2013,19 @@ class BradbitApp {
     if (this.layoutAnimating) return;
     if (this.chatVisible) {
       this.layoutAnimating = true;
-      this.animateSurfaceExit(".session-column", () => {
+      this.animateSessionWidth(0, () => {
         this.layoutAnimating = false;
         this.chatVisible = false;
         this.editorVisible = true;
-        this.animateNextSurface = true;
         this.render();
         this.persistWorkspaceState();
       });
       return;
     }
+    this.layoutAnimating = true;
     this.chatVisible = true;
-    this.animateNextSurface = true;
+    this.editorVisible = true;
+    this.openingSurface = "chat";
     this.render();
     this.persistWorkspaceState();
   }
@@ -2033,51 +2034,73 @@ class BradbitApp {
     if (this.layoutAnimating) return;
     if (this.editorVisible) {
       this.layoutAnimating = true;
-      this.animateSurfaceExit(".workspace-panel", () => {
+      const body = this.rootEl.querySelector<HTMLElement>(".workspace-body");
+      const width = body?.clientWidth ?? this.sessionWidth;
+      this.animateSessionWidth(width, () => {
         this.layoutAnimating = false;
         this.editorVisible = false;
         this.chatVisible = true;
-        this.animateNextSurface = true;
         this.render();
         this.persistWorkspaceState();
       });
       return;
     }
+    this.layoutAnimating = true;
     this.editorVisible = true;
-    this.animateNextSurface = true;
+    this.chatVisible = true;
+    this.openingSurface = "editor";
     this.render();
     this.persistWorkspaceState();
   }
 
-  private animateSurfaceExit(
-    selector: string,
-    onFinished: () => void,
-  ): void {
-    const surface = this.rootEl.querySelector<HTMLElement>(selector);
+  private startOpeningAnimation(): void {
+    if (!this.openingSurface) return;
+    this.openingSurface = null;
+    this.animateSessionWidth(this.sessionWidth, () => {
+      this.layoutAnimating = false;
+    });
+  }
+
+  private animateSessionWidth(target: number, onFinished: () => void): void {
+    const column = this.rootEl.querySelector<HTMLElement>(".session-column");
     if (
-      !surface ||
+      !column ||
+      typeof column.animate !== "function" ||
       (typeof window.matchMedia === "function" &&
         window.matchMedia("(prefers-reduced-motion: reduce)").matches)
     ) {
+      if (column) {
+        column.style.width = `${target}px`;
+        column.style.minWidth = "";
+        column.style.maxWidth = "";
+        column.style.overflow = "";
+      }
       onFinished();
       return;
     }
-    const animation = surface.animate(
-      [
-        { opacity: 1, transform: "translateY(0)" },
-        { opacity: 0, transform: "translateY(6px)" },
-      ],
-      { duration: 160, easing: "ease", fill: "forwards" },
+    const current = column.getBoundingClientRect().width;
+    column.style.minWidth = "0";
+    column.style.maxWidth = "none";
+    column.style.overflow = "hidden";
+    column.style.willChange = "width";
+    const animation = column.animate(
+      [{ width: `${current}px` }, { width: `${target}px` }],
+      { duration: 260, easing: "ease-in-out", fill: "forwards" },
     );
     let finished = false;
     const finish = () => {
       if (finished) return;
       finished = true;
+      column.style.width = `${target}px`;
+      column.style.minWidth = "";
+      column.style.maxWidth = "";
+      column.style.overflow = "";
+      column.style.willChange = "";
       onFinished();
     };
     animation.onfinish = finish;
     animation.oncancel = finish;
-    window.setTimeout(finish, 240);
+    window.setTimeout(finish, 340);
   }
 
   private toggleTerminalView(): void {
@@ -3283,7 +3306,7 @@ class BradbitApp {
       this.diffHostEl.className = "diff-host";
     }
 
-    const previousTree = this.rootEl.querySelector<HTMLElement>(".tree-body");
+    const previousTree = this.rootEl.querySelector<HTMLElement>(".tree-container");
     if (previousTree) this.treeScrollTop = previousTree.scrollTop;
 
     this.rootEl.innerHTML = "";
@@ -3307,9 +3330,7 @@ class BradbitApp {
       this.chatVisible = layout.chatVisible;
 
       if (layout.chatVisible) {
-        const session = this.renderSessionColumn(lang, layout);
-        if (this.animateNextSurface) session.classList.add("surface-enter");
-        body.appendChild(session);
+        body.appendChild(this.renderSessionColumn(lang, layout));
         if (layout.showSessionResizer) {
           body.appendChild(this.renderSessionResizer());
         }
@@ -3318,7 +3339,6 @@ class BradbitApp {
       if (layout.editorVisible) {
         const workspace = document.createElement("div");
         workspace.className = "workspace-panel";
-        if (this.animateNextSurface) workspace.classList.add("surface-enter");
         if (this.sidebarVisible) {
           workspace.appendChild(this.renderSidebar(lang));
           workspace.appendChild(this.renderSidebarResizer());
@@ -3336,9 +3356,9 @@ class BradbitApp {
     }
 
     this.rootEl.appendChild(shell);
-    this.animateNextSurface = false;
+    this.startOpeningAnimation();
 
-    const nextTree = this.rootEl.querySelector<HTMLElement>(".tree-body");
+    const nextTree = this.rootEl.querySelector<HTMLElement>(".tree-container");
     if (nextTree) nextTree.scrollTop = this.treeScrollTop;
 
     // Sync CodeMirror instance if a tab is active
@@ -4300,6 +4320,12 @@ class BradbitApp {
     column.className = "session-column";
     column.classList.toggle("full", layout.sessionFull);
     column.style.width = layout.sessionWidth;
+    if (this.openingSurface) {
+      column.style.width = this.openingSurface === "chat" ? "0px" : "100%";
+      column.style.minWidth = "0";
+      column.style.maxWidth = "none";
+      column.style.overflow = "hidden";
+    }
     if (
       this.settings.showDeveloperOptions &&
       this.sessionView === "terminal" &&
