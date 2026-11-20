@@ -2,6 +2,7 @@ import {
   EditorState,
   Extension,
   Facet,
+  Prec,
   RangeSet,
   RangeSetBuilder,
   StateEffect,
@@ -116,89 +117,35 @@ function hunkLineLabel(
       });
 }
 
-class HunkWidget extends WidgetType {
+class DeletedLinesWidget extends WidgetType {
   constructor(
-    private readonly key: string,
     private readonly text: string,
     private readonly from: number,
-    private readonly showRestore: boolean,
-    private readonly labels: {
-      restore: string;
-      previous: string;
-      next: string;
-      collapse: string;
-    },
-    private readonly onRestore: (view: EditorView) => void,
-    private readonly onNavigate: (view: EditorView, direction: 1 | -1) => void,
-    private readonly onCollapse: (view: EditorView) => void,
   ) {
     super();
   }
 
   eq(other: WidgetType): boolean {
     return (
-      other instanceof HunkWidget &&
-      other.key === this.key &&
+      other instanceof DeletedLinesWidget &&
       other.text === this.text &&
-      other.from === this.from &&
-      other.showRestore === this.showRestore
+      other.from === this.from
     );
   }
 
-  toDOM(view: EditorView): HTMLElement {
+  toDOM(): HTMLElement {
     const block = document.createElement("div");
     block.className = "cm-git-deleted-ghost";
     block.addEventListener("mousedown", (event) => {
-      const target = event.target as HTMLElement | null;
-      if (target?.closest("button")) return;
       event.preventDefault();
     });
-
     for (const line of textLines(this.text)) {
       const row = document.createElement("div");
       row.className = "cm-git-deleted-ghost-line";
       row.textContent = line || "\u00a0";
       block.appendChild(row);
     }
-
-    const actions = document.createElement("div");
-    actions.className = "cm-git-hunk-actions";
-
-    const previous = this.actionButton("↑", this.labels.previous);
-    previous.addEventListener("click", () => this.onNavigate(view, -1));
-    const next = this.actionButton("↓", this.labels.next);
-    next.addEventListener("click", () => this.onNavigate(view, 1));
-    actions.append(previous, next);
-
-    if (this.showRestore) {
-      const restore = document.createElement("button");
-      restore.type = "button";
-      restore.className = "cm-git-hunk-action cm-git-hunk-restore";
-      restore.textContent = this.labels.restore;
-      restore.addEventListener("click", () => this.onRestore(view));
-      actions.appendChild(restore);
-    }
-
-    const collapse = this.actionButton("×", this.labels.collapse);
-    collapse.classList.add("cm-git-hunk-collapse");
-    collapse.addEventListener("click", () => this.onCollapse(view));
-    actions.appendChild(collapse);
-
-    block.appendChild(actions);
     return block;
-  }
-
-  private actionButton(label: string, title: string): HTMLButtonElement {
-    const button = document.createElement("button");
-    button.type = "button";
-    button.className = "cm-git-hunk-action";
-    button.textContent = label;
-    button.title = title;
-    button.addEventListener("mousedown", (event) => {
-      event.preventDefault();
-      event.stopPropagation();
-    });
-    return button;
   }
 
   ignoreEvent(): boolean {
@@ -257,6 +204,8 @@ class GitLineMarker extends GutterMarker {
     private readonly atStart: boolean,
     private readonly atEnd: boolean,
     private readonly restoreTitle: string,
+    private readonly expanded: boolean,
+    private readonly deletedLines: number,
   ) {
     super();
   }
@@ -267,19 +216,30 @@ class GitLineMarker extends GutterMarker {
       other.kind === this.kind &&
       other.title === this.title &&
       other.atStart === this.atStart &&
-      other.atEnd === this.atEnd
+      other.atEnd === this.atEnd &&
+      other.expanded === this.expanded &&
+      other.deletedLines === this.deletedLines
     );
   }
 
-  toDOM(): Node {
+  toDOM(view: EditorView): Node {
     const marker = document.createElement("span");
     marker.className = `cm-git-marker cm-git-marker-${this.kind}`;
+    if (this.expanded) marker.classList.add("cm-git-marker-expanded");
     marker.title = this.title;
 
     if (this.kind === "deleted") {
       marker.classList.add(
         this.atStart ? "at-start" : this.atEnd ? "at-end" : "between",
       );
+      if (this.expanded) {
+        const bar = document.createElement("span");
+        bar.className = "cm-git-deleted-bar";
+        bar.style.height = `${Math.max(1, this.deletedLines) * view.defaultLineHeight}px`;
+        marker.appendChild(bar);
+        return marker;
+      }
+
       const triangle = document.createElement("span");
       triangle.className = "cm-git-triangle";
       marker.appendChild(triangle);
@@ -290,6 +250,13 @@ class GitLineMarker extends GutterMarker {
       restore.title = this.restoreTitle;
       marker.appendChild(restore);
       return marker;
+    }
+
+    if (this.expanded && this.deletedLines > 0) {
+      const prefix = document.createElement("span");
+      prefix.className = "cm-git-modified-prefix";
+      prefix.style.height = `${this.deletedLines * view.defaultLineHeight}px`;
+      marker.appendChild(prefix);
     }
 
     const bar = document.createElement("span");
@@ -344,6 +311,8 @@ export class InlineDiffView {
   private readonly nav: HTMLElement;
   private readonly prevButton: HTMLButtonElement;
   private readonly nextButton: HTMLButtonElement;
+  private readonly restoreButton: HTMLButtonElement;
+  private activeHunkKey: string | null = null;
 
   constructor(private readonly options: InlineDiffViewOptions) {
     this.ruler = document.createElement("div");
@@ -363,7 +332,17 @@ export class InlineDiffView {
     this.nextButton.textContent = "↓";
     this.nextButton.title = t(this.options.getLanguage(), "gitDiffNextChange");
     this.nextButton.addEventListener("click", () => this.navigate(1));
-    this.nav.append(this.prevButton, this.nextButton);
+    this.restoreButton = document.createElement("button");
+    this.restoreButton.type = "button";
+    this.restoreButton.className =
+      "git-diff-nav-button git-diff-nav-restore";
+    this.restoreButton.textContent = "↺";
+    this.restoreButton.title = t(this.options.getLanguage(), "gitDiffRestore");
+    this.restoreButton.hidden = true;
+    this.restoreButton.addEventListener("click", () =>
+      this.restoreActiveHunk(),
+    );
+    this.nav.append(this.prevButton, this.nextButton, this.restoreButton);
 
     this.options.parent.append(this.ruler, this.nav);
   }
@@ -376,13 +355,6 @@ export class InlineDiffView {
 
     const builder = new RangeSetBuilder<Decoration>();
     const seen = new Set<number>();
-    const lang = this.options.getLanguage();
-    const labels = {
-      restore: t(lang, "gitDiffRestore"),
-      previous: t(lang, "gitDiffPreviousChange"),
-      next: t(lang, "gitDiffNextChange"),
-      collapse: t(lang, "gitDiffCollapse"),
-    };
 
     for (const hunk of hunks) {
       const key = hunkKey(hunk);
@@ -401,25 +373,7 @@ export class InlineDiffView {
           position,
           position,
           Decoration.widget({
-            widget: new HunkWidget(
-              key,
-              hunk.originalText,
-              hunk.from,
-              true,
-              labels,
-              (view) => {
-                const current = currentHunk(view, key);
-                if (current) restoreHunk(view, current);
-              },
-              (_view, direction) => this.navigate(direction),
-              (view) => {
-                const next = new Set(expandedHunks(view.state));
-                next.delete(key);
-                view.dispatch({
-                  effects: setExpandedHunksEffect.of(next),
-                });
-              },
-            ),
+            widget: new DeletedLinesWidget(hunk.originalText, hunk.from),
             block: true,
             side: atDocumentEnd ? 1 : -1,
           }),
@@ -455,18 +409,14 @@ export class InlineDiffView {
         [inlineDiffField, expandedHunksField],
         (state) => buildLineNumberMarkers(state),
       ),
-      keymap.of([
-        {
-          key: "Escape",
-          run: (view) => {
-            if (expandedHunks(view.state).size === 0) return false;
-            view.dispatch({
-              effects: setExpandedHunksEffect.of(new Set<string>()),
-            });
-            return true;
+      Prec.highest(
+        keymap.of([
+          {
+            key: "Escape",
+            run: (view) => this.collapseAll(view),
           },
-        },
-      ]),
+        ]),
+      ),
       gutter({
         class: "cm-git-diff-gutter",
         initialSpacer: () => new GutterSpacer(),
@@ -494,7 +444,9 @@ export class InlineDiffView {
     if (!view) return;
     const keys = new Set(hunks.map(hunkKey));
     const current = expandedHunks(view.state);
-    const next = new Set([...current].filter((key) => keys.has(key)));
+    const keep = [...current].find((key) => keys.has(key));
+    const next = new Set<string>(keep ? [keep] : []);
+    this.activeHunkKey = keep ?? null;
     view.dispatch({
       effects: [
         setInlineDiffEffect.of(hunks),
@@ -514,9 +466,10 @@ export class InlineDiffView {
     const lang = this.options.getLanguage();
     this.ruler.replaceChildren();
     this.ruler.classList.toggle("visible", hunks.length > 0);
-    this.nav.classList.toggle("visible", hunks.length > 0);
     this.prevButton.title = t(lang, "gitDiffPreviousChange");
     this.nextButton.title = t(lang, "gitDiffNextChange");
+    this.restoreButton.title = t(lang, "gitDiffRestore");
+    this.updateNav();
     if (!view || hunks.length === 0) return;
     const total = Math.max(1, view.state.doc.lines);
 
@@ -527,8 +480,7 @@ export class InlineDiffView {
         0.35,
         ((range.toLine - range.fromLine + 1) / total) * 100,
       );
-      const tick = document.createElement("button");
-      tick.type = "button";
+      const tick = document.createElement("span");
       tick.className = `git-diff-ruler-tick git-diff-ruler-${hunk.kind}`;
       tick.style.top = `${top}%`;
       tick.style.height = `${height}%`;
@@ -537,11 +489,6 @@ export class InlineDiffView {
         hunk,
         view,
       )}`;
-      tick.addEventListener("mousedown", (event) => {
-        event.preventDefault();
-        event.stopPropagation();
-        this.revealHunk(hunk);
-      });
       this.ruler.appendChild(tick);
     }
   }
@@ -582,8 +529,9 @@ export class InlineDiffView {
         ? hunkAnchorLine(hunk, doc)
         : hunkLineRange(hunk, doc).fromLine;
     const line = doc.line(Math.min(Math.max(1, lineNumber), doc.lines));
-    const next = new Set(expandedHunks(view.state));
-    next.add(hunkKey(hunk));
+    const key = hunkKey(hunk);
+    const next = new Set<string>([key]);
+    this.activeHunkKey = key;
     view.dispatch({
       selection: { anchor: line.from },
       effects: [
@@ -592,6 +540,7 @@ export class InlineDiffView {
       ],
     });
     view.focus();
+    this.updateNav();
   }
 
   private buildGutterMarkers(view: EditorView) {
@@ -601,6 +550,7 @@ export class InlineDiffView {
 
     const lang = this.options.getLanguage();
     const doc = view.state.doc;
+    const expanded = expandedHunks(view.state);
     const markers: Array<{
       line: number;
       kind: InlineDiffHunk["kind"];
@@ -608,6 +558,8 @@ export class InlineDiffView {
       atStart: boolean;
       atEnd: boolean;
       restoreTitle: string;
+      expanded: boolean;
+      deletedLines: number;
     }> = [];
     const seen = new Set<number>();
 
@@ -624,6 +576,8 @@ export class InlineDiffView {
           atStart: hunk.from === 0,
           atEnd: hunk.from >= doc.length,
           restoreTitle: t(lang, "gitDiffRestoreDeleted"),
+          expanded: expanded.has(hunkKey(hunk)),
+          deletedLines: hunk.deletedLines,
         });
         continue;
       }
@@ -639,6 +593,11 @@ export class InlineDiffView {
           atStart: false,
           atEnd: false,
           restoreTitle: "",
+          expanded: expanded.has(hunkKey(hunk)),
+          deletedLines:
+            hunk.kind === "modified" && number === range.fromLine
+              ? hunk.deletedLines
+              : 0,
         });
       }
     }
@@ -655,6 +614,8 @@ export class InlineDiffView {
           info.atStart,
           info.atEnd,
           info.restoreTitle,
+          info.expanded,
+          info.deletedLines,
         ),
       );
     }
@@ -694,13 +655,64 @@ export class InlineDiffView {
       return true;
     }
 
-    const next = new Set(expandedHunks(view.state));
+    const current = expandedHunks(view.state);
     const key = hunkKey(hunk);
-    if (next.has(key)) next.delete(key);
-    else next.add(key);
+    const next = current.has(key)
+      ? new Set<string>()
+      : new Set<string>([key]);
+    this.activeHunkKey = next.has(key) ? key : null;
     view.dispatch({ effects: setExpandedHunksEffect.of(next) });
     view.requestMeasure();
+    this.updateNav();
     return true;
+  }
+
+  private collapseAll(view: EditorView): boolean {
+    if (expandedHunks(view.state).size === 0) return false;
+    this.activeHunkKey = null;
+    view.dispatch({
+      effects: setExpandedHunksEffect.of(new Set<string>()),
+    });
+    this.updateNav();
+    return true;
+  }
+
+  private restoreActiveHunk(): void {
+    const view = this.options.getView();
+    if (!view || !this.activeHunkKey) return;
+    const hunk = currentHunk(view, this.activeHunkKey);
+    if (!hunk) return;
+    restoreHunk(view, hunk);
+    const next = new Set(expandedHunks(view.state));
+    next.delete(this.activeHunkKey);
+    this.activeHunkKey = null;
+    view.dispatch({ effects: setExpandedHunksEffect.of(next) });
+    this.updateNav();
+  }
+
+  private updateNav(): void {
+    const view = this.options.getView();
+    if (!view) {
+      this.nav.classList.remove("visible");
+      return;
+    }
+    const hunks = view.state.field(inlineDiffField, false) ?? [];
+    const expanded = expandedHunks(view.state);
+    if (this.activeHunkKey && !expanded.has(this.activeHunkKey)) {
+      this.activeHunkKey = null;
+    }
+    if (!this.activeHunkKey) {
+      const first = hunks.find((hunk) => expanded.has(hunkKey(hunk)));
+      this.activeHunkKey = first ? hunkKey(first) : null;
+    }
+    const active = this.activeHunkKey
+      ? currentHunk(view, this.activeHunkKey)
+      : null;
+    this.nav.classList.toggle(
+      "visible",
+      hunks.length > 0 && expanded.size > 0,
+    );
+    this.restoreButton.hidden = !active || active.kind === "added";
   }
 
   public destroy(): void {

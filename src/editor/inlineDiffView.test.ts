@@ -46,6 +46,8 @@ describe("inline diff view (T-3.9.2)", () => {
     expect(parent.querySelector(".cm-git-line-expanded")).toBeNull();
     expect(parent.querySelector(".cm-git-deleted-ghost")).toBeNull();
     expect(parent.querySelectorAll(".git-diff-ruler-tick")).toHaveLength(1);
+    const nav = parent.querySelector(".git-diff-nav");
+    expect(nav?.classList.contains("visible")).toBe(false);
 
     click(parent.querySelector(".cm-git-marker-modified"));
 
@@ -53,7 +55,15 @@ describe("inline diff view (T-3.9.2)", () => {
     expect(parent.querySelector(".cm-git-line-number-expanded")).not.toBeNull();
     const ghost = parent.querySelector(".cm-git-deleted-ghost");
     expect(ghost?.textContent).toContain("uno");
-    expect(ghost?.querySelector(".cm-git-hunk-restore")).not.toBeNull();
+    expect(
+      parent
+        .querySelector(".cm-git-marker-modified")
+        ?.classList.contains("cm-git-marker-expanded"),
+    ).toBe(true);
+    expect(
+      parent.querySelector<HTMLButtonElement>(".git-diff-nav-restore")?.hidden,
+    ).toBe(false);
+    expect(nav?.classList.contains("visible")).toBe(true);
     holder.view?.destroy();
   });
 
@@ -66,7 +76,9 @@ describe("inline diff view (T-3.9.2)", () => {
 
     expect(parent.querySelector(".cm-git-line-expanded")).not.toBeNull();
     expect(parent.querySelector(".cm-git-deleted-ghost")).toBeNull();
-    expect(parent.querySelector(".cm-git-hunk-restore")).toBeNull();
+    expect(
+      parent.querySelector<HTMLButtonElement>(".git-diff-nav-restore")?.hidden,
+    ).toBe(true);
     holder.view?.destroy();
   });
 
@@ -78,7 +90,13 @@ describe("inline diff view (T-3.9.2)", () => {
 
     const ghost = parent.querySelector(".cm-git-deleted-ghost");
     expect(ghost?.textContent).toContain("uno");
-    expect(ghost?.querySelector(".cm-git-hunk-restore")).not.toBeNull();
+    expect(parent.querySelector(".cm-git-deleted-bar")).not.toBeNull();
+    expect(
+      parent.querySelector(".cm-git-marker-deleted .cm-git-triangle"),
+    ).toBeNull();
+    expect(
+      parent.querySelector<HTMLButtonElement>(".git-diff-nav-restore")?.hidden,
+    ).toBe(false);
     expect(parent.querySelector(".cm-git-line-expanded")).toBeNull();
     holder.view?.destroy();
   });
@@ -86,12 +104,20 @@ describe("inline diff view (T-3.9.2)", () => {
   it("collapses an expanded hunk when its bar is clicked again", () => {
     const { parent, holder, diff } = mount("uno\ndos");
     diff.setHunks(buildInlineDiffHunks("uno\ndos", "UNO\ndos"));
-    const marker = parent.querySelector(".cm-git-marker-modified");
-
-    click(marker);
+    click(parent.querySelector(".cm-git-marker-modified"));
     expect(parent.querySelector(".cm-git-deleted-ghost")).not.toBeNull();
-    click(marker);
+    expect(
+      parent
+        .querySelector(".cm-git-marker-modified")
+        ?.classList.contains("cm-git-marker-expanded"),
+    ).toBe(true);
+    click(parent.querySelector(".cm-git-marker-modified"));
     expect(parent.querySelector(".cm-git-deleted-ghost")).toBeNull();
+    expect(
+      parent
+        .querySelector(".cm-git-marker-modified")
+        ?.classList.contains("cm-git-marker-expanded"),
+    ).toBe(false);
     holder.view?.destroy();
   });
 
@@ -106,7 +132,7 @@ describe("inline diff view (T-3.9.2)", () => {
     const buttons = parent.querySelectorAll<HTMLButtonElement>(
       ".git-diff-nav-button",
     );
-    expect(buttons).toHaveLength(2);
+    expect(buttons).toHaveLength(3);
 
     const line = () =>
       holder.view?.state.doc.lineAt(holder.view.state.selection.main.head)
@@ -122,18 +148,52 @@ describe("inline diff view (T-3.9.2)", () => {
     holder.view?.destroy();
   });
 
-  it("restores deleted lines from the expanded hunk action", () => {
+  it("restores deleted lines from the hover controls", () => {
     const { parent, holder, diff } = mount("dos\n");
     diff.setHunks(buildInlineDiffHunks("uno\ndos\n", "dos\n"));
     click(parent.querySelector(".cm-git-marker-deleted"));
 
     const restore = parent.querySelector<HTMLButtonElement>(
-      ".cm-git-hunk-restore",
+      ".git-diff-nav-restore",
     );
     expect(restore).not.toBeNull();
+    expect(restore?.hidden).toBe(false);
     restore?.click();
 
     expect(holder.view?.state.doc.toString()).toBe("uno\ndos\n");
+    expect(parent.querySelector(".cm-git-deleted-ghost")).toBeNull();
+    holder.view?.destroy();
+  });
+
+  it("closes every expansion with Escape", () => {
+    const { parent, holder, diff } = mount("uno\ndos");
+    diff.setHunks(buildInlineDiffHunks("uno\ndos", "UNO\ndos"));
+    click(parent.querySelector(".cm-git-marker-modified"));
+    expect(parent.querySelector(".cm-git-deleted-ghost")).not.toBeNull();
+
+    holder.view?.contentDOM.dispatchEvent(
+      new KeyboardEvent("keydown", {
+        key: "Escape",
+        bubbles: true,
+        cancelable: true,
+      }),
+    );
+
+    expect(parent.querySelector(".cm-git-deleted-ghost")).toBeNull();
+    expect(
+      parent.querySelector(".git-diff-nav")?.classList.contains("visible"),
+    ).toBe(false);
+    holder.view?.destroy();
+  });
+
+  it("does not expand hunks from the right ruler", () => {
+    const { parent, holder, diff } = mount("uno\ndos");
+    diff.setHunks(buildInlineDiffHunks("uno\ndos", "UNO\ndos"));
+
+    click(parent.querySelector(".git-diff-ruler-tick"));
+
+    expect(parent.querySelector(".cm-git-deleted-ghost")).toBeNull();
+    expect(parent.querySelector(".cm-git-line-expanded")).toBeNull();
     holder.view?.destroy();
   });
 

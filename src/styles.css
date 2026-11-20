@@ -3038,14 +3038,8 @@ textarea.text-input {
   padding: 0;
   border: none;
   border-radius: 2px;
-  pointer-events: auto;
-  cursor: pointer;
+  pointer-events: none;
   opacity: 0.85;
-}
-
-.git-diff-ruler-tick:hover {
-  opacity: 1;
-  width: 6px;
 }
 
 .git-diff-ruler-added {
@@ -3085,42 +3079,27 @@ textarea.text-input {
   overflow-wrap: anywhere;
 }
 
-.cm-git-hunk-actions {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  margin: 2px -2px 0;
-  padding: 3px 6px;
-  border-top: 1px solid rgba(243, 108, 108, 0.22);
-  background: rgba(243, 108, 108, 0.08);
+.cm-git-deleted-bar,
+.cm-git-modified-prefix {
+  position: absolute;
+  bottom: 100%;
+  left: 50%;
+  width: 3px;
+  border-radius: 2px;
+  transform: translateX(-50%);
 }
 
-.cm-git-hunk-action {
-  min-width: 20px;
-  height: 20px;
-  padding: 0 6px;
-  border: 1px solid var(--border-color);
-  border-radius: 4px;
-  background: var(--bg-elevated);
-  color: var(--text-secondary);
-  font-family: var(--font-ui);
-  font-size: 11px;
-  line-height: 1;
-  cursor: pointer;
+.cm-git-deleted-bar {
+  background: var(--git-deleted);
 }
 
-.cm-git-hunk-action:hover {
-  color: var(--text-primary);
-  background: var(--bg-hover);
+.cm-git-modified-prefix {
+  background: var(--git-modified);
 }
 
-.cm-git-hunk-restore {
-  margin-left: 6px;
-  color: var(--git-deleted);
-}
-
-.cm-git-hunk-collapse {
-  color: var(--text-muted);
+.cm-git-marker-modified.cm-git-marker-expanded .cm-git-bar {
+  width: 7px;
+  margin-left: -4px;
 }
 
 .git-diff-nav {
@@ -3128,7 +3107,7 @@ textarea.text-input {
   top: 8px;
   right: 16px;
   z-index: 7;
-  display: none;
+  display: flex;
   align-items: center;
   gap: 2px;
   padding: 2px;
@@ -3136,10 +3115,18 @@ textarea.text-input {
   border-radius: 6px;
   background: var(--bg-elevated);
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.18);
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(-2px);
+  transition: opacity 0.12s ease, transform 0.12s ease;
 }
 
-.git-diff-nav.visible {
-  display: flex;
+.cm-host:hover .git-diff-nav.visible,
+.git-diff-nav.visible:hover,
+.git-diff-nav.visible:focus-within {
+  opacity: 1;
+  pointer-events: auto;
+  transform: none;
 }
 
 .git-diff-nav-button {
@@ -3159,6 +3146,15 @@ textarea.text-input {
 .git-diff-nav-button:hover {
   background: var(--bg-hover);
   color: var(--text-primary);
+}
+
+.git-diff-nav-restore {
+  color: var(--git-deleted);
+  font-size: 14px;
+}
+
+.git-diff-nav-restore[hidden] {
+  display: none;
 }
 
 .git-branch {
