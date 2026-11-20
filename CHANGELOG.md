@@ -13,6 +13,9 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 - **Developer options** are hidden by default; the terminal, configuration files and advanced Git author fields appear only after enabling them in Settings.
 - **Saving a version** falls back to `Bradbit Writer <writer@bradbit.local>` when no author is configured.
 - **Compact first-run checklist:** the welcome card no longer repeats the intro, checks sit in two columns and details stay on one line with ellipsis.
+- **Editor and chat polish:** clicking the last line no longer selects or jumps unexpectedly; per-tab editor scroll and file-tree scroll are preserved; the chat restores to the end when opening a project; showing or hiding the chat/editor surfaces animates smoothly.
+- **Chat Markdown:** user messages render as Markdown. Tool results choose their own display: Markdown when the file/result is Markdown, colored Fountain lines when it is Fountain, and compact plain text otherwise; tool input JSON stays hidden.
+- **Kit writing area:** templates declare `primaryPaths`, and the file tree highlights the folder/files being written in the accent color while the rest stays as context.
 
 ### Added
 - **Curated context menus** for the file tree and tabs: open, new file/folder, rename, delete, close tab/others, copy path and show in Finder. The text editor keeps the native macOS menu so spelling, Look Up and services remain available. The WebView inspector is disabled in the packaged app.

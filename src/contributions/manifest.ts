@@ -14,6 +14,7 @@ export interface ContributionManifest {
   version?: string;
   contributes?: {
     symbolSources?: SymbolSourceContribution[];
+    primaryPaths?: string[];
   };
 }
 
@@ -75,13 +76,20 @@ export function parseContributionManifest(
         .map(parseSymbolSource)
         .filter((source): source is SymbolSourceContribution => source !== null)
     : [];
+  const primaryPaths = stringArray(contributes?.primaryPaths)
+    .map((path) => path.trim())
+    .filter(Boolean);
+  const nextContributes = {
+    ...(sources.length > 0 ? { symbolSources: sources } : {}),
+    ...(primaryPaths.length > 0 ? { primaryPaths } : {}),
+  };
 
   return {
     ...(typeof parsed.id === "string" ? { id: parsed.id } : {}),
     ...(typeof parsed.name === "string" ? { name: parsed.name } : {}),
     ...(typeof parsed.version === "string" ? { version: parsed.version } : {}),
-    ...(sources.length > 0
-      ? { contributes: { symbolSources: sources } }
+    ...(Object.keys(nextContributes).length > 0
+      ? { contributes: nextContributes }
       : {}),
   };
 }
@@ -131,4 +139,8 @@ export function matchesAnySource(
   return sources.some((source) =>
     source.include.some((pattern) => matchesGlob(path, pattern)),
   );
+}
+
+export function matchesAnyGlob(path: string, patterns: string[]): boolean {
+  return patterns.some((pattern) => matchesGlob(path, pattern));
 }

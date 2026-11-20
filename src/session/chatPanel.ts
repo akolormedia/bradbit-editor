@@ -3,6 +3,7 @@ import { t } from "../i18n";
 import { KitCatalog, Language, OpenCodeFormField, OpenCodeModel } from "../types";
 import { createIcon, IconName } from "../ui/icons";
 import { renderMarkdownPreview } from "../editor/preview";
+import { classifyFountainLines } from "../editor/fountainPreview";
 import { createIconButton } from "../ui/iconButton";
 import { kitCommandCandidates, localizedKitText } from "../kit/localize";
 import { QuickOpenFile } from "../workspace/quickOpen";
@@ -396,8 +397,12 @@ export class ChatPanel {
   }
 
   public update(state: ChatState, options?: Partial<ChatPanelOptions>): void {
+    const previousActive = this.options.activeSessionId;
     if (options) {
       this.options = { ...this.options, ...options };
+    }
+    if (previousActive !== this.options.activeSessionId) {
+      this.stickToBottom = true;
     }
     this.state = state;
     const lang = this.options.language;
@@ -1195,13 +1200,20 @@ export class ChatPanel {
             : t(this.options.language, "chatSystem");
       row.appendChild(role);
 
-      if (message.role === "user" || message.role === "system") {
+      if (message.role === "system") {
         const text = messageText(message);
         if (text.length === 0) continue;
         const bubble = document.createElement("div");
         bubble.className = "chat-message-bubble";
         if (message.streaming) bubble.classList.add("streaming");
         bubble.textContent = text;
+        if (message.error) bubble.classList.add("error");
+        row.appendChild(bubble);
+      } else if (message.role === "user") {
+        const text = messageText(message);
+        if (text.length === 0) continue;
+        const bubble = this.markdownBubble(text);
+        if (message.streaming) bubble.classList.add("streaming");
         if (message.error) bubble.classList.add("error");
         row.appendChild(bubble);
       } else {
@@ -1214,22 +1226,10 @@ export class ChatPanel {
             continue;
           }
           if (part.text.length === 0) continue;
-          const bubble = document.createElement("div");
-          bubble.className = "chat-message-bubble chat-message-markdown";
+          const bubble = this.markdownBubble(part.text);
           if (message.streaming && part === lastText) {
             bubble.classList.add("streaming");
           }
-          bubble.innerHTML = renderMarkdownPreview(part.text);
-          bubble.addEventListener("click", (event) => {
-            const target = (event.target as HTMLElement).closest("a");
-            if (!target) return;
-            const href = target.getAttribute("href");
-            if (!href) return;
-            event.preventDefault();
-            if (/^(https?:|mailto:)/i.test(href)) {
-              void backend.openExternalUrl(href);
-            }
-          });
           if (message.error) bubble.classList.add("error");
           row.appendChild(bubble);
         }
@@ -1257,10 +1257,40 @@ export class ChatPanel {
     this.renderRequests();
 
     if (shouldStick) {
-      this.messagesEl.scrollTop = this.messagesEl.scrollHeight;
+      const scrollToBottom = () => {
+        if (!this.stickToBottom) return;
+        this.messagesEl.scrollTop = this.messagesEl.scrollHeight;
+      };
+      scrollToBottom();
+      if (typeof window.requestAnimationFrame === "function") {
+        window.requestAnimationFrame(scrollToBottom);
+      } else {
+        window.setTimeout(scrollToBottom, 0);
+      }
     } else {
       this.messagesEl.scrollTop = previousScrollTop;
     }
+  }
+
+  private markdownBubble(text: string): HTMLElement {
+    const bubble = document.createElement("div");
+    bubble.className = "chat-message-bubble chat-message-markdown";
+    bubble.innerHTML = renderMarkdownPreview(text);
+    this.bindMarkdownLinks(bubble);
+    return bubble;
+  }
+
+  private bindMarkdownLinks(element: HTMLElement): void {
+    element.addEventListener("click", (event) => {
+      const target = (event.target as HTMLElement).closest("a");
+      if (!target) return;
+      const href = target.getAttribute("href");
+      if (!href) return;
+      event.preventDefault();
+      if (/^(https?:|mailto:)/i.test(href)) {
+        void backend.openExternalUrl(href);
+      }
+    });
   }
 
   private toolVerb(name: string): string {
@@ -1351,20 +1381,181 @@ export class ChatPanel {
     return text.length > max ? `${text.slice(0, max)}…` : text;
   }
 
-  private formatInput(input: unknown): string {
-    if (input === null || input === undefined) return "";
-    if (typeof input === "string") return this.clip(input, 6000);
-    try {
-      return this.clip(JSON.stringify(input, null, 2), 6000);
-    } catch {
-      return this.clip(String(input), 6000);
-    }
-  }
-
   private isEditTool(name: string): boolean {
     return ["edit", "write", "patch", "multiedit", "apply_patch"].includes(
       name,
     );
+  }
+
+  private toolMarkdownSection(
+    lang: Language,
+    labelKey: "chatToolOutput",
+    text: string,
+    className: string,
+  ): HTMLElement {
+    const section = document.createElement("div");
+    section.className = `chat-tool-section ${className}`.trim();
+    const label = document.createElement("div");
+    label.className = "chat-tool-section-label";
+    label.textContent = t(lang, labelKey);
+    const content = document.createElement("div");
+    content.className = "chat-tool-markdown markdown-preview";
+    content.innerHTML = renderMarkdownPreview(text);
+    this.bindMarkdownLinks(content);
+    section.append(label, content);
+    return section;
+  }
+
+  private toolActionSection(lang: Language, text: string): HTMLElement {
+    const section = document.createElement("div");
+    section.className = "chat-tool-section";
+    const label = document.createElement("div");
+    label.className = "chat-tool-section-label";
+    label.textContent = t(lang, "chatToolAction");
+    const content = document.createElement("div");
+    content.className = "chat-tool-action";
+    content.textContent = text;
+    section.append(label, content);
+    return section;
+  }
+
+  private splitToolOutput(tool: ChatToolCall): {
+    action: string;
+    result: string;
+  } {
+    const lines = tool.output.split(/\r?\n/);
+    let action = "";
+    let start = 0;
+    const first = lines[0]?.trim() ?? "";
+    if (/^read file\b/i.test(first)) {
+      const second = lines[1]?.trim() ?? "";
+      const header = second.match(
+        /^(.+?)(?:,\s*lines?\s+(\d+)(?:\s*[-–]\s*(\d+))?)?$/i,
+      );
+      if (second.startsWith("/") && header) {
+        const relative =
+          projectRelativePath(this.options.projectRoot, header[1]) ?? header[1];
+        const range = header[3]
+          ? `${header[2]}–${header[3]}`
+          : header[2] ?? "";
+        action = range ? `${relative} · ${range}` : relative;
+        start = 2;
+      } else {
+        action = first;
+        start = 1;
+      }
+    }
+
+    let contentLines = lines.slice(start);
+    if (tool.name === "read" || start > 0) {
+      contentLines = contentLines.map((line) =>
+        line.replace(/^\s*\d+[:|]\s?/, ""),
+      );
+    }
+    while (contentLines[0]?.trim() === "") contentLines.shift();
+    while (contentLines[contentLines.length - 1]?.trim() === "") {
+      contentLines.pop();
+    }
+    return { action, result: contentLines.join("\n") };
+  }
+
+  private toolActionText(tool: ChatToolCall): string {
+    const input =
+      tool.input && typeof tool.input === "object" && !Array.isArray(tool.input)
+        ? (tool.input as Record<string, unknown>)
+        : {};
+    const pick = (...keys: string[]): string => {
+      for (const key of keys) {
+        const value = input[key];
+        if (typeof value === "string" && value.trim().length > 0) {
+          return value.trim();
+        }
+      }
+      return "";
+    };
+    const path =
+      tool.files.length > 0
+        ? projectRelativePath(this.options.projectRoot, tool.files[0]) ??
+          tool.files[0]
+        : pick("path", "filePath", "file");
+    if (tool.name === "read" || this.isEditTool(tool.name)) return path;
+    if (tool.name === "shell") return pick("command");
+    if (tool.name === "glob" || tool.name === "grep") {
+      return pick("pattern", "query");
+    }
+    if (tool.name === "webfetch" || tool.name === "websearch") {
+      return pick("url", "query");
+    }
+    return this.toolSummary(tool) || tool.name;
+  }
+
+  private toolFountainSection(
+    lang: Language,
+    labelKey: "chatToolOutput",
+    text: string,
+    className: string,
+  ): HTMLElement {
+    const section = document.createElement("div");
+    section.className = `chat-tool-section ${className}`.trim();
+    const label = document.createElement("div");
+    label.className = "chat-tool-section-label";
+    label.textContent = t(lang, labelKey);
+    const content = document.createElement("div");
+    content.className = "chat-tool-fountain";
+    for (const line of classifyFountainLines(text)) {
+      const lineEl = document.createElement("div");
+      lineEl.className = `chat-fountain-line chat-fountain-${line.type}`;
+      lineEl.textContent = line.text || "\u00a0";
+      content.appendChild(lineEl);
+    }
+    section.append(label, content);
+    return section;
+  }
+
+  private toolOutputKind(
+    tool: ChatToolCall,
+    result: string,
+  ): "markdown" | "fountain" | "text" {
+    const path = tool.files[0]?.toLowerCase() ?? "";
+    if (/\.(md|markdown|mdx)$/.test(path)) return "markdown";
+    if (/\.(fountain|spmd)$/.test(path)) return "fountain";
+    // A known non-Markdown/non-Fountain file type is shown as plain text.
+    if (/\.[a-z0-9]+$/.test(path)) return "text";
+
+    const text = result.trim();
+    if (!text) return "text";
+    if (this.looksLikeFountain(text)) return "fountain";
+    if (this.looksLikeMarkdown(text)) return "markdown";
+    return "text";
+  }
+
+  private looksLikeFountain(text: string): boolean {
+    const lines = classifyFountainLines(text).filter(
+      (line) => line.text.trim().length > 0,
+    );
+    if (lines.length === 0) return false;
+    const screenplayLines = lines.filter((line) =>
+      ["scene", "character", "dialogue", "parenthetical", "transition"].includes(
+        line.type,
+      ),
+    );
+    return (
+      screenplayLines.length >= 2 &&
+      screenplayLines.length >= lines.length * 0.5
+    );
+  }
+
+  private looksLikeMarkdown(text: string): boolean {
+    const signals = [
+      /^#{1,6}\s+\S/m,
+      /\*\*[^*]+\*\*/,
+      /(?:^|\n)\s*[-*+]\s+\S/,
+      /(?:^|\n)\s*\d+\.\s+\S/,
+      /\[[^\]]+\]\([^)]+\)/,
+      /(?:^|\n)```/,
+      /(?:^|\n)>\s+\S/,
+    ];
+    return signals.filter((pattern) => pattern.test(text)).length >= 2;
   }
 
   private renderTool(tool: ChatToolCall): HTMLElement {
@@ -1444,20 +1635,20 @@ export class ChatPanel {
     if (prompts) {
       body.appendChild(renderQuestionTool(tool, prompts));
     } else {
-      const inputText = this.formatInput(tool.input);
-      if (inputText) {
-        body.appendChild(
-          this.toolSection(lang, "chatToolInput", inputText, ""),
-        );
+      const { action, result } = this.splitToolOutput(tool);
+      const actionText = action || this.toolActionText(tool);
+      if (actionText) {
+        body.appendChild(this.toolActionSection(lang, actionText));
       }
-      if (tool.output) {
+      if (result) {
+        const output = this.clip(result, 8000);
+        const kind = this.toolOutputKind(tool, result);
         body.appendChild(
-          this.toolSection(
-            lang,
-            "chatToolOutput",
-            this.clip(tool.output, 8000),
-            "",
-          ),
+          kind === "fountain"
+            ? this.toolFountainSection(lang, "chatToolOutput", output, "")
+            : kind === "markdown"
+              ? this.toolMarkdownSection(lang, "chatToolOutput", output, "")
+              : this.toolSection(lang, "chatToolOutput", output, ""),
         );
       }
       if (tool.error) {

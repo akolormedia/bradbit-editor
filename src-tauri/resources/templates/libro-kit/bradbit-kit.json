@@ -17,5 +17,11 @@
     "pitch/",
     "README.md",
     "LICENSE"
-  ]
+  ],
+  "contributes": {
+    "primaryPaths": [
+      "manuscript",
+      "manuscript/**"
+    ]
+  }
 }

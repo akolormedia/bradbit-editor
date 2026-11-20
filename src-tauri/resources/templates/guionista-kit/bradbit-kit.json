@@ -12,20 +12,32 @@
         "id": "screenplay.characters",
         "language": "fountain",
         "kind": "character",
-        "include": ["bible/characters/**/*.md"],
+        "include": [
+          "bible/characters/**/*.md"
+        ],
         "name": "frontmatter.name",
-        "aliases": ["frontmatter.aliases"],
+        "aliases": [
+          "frontmatter.aliases"
+        ],
         "fallback": "heading"
       },
       {
         "id": "screenplay.locations",
         "language": "fountain",
         "kind": "location",
-        "include": ["bible/locations/**/*.md"],
+        "include": [
+          "bible/locations/**/*.md"
+        ],
         "name": "frontmatter.name",
-        "aliases": ["frontmatter.aliases"],
+        "aliases": [
+          "frontmatter.aliases"
+        ],
         "fallback": "heading"
       }
+    ],
+    "primaryPaths": [
+      "script",
+      "script/**"
     ]
   },
   "contents": [

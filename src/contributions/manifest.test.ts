@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   globToRegExp,
+  matchesAnyGlob,
   matchesAnySource,
   matchesGlob,
   parseContributionManifest,
@@ -29,11 +30,16 @@ describe("contribution manifest", () => {
               kind: "character",
             },
           ],
+          primaryPaths: ["script", "script/**"],
         },
       }),
     );
 
     expect(manifest?.id).toBe("guionista-kit");
+    expect(manifest?.contributes?.primaryPaths).toEqual([
+      "script",
+      "script/**",
+    ]);
     expect(symbolSourcesForLanguage(manifest, "fountain")).toHaveLength(1);
     expect(symbolSourcesForLanguage(manifest, "fountain")[0]).toMatchObject({
       id: "screenplay.characters",
@@ -67,5 +73,11 @@ describe("contribution manifest", () => {
     ];
     expect(matchesAnySource("bible/characters/ana.md", sources)).toBe(true);
     expect(matchesAnySource("script/acto.fountain", sources)).toBe(false);
+    expect(
+      matchesAnyGlob("script/acto.fountain", ["script", "script/**"]),
+    ).toBe(true);
+    expect(
+      matchesAnyGlob("bible/premise.md", ["script", "script/**"]),
+    ).toBe(false);
   });
 });

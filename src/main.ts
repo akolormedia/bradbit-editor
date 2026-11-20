@@ -100,6 +100,7 @@ import { createIcon } from "./ui/icons";
 import { createIconButton } from "./ui/iconButton";
 import { createFountainToolbar } from "./editor/fountainToolbar";
 import {
+  matchesAnyGlob,
   matchesAnySource,
   parseContributionManifest,
   symbolSourcesForLanguage,
@@ -336,6 +337,10 @@ class BradbitApp {
   private editor: BradbitCodeMirror | null = null;
   private symbolSources: SymbolSourceContribution[] = [];
   private symbolIndex: SymbolIndex = new Map();
+  private primaryPaths: string[] = [];
+  private treeScrollTop = 0;
+  private openingSurface: "chat" | "editor" | null = null;
+  private layoutAnimating = false;
 
   constructor(rootEl: HTMLElement) {
     this.rootEl = rootEl;
@@ -435,6 +440,7 @@ class BradbitApp {
     this.folder = null;
     this.symbolSources = [];
     this.symbolIndex = new Map();
+    this.primaryPaths = [];
     this.kitCatalog = { agents: [], commands: GENERAL_COMMANDS, skills: [] };
     this.chatModels = [];
     this.tabState = { tabs: [], activeTabPath: null };
@@ -467,6 +473,7 @@ class BradbitApp {
       this.folder = opened;
       this.symbolSources = [];
       this.symbolIndex = new Map();
+      this.primaryPaths = [];
       this.kitCatalog = { agents: [], commands: GENERAL_COMMANDS, skills: [] };
       try {
         this.workspaceState = await backend.loadWorkspaceState(opened.rootPath);
@@ -488,6 +495,7 @@ class BradbitApp {
       this.untitledSequence = 0;
       this.collapsedDirs.clear();
       this.fileFilter = "";
+      this.treeScrollTop = 0;
       this.gitHistory = [];
       this.gitBranches = [];
       this.gitCommitMessage = "";
@@ -536,14 +544,17 @@ class BradbitApp {
   private async refreshProjectContributions(): Promise<void> {
     this.symbolSources = [];
     this.symbolIndex = new Map();
+    this.primaryPaths = [];
     if (!this.folder || !isTauriEnvironment()) return;
     const root = this.folder.rootPath;
     try {
       const raw = await backend.readTextFile(root, "bradbit-kit.json");
       const manifest = parseContributionManifest(raw);
       this.symbolSources = symbolSourcesForLanguage(manifest, "fountain");
+      this.primaryPaths = manifest?.contributes?.primaryPaths ?? [];
     } catch {
       this.symbolSources = [];
+      this.primaryPaths = [];
     }
     if (this.folder?.rootPath !== root) return;
     await this.refreshProjectSymbols();
@@ -1999,21 +2010,97 @@ class BradbitApp {
   }
 
   private toggleChatPanel(): void {
-    this.chatVisible = !this.chatVisible;
-    if (!this.chatVisible) {
-      this.editorVisible = true;
+    if (this.layoutAnimating) return;
+    if (this.chatVisible) {
+      this.layoutAnimating = true;
+      this.animateSessionWidth(0, () => {
+        this.layoutAnimating = false;
+        this.chatVisible = false;
+        this.editorVisible = true;
+        this.render();
+        this.persistWorkspaceState();
+      });
+      return;
     }
+    this.layoutAnimating = true;
+    this.chatVisible = true;
+    this.editorVisible = true;
+    this.openingSurface = "chat";
     this.render();
     this.persistWorkspaceState();
   }
 
   private toggleEditorPanel(): void {
-    this.editorVisible = !this.editorVisible;
-    if (!this.editorVisible) {
-      this.chatVisible = true;
+    if (this.layoutAnimating) return;
+    if (this.editorVisible) {
+      this.layoutAnimating = true;
+      const body = this.rootEl.querySelector<HTMLElement>(".workspace-body");
+      const width = body?.clientWidth ?? this.sessionWidth;
+      this.animateSessionWidth(width, () => {
+        this.layoutAnimating = false;
+        this.editorVisible = false;
+        this.chatVisible = true;
+        this.render();
+        this.persistWorkspaceState();
+      });
+      return;
     }
+    this.layoutAnimating = true;
+    this.editorVisible = true;
+    this.chatVisible = true;
+    this.openingSurface = "editor";
     this.render();
     this.persistWorkspaceState();
+  }
+
+  private startOpeningAnimation(): void {
+    if (!this.openingSurface) return;
+    this.openingSurface = null;
+    this.animateSessionWidth(this.sessionWidth, () => {
+      this.layoutAnimating = false;
+    });
+  }
+
+  private animateSessionWidth(target: number, onFinished: () => void): void {
+    const column = this.rootEl.querySelector<HTMLElement>(".session-column");
+    if (
+      !column ||
+      typeof column.animate !== "function" ||
+      (typeof window.matchMedia === "function" &&
+        window.matchMedia("(prefers-reduced-motion: reduce)").matches)
+    ) {
+      if (column) {
+        column.style.width = `${target}px`;
+        column.style.minWidth = "";
+        column.style.maxWidth = "";
+        column.style.overflow = "";
+      }
+      onFinished();
+      return;
+    }
+    const current = column.getBoundingClientRect().width;
+    column.style.minWidth = "0";
+    column.style.maxWidth = "none";
+    column.style.overflow = "hidden";
+    column.style.willChange = "width";
+    const animation = column.animate(
+      [{ width: `${current}px` }, { width: `${target}px` }],
+      { duration: 260, easing: "ease-in-out", fill: "forwards" },
+    );
+    let finished = false;
+    const finish = () => {
+      if (finished) return;
+      finished = true;
+      column.style.width = `${target}px`;
+      column.style.minWidth = "";
+      column.style.maxWidth = "";
+      column.style.overflow = "";
+      column.style.willChange = "";
+      onFinished();
+    };
+    animation.onfinish = finish;
+    animation.oncancel = finish;
+    window.setTimeout(finish, 340);
   }
 
   private toggleTerminalView(): void {
@@ -3219,6 +3306,9 @@ class BradbitApp {
       this.diffHostEl.className = "diff-host";
     }
 
+    const previousTree = this.rootEl.querySelector<HTMLElement>(".tree-container");
+    if (previousTree) this.treeScrollTop = previousTree.scrollTop;
+
     this.rootEl.innerHTML = "";
     const shell = document.createElement("div");
     shell.className = "app-shell";
@@ -3266,6 +3356,10 @@ class BradbitApp {
     }
 
     this.rootEl.appendChild(shell);
+    this.startOpeningAnimation();
+
+    const nextTree = this.rootEl.querySelector<HTMLElement>(".tree-container");
+    if (nextTree) nextTree.scrollTop = this.treeScrollTop;
 
     // Sync CodeMirror instance if a tab is active
     if (this.folder && activeTab && this.cmHostEl) {
@@ -3683,6 +3777,9 @@ class BradbitApp {
         const row = document.createElement("div");
         row.className = "tree-row";
         if (node.isDir) row.classList.add("tree-row-dir");
+        if (matchesAnyGlob(node.path, this.primaryPaths)) {
+          row.classList.add("tree-primary");
+        }
         row.setAttribute("role", "button");
         row.tabIndex = 0;
         row.dataset.treePath = node.path;
@@ -4223,6 +4320,12 @@ class BradbitApp {
     column.className = "session-column";
     column.classList.toggle("full", layout.sessionFull);
     column.style.width = layout.sessionWidth;
+    if (this.openingSurface) {
+      column.style.width = this.openingSurface === "chat" ? "0px" : "100%";
+      column.style.minWidth = "0";
+      column.style.maxWidth = "none";
+      column.style.overflow = "hidden";
+    }
     if (
       this.settings.showDeveloperOptions &&
       this.sessionView === "terminal" &&

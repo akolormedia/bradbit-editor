@@ -160,6 +160,19 @@ describe("chat panel (T-2.1.1)", () => {
     expect(onStop).toHaveBeenCalledOnce();
   });
 
+  it("renders user messages as markdown", () => {
+    const panel = new ChatPanel(options());
+    const state = appendUserMessage(
+      readyState(),
+      "**Hola** con `código`",
+    );
+    panel.update(state);
+    const bubbles = panel.element.querySelectorAll(".chat-message-user .chat-message-markdown");
+    expect(bubbles).toHaveLength(1);
+    expect(bubbles[0].querySelector("strong")?.textContent).toBe("Hola");
+    expect(bubbles[0].querySelector("code")?.textContent).toBe("código");
+  });
+
   it("renders user and assistant messages, errors and the retry action", () => {
     const onRetry = vi.fn();
     const panel = new ChatPanel(options({ onRetry }));
@@ -245,7 +258,7 @@ describe("chat panel (T-2.1.1)", () => {
     panel.update(state);
 
     const bubble = panel.element.querySelector(
-      ".chat-message-markdown",
+      ".chat-message-assistant .chat-message-markdown",
     ) as HTMLElement | null;
     expect(bubble).not.toBeNull();
     expect(bubble?.querySelector("strong")?.textContent).toBe("Negrita");
@@ -345,7 +358,7 @@ describe("chat panel (T-2.1.1)", () => {
                 id: "tool_1",
                 name: "edit",
                 status: "completed",
-                input: { path: "notas.md" },
+                input: { path: "notas.md", internalJson: "NO_MOSTRAR" },
                 output: "Editado",
                 error: "",
                 executed: true,
@@ -366,6 +379,8 @@ describe("chat panel (T-2.1.1)", () => {
     toggle.click();
     expect(toggle.getAttribute("aria-expanded")).toBe("true");
     expect(panel.element.textContent).toContain("Resultado");
+    expect(panel.element.textContent).not.toContain("NO_MOSTRAR");
+    expect(panel.element.querySelector(".chat-tool-markdown")).not.toBeNull();
 
     panel.element
       .querySelector<HTMLButtonElement>('[data-testid="tool-file-tool_1-0"]')
@@ -374,6 +389,176 @@ describe("chat panel (T-2.1.1)", () => {
       "/proyecto/notas.md",
       true,
     );
+  });
+
+  it("chooses Markdown, Fountain or plain rendering for tool results", () => {
+    const panel = new ChatPanel(options());
+    panel.update({
+      ...readyState(),
+      messages: [
+        {
+          id: "assistant:msg_a",
+          role: "assistant",
+          parts: [
+            {
+              type: "tool",
+              tool: {
+                id: "tool_md",
+                name: "read",
+                status: "completed",
+                input: {},
+                output: "**Negrita** y `código`",
+                error: "",
+                executed: true,
+                files: ["/proyecto/notas.md"],
+                answers: [],
+              },
+            },
+            {
+              type: "tool",
+              tool: {
+                id: "tool_fountain",
+                name: "read",
+                status: "completed",
+                input: {},
+                output: "INT. CASA - DÍA\n\nANA\nHola.",
+                error: "",
+                executed: true,
+                files: ["/proyecto/script/acto.fountain"],
+                answers: [],
+              },
+            },
+            {
+              type: "tool",
+              tool: {
+                id: "tool_text",
+                name: "shell",
+                status: "completed",
+                input: {},
+                output: "línea uno\nlínea dos",
+                error: "",
+                executed: true,
+                files: ["/proyecto/logs/app.txt"],
+                answers: [],
+              },
+            },
+          ],
+        },
+      ],
+      streaming: false,
+    });
+
+    for (const id of ["tool_md", "tool_fountain", "tool_text"]) {
+      panel.element
+        .querySelector<HTMLButtonElement>(`[data-testid="tool-toggle-${id}"]`)!
+        .click();
+    }
+
+    expect(
+      panel.element.querySelector('[data-testid="tool-tool_md"] .chat-tool-markdown strong')
+        ?.textContent,
+    ).toBe("Negrita");
+    expect(
+      panel.element.querySelector(
+        '[data-testid="tool-tool_fountain"] .chat-fountain-scene',
+      )?.textContent,
+    ).toContain("INT. CASA");
+    expect(
+      panel.element.querySelector('[data-testid="tool-tool_fountain"] .chat-fountain-character')
+        ?.textContent,
+    ).toBe("ANA");
+    expect(
+      panel.element.querySelector('[data-testid="tool-tool_text"] .chat-tool-pre')
+        ?.textContent,
+    ).toContain("línea dos");
+    expect(
+      panel.element.querySelector('[data-testid="tool-tool_text"] .chat-tool-markdown'),
+    ).toBeNull();
+  });
+
+  it("separates the read action from line-numbered results", () => {
+    const panel = new ChatPanel(options());
+    panel.update({
+      ...readyState(),
+      messages: [
+        {
+          id: "assistant:msg_a",
+          role: "assistant",
+          parts: [
+            {
+              type: "tool",
+              tool: {
+                id: "tool_read",
+                name: "read",
+                status: "completed",
+                input: {},
+                output:
+                  "Read file\n/proyecto/guion/acto-1.fountain, lines 50-53\n50:\n51: CORTE A:\n52:\n53: INT. CASA / ANTE-SALA - DÍA",
+                error: "",
+                executed: true,
+                files: ["/proyecto/guion/acto-1.fountain"],
+                answers: [],
+              },
+            },
+          ],
+        },
+      ],
+      streaming: false,
+    });
+    panel.element
+      .querySelector<HTMLButtonElement>('[data-testid="tool-toggle-tool_read"]')!
+      .click();
+
+    expect(
+      panel.element.querySelector(".chat-tool-action")?.textContent,
+    ).toBe("guion/acto-1.fountain · 50–53");
+    expect(
+      panel.element.querySelector(".chat-fountain-scene")?.textContent,
+    ).toBe("INT. CASA / ANTE-SALA - DÍA");
+    expect(panel.element.querySelector(".chat-tool-markdown")).toBeNull();
+    expect(panel.element.textContent).not.toContain("Read file");
+  });
+
+  it("renders line-numbered Markdown read results", () => {
+    const panel = new ChatPanel(options());
+    panel.update({
+      ...readyState(),
+      messages: [
+        {
+          id: "assistant:msg_a",
+          role: "assistant",
+          parts: [
+            {
+              type: "tool",
+              tool: {
+                id: "tool_md_read",
+                name: "read",
+                status: "completed",
+                input: {},
+                output:
+                  "Read file\n/proyecto/estructura/metodo.md, lines 1-2\n1: # Método elegido\n2: **Texto claro**",
+                error: "",
+                executed: true,
+                files: ["/proyecto/estructura/metodo.md"],
+                answers: [],
+              },
+            },
+          ],
+        },
+      ],
+      streaming: false,
+    });
+    panel.element
+      .querySelector<HTMLButtonElement>('[data-testid="tool-toggle-tool_md_read"]')!
+      .click();
+
+    expect(
+      panel.element.querySelector(".chat-tool-markdown h1")?.textContent,
+    ).toBe("Método elegido");
+    expect(
+      panel.element.querySelector(".chat-tool-markdown strong")?.textContent,
+    ).toBe("Texto claro");
+    expect(panel.element.textContent).not.toContain("1: # Método");
   });
 
   it("renders permission cards and sends allow/reject decisions (T-2.1.3)", () => {
