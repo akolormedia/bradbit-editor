@@ -1406,6 +1406,89 @@ export class ChatPanel {
     return section;
   }
 
+  private toolActionSection(lang: Language, text: string): HTMLElement {
+    const section = document.createElement("div");
+    section.className = "chat-tool-section";
+    const label = document.createElement("div");
+    label.className = "chat-tool-section-label";
+    label.textContent = t(lang, "chatToolAction");
+    const content = document.createElement("div");
+    content.className = "chat-tool-action";
+    content.textContent = text;
+    section.append(label, content);
+    return section;
+  }
+
+  private splitToolOutput(tool: ChatToolCall): {
+    action: string;
+    result: string;
+  } {
+    const lines = tool.output.split(/\r?\n/);
+    let action = "";
+    let start = 0;
+    const first = lines[0]?.trim() ?? "";
+    if (/^read file\b/i.test(first)) {
+      const second = lines[1]?.trim() ?? "";
+      const header = second.match(
+        /^(.+?)(?:,\s*lines?\s+(\d+)(?:\s*[-–]\s*(\d+))?)?$/i,
+      );
+      if (second.startsWith("/") && header) {
+        const relative =
+          projectRelativePath(this.options.projectRoot, header[1]) ?? header[1];
+        const range = header[3]
+          ? `${header[2]}–${header[3]}`
+          : header[2] ?? "";
+        action = range ? `${relative} · ${range}` : relative;
+        start = 2;
+      } else {
+        action = first;
+        start = 1;
+      }
+    }
+
+    let contentLines = lines.slice(start);
+    if (tool.name === "read" || start > 0) {
+      contentLines = contentLines.map((line) =>
+        line.replace(/^\s*\d+[:|]\s?/, ""),
+      );
+    }
+    while (contentLines[0]?.trim() === "") contentLines.shift();
+    while (contentLines[contentLines.length - 1]?.trim() === "") {
+      contentLines.pop();
+    }
+    return { action, result: contentLines.join("\n") };
+  }
+
+  private toolActionText(tool: ChatToolCall): string {
+    const input =
+      tool.input && typeof tool.input === "object" && !Array.isArray(tool.input)
+        ? (tool.input as Record<string, unknown>)
+        : {};
+    const pick = (...keys: string[]): string => {
+      for (const key of keys) {
+        const value = input[key];
+        if (typeof value === "string" && value.trim().length > 0) {
+          return value.trim();
+        }
+      }
+      return "";
+    };
+    const path =
+      tool.files.length > 0
+        ? projectRelativePath(this.options.projectRoot, tool.files[0]) ??
+          tool.files[0]
+        : pick("path", "filePath", "file");
+    if (tool.name === "read" || this.isEditTool(tool.name)) return path;
+    if (tool.name === "shell") return pick("command");
+    if (tool.name === "glob" || tool.name === "grep") {
+      return pick("pattern", "query");
+    }
+    if (tool.name === "webfetch" || tool.name === "websearch") {
+      return pick("url", "query");
+    }
+    return this.toolSummary(tool) || tool.name;
+  }
+
   private toolFountainSection(
     lang: Language,
     labelKey: "chatToolOutput",
@@ -1431,6 +1514,7 @@ export class ChatPanel {
 
   private toolOutputKind(
     tool: ChatToolCall,
+    result: string,
   ): "markdown" | "fountain" | "text" {
     const path = tool.files[0]?.toLowerCase() ?? "";
     if (/\.(md|markdown|mdx)$/.test(path)) return "markdown";
@@ -1438,7 +1522,7 @@ export class ChatPanel {
     // A known non-Markdown/non-Fountain file type is shown as plain text.
     if (/\.[a-z0-9]+$/.test(path)) return "text";
 
-    const text = tool.output.trim();
+    const text = result.trim();
     if (!text) return "text";
     if (this.looksLikeFountain(text)) return "fountain";
     if (this.looksLikeMarkdown(text)) return "markdown";
@@ -1551,9 +1635,14 @@ export class ChatPanel {
     if (prompts) {
       body.appendChild(renderQuestionTool(tool, prompts));
     } else {
-      if (tool.output) {
-        const output = this.clip(tool.output, 8000);
-        const kind = this.toolOutputKind(tool);
+      const { action, result } = this.splitToolOutput(tool);
+      const actionText = action || this.toolActionText(tool);
+      if (actionText) {
+        body.appendChild(this.toolActionSection(lang, actionText));
+      }
+      if (result) {
+        const output = this.clip(result, 8000);
+        const kind = this.toolOutputKind(tool, result);
         body.appendChild(
           kind === "fountain"
             ? this.toolFountainSection(lang, "chatToolOutput", output, "")

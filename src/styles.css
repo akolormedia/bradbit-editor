@@ -1846,9 +1846,19 @@ textarea.text-input {
   overflow-wrap: anywhere;
 }
 
+.chat-tool-action {
+  padding: 7px;
+  border-radius: 5px;
+  background: var(--bg-input);
+  color: var(--text-secondary);
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+}
+
 .chat-tool-markdown.markdown-preview {
-  height: auto;
-  min-height: 0;
+  height: auto;  min-height: 0;
   max-height: 260px;
   overflow: auto;
   padding: 7px;
