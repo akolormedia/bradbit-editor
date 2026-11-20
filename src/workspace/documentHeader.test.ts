@@ -213,3 +213,24 @@ describe("active document header (T-1.2.1)", () => {
   });
 
 });
+
+describe("document header file options (T-3.9.3)", () => {
+  it("opens the file options menu from the ellipsis button", () => {
+    const onFileMenu = vi.fn();
+    const header = createDocumentHeader({
+      tab: tab(),
+      language: "es",
+      onTogglePreview: vi.fn(),
+      onCopy: vi.fn(async () => true),
+      onFileMenu,
+    });
+
+    const button = header.querySelector<HTMLButtonElement>(
+      '[data-action="file-menu"]',
+    );
+    expect(button).not.toBeNull();
+    button?.click();
+
+    expect(onFileMenu).toHaveBeenCalledTimes(1);
+  });
+});

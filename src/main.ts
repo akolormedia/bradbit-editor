@@ -15,6 +15,7 @@ import {
   GitBranch,
   GitCommit,
   GitCommitFile,
+  GitBlameLine,
   GitRemote,
   GitStatus,
   GitHubPullRequest,
@@ -290,6 +291,9 @@ class BradbitApp {
   private inlineDiffOriginals = new Map<string, string | null>();
   private inlineDiffLoading = new Set<string>();
   private gitHeadId: string | null = null;
+  private inlineBlameEnabled = false;
+  private blameByPath = new Map<string, GitBlameLine[]>();
+  private blameLoading = new Set<string>();
   private githubTokenPresent = false;
   private githubAccount: string | null = null;
   private githubAccountLoaded = false;
@@ -318,6 +322,7 @@ class BradbitApp {
       chatVisible: true,
       editorVisible: true,
     },
+    inlineBlame: false,
   };
   private chatPanel: ChatPanel | null = null;
   private chatVisible = true;
@@ -460,6 +465,9 @@ class BradbitApp {
     this.inlineDiffOriginals.clear();
     this.inlineDiffLoading.clear();
     this.gitHeadId = null;
+    this.inlineBlameEnabled = false;
+    this.blameByPath.clear();
+    this.blameLoading.clear();
     this.githubPullRequests = [];
     this.githubError = "";
     this.githubPrLoading = false;
@@ -484,6 +492,7 @@ class BradbitApp {
       try {
         this.workspaceState = await backend.loadWorkspaceState(opened.rootPath);
         this.applyWorkspaceLayout(this.workspaceState.layout);
+        this.inlineBlameEnabled = this.workspaceState.inlineBlame;
       } catch (err) {
         console.error("Could not load the workspace state", err);
         this.workspaceState = {
@@ -494,8 +503,10 @@ class BradbitApp {
             chatVisible: true,
             editorVisible: true,
           },
+          inlineBlame: false,
         };
         this.applyWorkspaceLayout(this.workspaceState.layout);
+        this.inlineBlameEnabled = false;
       }
       this.tabState = { tabs: [], activeTabPath: null };
       this.untitledSequence = 0;
@@ -634,6 +645,7 @@ class BradbitApp {
     if (headChanged) {
       this.inlineDiffOriginals.clear();
       this.inlineDiffLoading.clear();
+      this.blameByPath.clear();
       this.editor?.clearGitOriginals();
     } else {
       for (const [path, original] of [...this.inlineDiffOriginals]) {
@@ -693,6 +705,56 @@ class BradbitApp {
       .finally(() => {
         this.inlineDiffLoading.delete(tab.path);
       });
+  }
+
+  private syncInlineBlame(tab: OpenTab | null): void {
+    if (!this.editor) return;
+    this.editor.setInlineBlameEnabled(this.inlineBlameEnabled);
+    if (
+      !this.inlineBlameEnabled ||
+      !tab ||
+      !this.folder ||
+      tab.untitled ||
+      !this.gitStatus?.isRepository ||
+      isTabDirty(tab)
+    ) {
+      this.editor.setInlineBlame([]);
+      return;
+    }
+    if (this.blameByPath.has(tab.path)) {
+      this.editor.setInlineBlame(this.blameByPath.get(tab.path) ?? []);
+      return;
+    }
+    if (this.blameLoading.has(tab.path)) return;
+
+    const root = this.folder.rootPath;
+    this.blameLoading.add(tab.path);
+    void backend
+      .gitBlameFile(root, tab.path)
+      .then((lines) => {
+        if (this.folder?.rootPath !== root) return;
+        this.blameByPath.set(tab.path, lines);
+        if (
+          this.getActiveTab()?.path === tab.path &&
+          this.inlineBlameEnabled &&
+          !isTabDirty(this.getActiveTab()!)
+        ) {
+          this.editor?.setInlineBlame(lines);
+        }
+      })
+      .catch((err) => {
+        console.error("Could not load Git blame", err);
+      })
+      .finally(() => {
+        this.blameLoading.delete(tab.path);
+      });
+  }
+
+  private toggleInlineBlame(): void {
+    this.inlineBlameEnabled = !this.inlineBlameEnabled;
+    this.persistWorkspaceState();
+    this.syncInlineBlame(this.getActiveTab());
+    this.render();
   }
 
   private async refreshGitMeta(): Promise<void> {
@@ -1630,6 +1692,7 @@ class BradbitApp {
         chatVisible: this.chatVisible,
         editorVisible: this.editorVisible,
       },
+      inlineBlame: this.inlineBlameEnabled,
     };
     this.workspaceState = state;
     void backend
@@ -2287,6 +2350,7 @@ class BradbitApp {
     }
     try {
       await backend.writeTextFile(this.folder.rootPath, active.path, active.content);
+      this.blameByPath.delete(active.path);
       this.tabState = markTabSaved(this.tabState, active.path);
       this.statusNotice = t(this.settings.language, "saved");
       await this.refreshGitStatus();
@@ -3470,6 +3534,7 @@ class BradbitApp {
             this.tabState = updateTabContent(this.tabState, path, content);
             this.updateLightweightChrome();
             this.refreshOutlineSoon();
+            if (this.inlineBlameEnabled) this.editor?.setInlineBlame([]);
           },
           onCursorChange: (path, line, col) => {
             this.tabState = {
@@ -3487,11 +3552,13 @@ class BradbitApp {
             backend.diffLineHunks(original, current),
           getFountainBibleSymbols: () => this.getFountainSymbols(),
         });
+        this.editor.setInlineBlameEnabled(this.inlineBlameEnabled);
       }
       if (activeTab.viewMode !== "diff") {
         this.editor.openDocument(activeTab.path, activeTab.content, this.settings);
       }
       this.syncInlineDiff(activeTab);
+      this.syncInlineBlame(activeTab);
     }
 
     this.syncDiffView(activeTab);
@@ -4117,6 +4184,26 @@ class BradbitApp {
       items.push(
         { id: "tab-separator", label: "", separator: true },
         {
+          id: "rename-tab",
+          label: t(lang, "rename"),
+          icon: "pencil",
+          action: () => this.openEntryModal("rename", tab.path),
+        },
+      );
+      if (this.gitStatus?.isRepository) {
+        items.push({
+          id: "inline-blame",
+          label: t(
+            lang,
+            this.inlineBlameEnabled ? "inlineBlameOn" : "inlineBlameOff",
+          ),
+          icon: "message-square",
+          action: () => this.toggleInlineBlame(),
+        });
+      }
+      items.push(
+        { id: "tab-separator-2", label: "", separator: true },
+        {
           id: "copy-tab-path",
           label: t(lang, "copyPath"),
           icon: "copy",
@@ -4565,6 +4652,7 @@ class BradbitApp {
           onToggleDiff: () => void this.toggleDiff(),
           canDiscard,
           onDiscard: () => this.requestDiscard(),
+          onFileMenu: (event) => this.showTabContextMenu(event, activeTab),
         }),
       );
     }

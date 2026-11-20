@@ -327,6 +327,19 @@ pub struct CommitFile {
     pub status: String,
 }
 
+/// Git blame for one line of a file.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct BlameLine {
+    /// 1-based line number in the working-tree file.
+    pub line: u32,
+    pub author: String,
+    pub email: String,
+    /// RFC 3339 timestamp with the commit's original offset.
+    pub date: String,
+    pub commit: String,
+    pub summary: String,
+}
+
 /// Per-file insertions/deletions.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct FileChange {
@@ -578,6 +591,59 @@ impl Repository {
         let diff =
             build_diff(&repo, scope, Some(path)).map_err(|error| git_error("diff", error))?;
         diff_text(&diff).map_err(|error| git_error("diff", error))
+    }
+
+    /// Blame the working-tree version of a file, one entry per line.
+    pub fn blame(&self, path: &str, options: OpOptions) -> Result<Vec<BlameLine>, GitError> {
+        check_cancel("blame", &options)?;
+        validate_relative_path(path)?;
+        let repo = self.open_engine("blame")?;
+        let blame = repo
+            .blame_file(Path::new(path), None)
+            .map_err(|error| git_error("blame", error))?;
+        let mut lines = Vec::new();
+        for hunk in blame.iter() {
+            let signature = hunk.final_signature().or_else(|| hunk.orig_signature());
+            let author = signature
+                .as_ref()
+                .and_then(|signature| signature.name().ok())
+                .unwrap_or_default()
+                .to_string();
+            let email = signature
+                .as_ref()
+                .and_then(|signature| signature.email().ok())
+                .unwrap_or_default()
+                .to_string();
+            let date = signature
+                .as_ref()
+                .map(|signature| format_commit_date(signature.when()))
+                .unwrap_or_default();
+            let commit = hunk.final_commit_id();
+            let commit_id = if commit.is_zero() {
+                String::new()
+            } else {
+                commit.to_string()
+            };
+            let summary = if commit.is_zero() {
+                String::new()
+            } else {
+                repo.find_commit(commit)
+                    .ok()
+                    .and_then(|commit| commit.summary().ok().flatten().map(str::to_string))
+                    .unwrap_or_default()
+            };
+            for offset in 0..hunk.lines_in_hunk() {
+                lines.push(BlameLine {
+                    line: (hunk.final_start_line() + offset) as u32,
+                    author: author.clone(),
+                    email: email.clone(),
+                    date: date.clone(),
+                    commit: commit_id.clone(),
+                    summary: summary.clone(),
+                });
+            }
+        }
+        Ok(lines)
     }
 
     /// Read a file's content at a commit without touching the working tree.

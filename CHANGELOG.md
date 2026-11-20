@@ -21,6 +21,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 
 ### Added
 - **Curated context menus** for the file tree and tabs: open, new file/folder, rename, delete, close tab/others, copy path and show in Finder. The text editor keeps the native macOS menu so spelling, Look Up and services remain available. The WebView inspector is disabled in the packaged app.
+- **File options menu and inline blame:** an ellipsis in the document header and the tab context menu expose rename, copy path, reveal in Finder, close actions and an **Inline blame** toggle. When enabled, the current line shows its author and relative date from `git2` blame, with the commit summary on hover; unsaved buffers hide blame until saved, and the preference is stored per project.
 - **DOCX import:** **File → Import → DOCX…** converts a Word manuscript into a single Markdown file. It preserves headings, paragraphs, bold and italic, and warns before dropping images, tables, comments, tracked changes and advanced styles.
 - **Final Draft import:** **File → Import → Final Draft (.fdx)…** converts an FDX screenplay into Fountain with `jumpcut`, with a rendered screenplay preview before writing.
 - **DOCX export:** **File → Export DOCX…** writes a Markdown manuscript using the standard A4 manuscript preset (Times New Roman 12 pt, double spacing, title page and page numbers).

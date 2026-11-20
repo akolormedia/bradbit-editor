@@ -2902,6 +2902,22 @@ textarea.text-input {
   color: var(--text-muted);
 }
 
+/* Inline Git blame (T-3.9.3) */
+.cm-inline-blame {
+  margin-left: 1.6em;
+  color: var(--text-muted);
+  font-family: var(--font-ui);
+  font-size: 0.78em;
+  letter-spacing: 0.01em;
+  white-space: nowrap;
+  user-select: none;
+  opacity: 0.78;
+}
+
+.cm-inline-blame.unsaved {
+  color: var(--cm-keyword);
+}
+
 /* Inline Git diff (T-3.9.2) */
 
 .tree-row.tree-git-added .tree-row-name {

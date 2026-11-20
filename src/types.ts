@@ -174,6 +174,15 @@ export interface LineDiffHunk {
   currentEnd: number;
 }
 
+export interface GitBlameLine {
+  line: number;
+  author: string;
+  email: string;
+  date: string;
+  commit: string;
+  summary: string;
+}
+
 export interface GitStatus {
   isRepository: boolean;
   branch: string | null;
@@ -415,6 +424,7 @@ export interface ProjectWorkspaceState {
   openSessionIds: string[];
   activeSessionId: string | null;
   layout: WorkspaceLayout;
+  inlineBlame: boolean;
 }
 
 export interface OpenCodeStatus {

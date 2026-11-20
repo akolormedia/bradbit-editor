@@ -81,6 +81,41 @@ pub fn diff_file(root: &str, rel_path: &str) -> Result<String, String> {
         .map_err(|e| e.to_string())
 }
 
+#[derive(Debug, Clone, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct GitBlameLine {
+    pub line: u32,
+    pub author: String,
+    pub email: String,
+    pub date: String,
+    pub commit: String,
+    pub summary: String,
+}
+
+/// Blame for the working-tree version of a file. Plain folders and untracked
+/// files return an empty list instead of an error.
+pub fn blame_file(root: &str, rel_path: &str) -> Result<Vec<GitBlameLine>, String> {
+    if !Path::new(root).join(".git").exists() {
+        return Ok(Vec::new());
+    }
+    let repo =
+        Repository::open(Path::new(root), OpOptions::default()).map_err(|e| e.to_string())?;
+    let lines = repo
+        .blame(rel_path, OpOptions::default())
+        .map_err(|e| e.to_string())?;
+    Ok(lines
+        .into_iter()
+        .map(|line| GitBlameLine {
+            line: line.line,
+            author: line.author,
+            email: line.email,
+            date: line.date,
+            commit: line.commit,
+            summary: line.summary,
+        })
+        .collect())
+}
+
 pub fn restore_file(root: &str, rel_path: &str) -> Result<GitStatus, String> {
     let repo =
         Repository::open(Path::new(root), OpOptions::default()).map_err(|e| e.to_string())?;
