@@ -13,6 +13,8 @@ import {
   DecorationSet,
   EditorView,
   GutterMarker,
+  ViewPlugin,
+  ViewUpdate,
   WidgetType,
   gutter,
   keymap,
@@ -204,7 +206,6 @@ class GitLineMarker extends GutterMarker {
     private readonly atStart: boolean,
     private readonly atEnd: boolean,
     private readonly expanded: boolean,
-    private readonly deletedLines: number,
   ) {
     super();
   }
@@ -216,12 +217,11 @@ class GitLineMarker extends GutterMarker {
       other.title === this.title &&
       other.atStart === this.atStart &&
       other.atEnd === this.atEnd &&
-      other.expanded === this.expanded &&
-      other.deletedLines === this.deletedLines
+      other.expanded === this.expanded
     );
   }
 
-  toDOM(view: EditorView): Node {
+  toDOM(): Node {
     const marker = document.createElement("span");
     marker.className = `cm-git-marker cm-git-marker-${this.kind}`;
     if (this.expanded) marker.classList.add("cm-git-marker-expanded");
@@ -232,10 +232,6 @@ class GitLineMarker extends GutterMarker {
         this.atStart ? "at-start" : this.atEnd ? "at-end" : "between",
       );
       if (this.expanded) {
-        const bar = document.createElement("span");
-        bar.className = "cm-git-deleted-bar";
-        bar.style.height = `${Math.max(1, this.deletedLines) * view.defaultLineHeight}px`;
-        marker.appendChild(bar);
         return marker;
       }
 
@@ -245,11 +241,8 @@ class GitLineMarker extends GutterMarker {
       return marker;
     }
 
-    if (this.expanded && this.deletedLines > 0) {
-      const prefix = document.createElement("span");
-      prefix.className = "cm-git-modified-prefix";
-      prefix.style.height = `${this.deletedLines * view.defaultLineHeight}px`;
-      marker.appendChild(prefix);
+    if (this.expanded) {
+      return marker;
     }
 
     const bar = document.createElement("span");
@@ -306,6 +299,8 @@ export class InlineDiffView {
   private readonly nextButton: HTMLButtonElement;
   private readonly restoreButton: HTMLButtonElement;
   private activeHunkKey: string | null = null;
+  private expandedBar: HTMLElement | null = null;
+  private barFrame: number | null = null;
 
   constructor(private readonly options: InlineDiffViewOptions) {
     this.ruler = document.createElement("div");
@@ -390,6 +385,7 @@ export class InlineDiffView {
   }
 
   public extension(): Extension {
+    const host = this;
     return [
       inlineDiffField,
       expandedHunksField,
@@ -401,6 +397,27 @@ export class InlineDiffView {
       lineNumberMarkers.compute(
         [inlineDiffField, expandedHunksField],
         (state) => buildLineNumberMarkers(state),
+      ),
+      ViewPlugin.fromClass(
+        class {
+          constructor(view: EditorView) {
+            host.scheduleExpandedBar(view);
+          }
+
+          update(update: ViewUpdate) {
+            if (
+              update.docChanged ||
+              update.geometryChanged ||
+              update.viewportChanged ||
+              update.startState.field(expandedHunksField) !==
+                update.state.field(expandedHunksField) ||
+              update.startState.field(inlineDiffField) !==
+                update.state.field(inlineDiffField)
+            ) {
+              host.scheduleExpandedBar(update.view);
+            }
+          }
+        },
       ),
       Prec.highest(
         keymap.of([
@@ -464,15 +481,22 @@ export class InlineDiffView {
     this.restoreButton.title = t(lang, "gitDiffRestore");
     this.updateNav();
     if (!view || hunks.length === 0) return;
-    const total = Math.max(1, view.state.doc.lines);
+    const totalDeleted = hunks.reduce(
+      (sum, hunk) => sum + hunk.deletedLines,
+      0,
+    );
+    const total = Math.max(1, view.state.doc.lines + totalDeleted);
+    let deletedBefore = 0;
 
     for (const hunk of hunks) {
       const range = hunkLineRange(hunk, view.state.doc);
-      const top = ((range.fromLine - 1) / total) * 100;
-      const height = Math.max(
-        0.35,
-        ((range.toLine - range.fromLine + 1) / total) * 100,
-      );
+      const currentRows =
+        hunk.kind === "deleted" ? 0 : range.toLine - range.fromLine + 1;
+      const virtualTop = range.fromLine - 1 + deletedBefore;
+      const virtualHeight = currentRows + hunk.deletedLines;
+      deletedBefore += hunk.deletedLines;
+      const top = (virtualTop / total) * 100;
+      const height = Math.max(0.35, (virtualHeight / total) * 100);
       const tick = document.createElement("span");
       tick.className = `git-diff-ruler-tick git-diff-ruler-${hunk.kind}`;
       tick.style.top = `${top}%`;
@@ -551,7 +575,6 @@ export class InlineDiffView {
       atStart: boolean;
       atEnd: boolean;
       expanded: boolean;
-      deletedLines: number;
     }> = [];
     const seen = new Set<number>();
 
@@ -568,7 +591,6 @@ export class InlineDiffView {
           atStart: hunk.from === 0,
           atEnd: hunk.from >= doc.length,
           expanded: expanded.has(hunkKey(hunk)),
-          deletedLines: hunk.deletedLines,
         });
         continue;
       }
@@ -584,10 +606,6 @@ export class InlineDiffView {
           atStart: false,
           atEnd: false,
           expanded: expanded.has(hunkKey(hunk)),
-          deletedLines:
-            hunk.kind === "modified" && number === range.fromLine
-              ? hunk.deletedLines
-              : 0,
         });
       }
     }
@@ -604,7 +622,6 @@ export class InlineDiffView {
           info.atStart,
           info.atEnd,
           info.expanded,
-          info.deletedLines,
         ),
       );
     }
@@ -696,9 +713,102 @@ export class InlineDiffView {
       hunks.length > 0 && expanded.size > 0,
     );
     this.restoreButton.hidden = !active || active.kind === "added";
+    this.scheduleExpandedBar(view);
+  }
+
+  private scheduleExpandedBar(view: EditorView | null): void {
+    if (!view) return;
+    if (this.barFrame !== null) {
+      if (typeof window.cancelAnimationFrame === "function") {
+        window.cancelAnimationFrame(this.barFrame);
+      } else {
+        window.clearTimeout(this.barFrame);
+      }
+      this.barFrame = null;
+    }
+    const run = () => {
+      this.barFrame = null;
+      const current = this.options.getView();
+      if (!current) return;
+      this.updateExpandedBar(current);
+    };
+    this.barFrame =
+      typeof window.requestAnimationFrame === "function"
+        ? window.requestAnimationFrame(run)
+        : window.setTimeout(run, 16);
+  }
+
+  private updateExpandedBar(view: EditorView): void {
+    const expanded = expandedHunks(view.state);
+    if (expanded.size !== 1) {
+      this.removeExpandedBar();
+      return;
+    }
+    const hunk = currentHunk(view, [...expanded][0]);
+    if (!hunk || hunk.kind === "added") {
+      this.removeExpandedBar();
+      return;
+    }
+
+    const gutters = view.scrollDOM.querySelector<HTMLElement>(".cm-gutters");
+    const diffGutter = view.scrollDOM.querySelector<HTMLElement>(
+      ".cm-git-diff-gutter",
+    );
+    if (!gutters || !diffGutter) {
+      this.removeExpandedBar();
+      return;
+    }
+
+    const elements: HTMLElement[] = [];
+    const ghost = view.contentDOM.querySelector<HTMLElement>(
+      ".cm-git-deleted-ghost",
+    );
+    if (ghost) elements.push(ghost);
+    elements.push(
+      ...view.contentDOM.querySelectorAll<HTMLElement>(
+        ".cm-line.cm-git-line-expanded",
+      ),
+    );
+    if (elements.length === 0) {
+      this.removeExpandedBar();
+      return;
+    }
+
+    const rects = elements.map((element) => element.getBoundingClientRect());
+    const top = Math.min(...rects.map((rect) => rect.top));
+    const bottom = Math.max(...rects.map((rect) => rect.bottom));
+    const guttersRect = gutters.getBoundingClientRect();
+    const gutterRect = diffGutter.getBoundingClientRect();
+
+    let bar = this.expandedBar;
+    if (!bar) {
+      bar = document.createElement("div");
+      this.expandedBar = bar;
+    }
+    bar.className = `git-diff-expanded-bar git-diff-expanded-bar-${hunk.kind}`;
+    if (bar.parentElement !== gutters) gutters.appendChild(bar);
+    bar.style.top = `${top - guttersRect.top}px`;
+    bar.style.height = `${bottom - top}px`;
+    bar.style.left = `${
+      gutterRect.left - guttersRect.left + gutterRect.width / 2
+    }px`;
+  }
+
+  private removeExpandedBar(): void {
+    this.expandedBar?.remove();
+    this.expandedBar = null;
   }
 
   public destroy(): void {
+    if (this.barFrame !== null) {
+      if (typeof window.cancelAnimationFrame === "function") {
+        window.cancelAnimationFrame(this.barFrame);
+      } else {
+        window.clearTimeout(this.barFrame);
+      }
+      this.barFrame = null;
+    }
+    this.removeExpandedBar();
     this.ruler.remove();
     this.nav.remove();
   }

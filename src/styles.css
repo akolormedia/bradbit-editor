@@ -3052,27 +3052,22 @@ textarea.text-input {
   overflow-wrap: anywhere;
 }
 
-.cm-git-deleted-bar,
-.cm-git-modified-prefix {
+.git-diff-expanded-bar {
   position: absolute;
-  bottom: 100%;
-  left: 50%;
-  width: 3px;
+  z-index: 6;
   border-radius: 2px;
+  pointer-events: none;
   transform: translateX(-50%);
 }
 
-.cm-git-deleted-bar {
-  background: var(--git-deleted);
-}
-
-.cm-git-modified-prefix {
+.git-diff-expanded-bar-modified {
+  width: 7px;
   background: var(--git-modified);
 }
 
-.cm-git-marker-modified.cm-git-marker-expanded .cm-git-bar {
-  width: 7px;
-  margin-left: -4px;
+.git-diff-expanded-bar-deleted {
+  width: 3px;
+  background: var(--git-deleted);
 }
 
 .git-diff-nav {

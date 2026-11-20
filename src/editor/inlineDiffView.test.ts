@@ -82,15 +82,18 @@ describe("inline diff view (T-3.9.2)", () => {
     holder.view?.destroy();
   });
 
-  it("expands a red triangle into deleted lines with restore", () => {
+  it("expands a red triangle into deleted lines with a continuous red bar", async () => {
     const { parent, holder, diff } = mount("dos");
     diff.setHunks(buildInlineDiffHunks("uno\ndos", "dos"));
 
     click(parent.querySelector(".cm-git-marker-deleted"));
+    await new Promise((resolve) => setTimeout(resolve, 30));
 
     const ghost = parent.querySelector(".cm-git-deleted-ghost");
     expect(ghost?.textContent).toContain("uno");
-    expect(parent.querySelector(".cm-git-deleted-bar")).not.toBeNull();
+    expect(
+      parent.querySelector(".git-diff-expanded-bar-deleted"),
+    ).not.toBeNull();
     expect(
       parent.querySelector(".cm-git-marker-deleted .cm-git-triangle"),
     ).toBeNull();
@@ -98,6 +101,21 @@ describe("inline diff view (T-3.9.2)", () => {
       parent.querySelector<HTMLButtonElement>(".git-diff-nav-restore")?.hidden,
     ).toBe(false);
     expect(parent.querySelector(".cm-git-line-expanded")).toBeNull();
+    holder.view?.destroy();
+  });
+
+  it("sizes the overview ruler with deleted original lines", () => {
+    const { parent, holder, diff } = mount("linea 0\nlinea 99");
+    const original = Array.from(
+      { length: 100 },
+      (_, index) => `linea ${index}`,
+    ).join("\n");
+    diff.setHunks(buildInlineDiffHunks(original, "linea 0\nlinea 99"));
+
+    const tick = parent.querySelector<HTMLElement>(
+      ".git-diff-ruler-tick",
+    );
+    expect(parseFloat(tick?.style.height ?? "0")).toBeGreaterThan(50);
     holder.view?.destroy();
   });
 
