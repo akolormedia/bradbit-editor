@@ -636,8 +636,10 @@ class BradbitApp {
       this.inlineDiffLoading.clear();
       this.editor?.clearGitOriginals();
     } else {
-      for (const path of [...this.inlineDiffOriginals.keys()]) {
-        if (changed.has(path)) continue;
+      for (const [path, original] of [...this.inlineDiffOriginals]) {
+        // A committed baseline stays useful for clean tracked files: the
+        // writer may edit without saving and still deserves live markers.
+        if (changed.has(path) || original !== null) continue;
         this.inlineDiffOriginals.delete(path);
         this.editor?.setGitOriginal(path, undefined);
       }
@@ -656,13 +658,6 @@ class BradbitApp {
       return;
     }
 
-    const entry = this.gitStatus.entries.find(
-      (candidate) => candidate.path === tab.path,
-    );
-    if (!entry) {
-      this.editor.setGitOriginal(tab.path, undefined);
-      return;
-    }
     if (this.inlineDiffOriginals.has(tab.path)) {
       this.editor.setGitOriginal(
         tab.path,
@@ -678,6 +673,15 @@ class BradbitApp {
       .gitHeadFile(root, tab.path)
       .then((original) => {
         if (this.folder?.rootPath !== root) return;
+        const trackedChange = this.gitStatus?.entries.some(
+          (entry) => entry.path === tab.path,
+        );
+        if (original === null && !trackedChange) {
+          // Ignored or untracked-without-status files have no baseline.
+          this.inlineDiffOriginals.delete(tab.path);
+          this.editor?.setGitOriginal(tab.path, undefined);
+          return;
+        }
         this.inlineDiffOriginals.set(tab.path, original);
         if (this.getActiveTab()?.path === tab.path) {
           this.editor?.setGitOriginal(tab.path, original);
