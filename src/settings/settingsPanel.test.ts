@@ -138,6 +138,15 @@ describe("settings panel (T-2.4.4)", () => {
     wrap.checked = false;
     wrap.dispatchEvent(new Event("change", { bubbles: true }));
     expect(onUpdateSettings).toHaveBeenCalledWith({ wordWrap: false });
+
+    const fountain = panel.element.querySelector<HTMLInputElement>(
+      '[data-testid="settings-fountain-autocomplete"]',
+    )!;
+    fountain.checked = false;
+    fountain.dispatchEvent(new Event("change", { bubbles: true }));
+    expect(onUpdateSettings).toHaveBeenCalledWith({
+      fountainAutocomplete: false,
+    });
   });
 
   it("hides developer settings by default and reveals them with the toggle", () => {

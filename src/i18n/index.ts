@@ -146,6 +146,15 @@ export const translations = {
     fontSize: "Tamaño de letra",
     wordWrap: "Ajuste de línea automático",
     lineNumbers: "Mostrar números de línea",
+    fountainToolbarLabel: "Elementos de guion",
+    fountainToolbarHint:
+      "Elige un elemento y selecciona una opción. Atajos: ⌘1–⌘6.",
+    fountainElementScene: "Escena",
+    fountainElementCharacter: "Personaje",
+    fountainElementParenthetical: "Paréntesis",
+    fountainElementTransition: "Transición",
+    fountainElementSection: "Sección",
+    fountainElementNote: "Nota",
     showConfigFiles: "Mostrar archivos de configuración (.opencode, AGENTS.md)",
     settingsSearchPlaceholder: "Buscar ajustes…",
     settingsNoResults: "No se encontraron ajustes.",
@@ -171,6 +180,9 @@ export const translations = {
     settingsFontSizeHint: "Tamaño base del texto en el editor.",
     settingsWordWrapHint: "Ajusta las líneas largas al ancho del editor.",
     settingsLineNumbersHint: "Muestra números de línea en el margen.",
+    settingsFountainAutocomplete: "Sugerencias Fountain",
+    settingsFountainAutocompleteHint:
+      "Abre sugerencias contextuales al escribir guiones. Nunca dentro del diálogo.",
     settingsShowConfigFilesHint:
       "Muestra .opencode, .bradbit, AGENTS.md y otros archivos de configuración.",
     settingsTerminalCommand: "Comando por defecto",
@@ -710,6 +722,15 @@ export const translations = {
     fontSize: "Font Size",
     wordWrap: "Word Wrap",
     lineNumbers: "Show Line Numbers",
+    fountainToolbarLabel: "Screenplay elements",
+    fountainToolbarHint:
+      "Choose an element and pick an option. Shortcuts: ⌘1–⌘6.",
+    fountainElementScene: "Scene",
+    fountainElementCharacter: "Character",
+    fountainElementParenthetical: "Parenthetical",
+    fountainElementTransition: "Transition",
+    fountainElementSection: "Section",
+    fountainElementNote: "Note",
     showConfigFiles: "Show Configuration Files (.opencode, AGENTS.md)",
     settingsSearchPlaceholder: "Search settings…",
     settingsNoResults: "No settings found.",
@@ -735,6 +756,9 @@ export const translations = {
     settingsFontSizeHint: "Base text size in the editor.",
     settingsWordWrapHint: "Wrap long lines to the editor width.",
     settingsLineNumbersHint: "Show line numbers in the gutter.",
+    settingsFountainAutocomplete: "Fountain suggestions",
+    settingsFountainAutocompleteHint:
+      "Open contextual suggestions while writing screenplays. Never inside dialogue.",
     settingsShowConfigFilesHint:
       "Show .opencode, .bradbit, AGENTS.md and other configuration files.",
     settingsTerminalCommand: "Default command",

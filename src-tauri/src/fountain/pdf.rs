@@ -27,6 +27,8 @@ const TOP_MARGIN: f32 = 72.0;
 const LEADING: f32 = 12.0;
 /// Courier 12pt advances exactly 7.2pt per character (10 characters/inch).
 const ADVANCE: f32 = 7.2;
+/// Scene numbers sit in the left margin, before the scene heading.
+const SCENE_NUMBER_X: f32 = 72.0;
 /// Conventional 55-line screenplay page (top 1", bottom ~0.83").
 pub const LINES_PER_PAGE: usize = 55;
 
@@ -70,6 +72,8 @@ pub struct Line {
     pub width: usize,
     pub align: Align,
     pub style: Style,
+    /// Scene number printed in the left margin on the first line of a heading.
+    pub scene_number: Option<usize>,
 }
 
 impl Line {
@@ -80,6 +84,7 @@ impl Line {
             width: 0,
             align: Align::Left,
             style: Style::Normal,
+            scene_number: None,
         }
     }
 
@@ -90,6 +95,7 @@ impl Line {
             width: ACTION_COLS,
             align: Align::Right,
             style: Style::Normal,
+            scene_number: None,
         }
     }
 
@@ -100,6 +106,7 @@ impl Line {
             width: ACTION_COLS,
             align: Align::Center,
             style: Style::Normal,
+            scene_number: None,
         }
     }
 
@@ -341,6 +348,7 @@ impl Builder {
 
 fn place(blocks: &[Block]) -> Vec<Page> {
     let mut builder = Builder::new();
+    let mut scene_number = 0usize;
     for (index, block) in blocks.iter().enumerate() {
         let next_emits = blocks
             .get(index + 1)
@@ -349,6 +357,7 @@ fn place(blocks: &[Block]) -> Vec<Page> {
         match block {
             Block::PageBreak => builder.new_page(),
             Block::Heading(text) => {
+                scene_number += 1;
                 let wrapped = wrap(&text.to_uppercase(), ACTION_COLS);
                 let blank = usize::from(!builder.is_empty());
                 // Orphan rule: a scene heading must be followed by at least
@@ -360,8 +369,12 @@ fn place(blocks: &[Block]) -> Vec<Page> {
                 if !builder.is_empty() {
                     builder.push(Line::blank());
                 }
-                for line in wrapped {
-                    builder.push(Line::left(line, 0));
+                for (line_index, line) in wrapped.into_iter().enumerate() {
+                    let mut heading = Line::left(line, 0);
+                    if line_index == 0 {
+                        heading.scene_number = Some(scene_number);
+                    }
+                    builder.push(heading);
                 }
             }
             Block::Action(text) => {
@@ -391,6 +404,7 @@ fn place(blocks: &[Block]) -> Vec<Page> {
                             width: *width,
                             align: Align::Left,
                             style: *style,
+                            scene_number: None,
                         });
                     }
                 }
@@ -474,6 +488,7 @@ fn place(blocks: &[Block]) -> Vec<Page> {
                         width: DIALOGUE_COLS,
                         align: Align::Left,
                         style: Style::Oblique,
+                        scene_number: None,
                     });
                 }
             }
@@ -579,6 +594,7 @@ pub fn write_pdf(layout: &Layout) -> Vec<u8> {
     let page_tree = alloc.bump();
     let normal = alloc.bump();
     let oblique = alloc.bump();
+    let bold = alloc.bump();
 
     pdf.catalog(catalog).pages(page_tree);
     pdf.type1_font(normal)
@@ -586,6 +602,9 @@ pub fn write_pdf(layout: &Layout) -> Vec<u8> {
         .encoding_predefined(Name(b"WinAnsiEncoding"));
     pdf.type1_font(oblique)
         .base_font(Name(b"Courier-Oblique"))
+        .encoding_predefined(Name(b"WinAnsiEncoding"));
+    pdf.type1_font(bold)
+        .base_font(Name(b"Courier-Bold"))
         .encoding_predefined(Name(b"WinAnsiEncoding"));
 
     let title_page = (!layout.title.is_empty()).then(|| title_page_layout(&layout.title));
@@ -619,6 +638,11 @@ pub fn write_pdf(layout: &Layout) -> Vec<u8> {
                 }
             };
             let y = PAGE_H - TOP_MARGIN - ((index + 1) as f32) * LEADING;
+            if let Some(scene_number) = line.scene_number {
+                content.set_font(Name(b"F3"), 12.0);
+                content.set_text_matrix([1.0, 0.0, 0.0, 1.0, SCENE_NUMBER_X, y]);
+                content.show(Str(&winansi(&format!("{}.", scene_number))));
+            }
             let font = match line.style {
                 Style::Normal => Name(b"F1"),
                 Style::Oblique => Name(b"F2"),
@@ -646,7 +670,8 @@ pub fn write_pdf(layout: &Layout) -> Vec<u8> {
             .resources()
             .fonts()
             .pair(Name(b"F1"), normal)
-            .pair(Name(b"F2"), oblique);
+            .pair(Name(b"F2"), oblique)
+            .pair(Name(b"F3"), bold);
     }
 
     let page_count = page_ids.len() as i32;
@@ -687,6 +712,18 @@ mod tests {
 
     fn page_text(page: &Page) -> Vec<&str> {
         page.lines.iter().map(|line| line.text.as_str()).collect()
+    }
+
+    #[test]
+    fn numbers_each_scene_heading_in_the_left_margin() {
+        let layout = layout("INT. CASA - DAY\n\nAction.\n\nEXT. CALLE - NIGHT\n\nMore action.");
+        let numbers = layout
+            .pages
+            .iter()
+            .flat_map(|page| page.lines.iter())
+            .filter_map(|line| line.scene_number)
+            .collect::<Vec<_>>();
+        assert_eq!(numbers, vec![1, 2]);
     }
 
     #[test]

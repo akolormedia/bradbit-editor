@@ -44,6 +44,7 @@ export interface AppSettings {
   fontSize: number;
   wordWrap: boolean;
   lineNumbers: boolean;
+  fountainAutocomplete: boolean;
   showConfigFiles: boolean;
   showDeveloperOptions: boolean;
   gitAuthorName: string;

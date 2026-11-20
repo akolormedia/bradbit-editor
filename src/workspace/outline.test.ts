@@ -66,8 +66,8 @@ describe("Fountain outline extraction (T-1.2.2)", () => {
 
     expect(outline?.items).toEqual([
       { level: 2, title: "Acto 1", line: 3, kind: "section" },
-      { level: 3, title: "INT. CASA - DÍA", line: 5, kind: "scene" },
-      { level: 3, title: "EXT. CALLE - NOCHE", line: 10, kind: "scene" },
+      { level: 3, title: "INT. CASA - DÍA", line: 5, kind: "scene", number: 1 },
+      { level: 3, title: "EXT. CALLE - NOCHE", line: 10, kind: "scene", number: 2 },
     ]);
     expect(outline?.pageCount).toBe(1);
   });
@@ -75,7 +75,7 @@ describe("Fountain outline extraction (T-1.2.2)", () => {
   it("keeps scenes at level 1 before the first section and strips forced-scene dots", () => {
     const outline = extractOutline("guion/escena.fountain", ".CASA DE ANA\n\n# Acto 1");
     expect(outline?.items).toEqual([
-      { level: 1, title: "CASA DE ANA", line: 1, kind: "scene" },
+      { level: 1, title: "CASA DE ANA", line: 1, kind: "scene", number: 1 },
       { level: 1, title: "Acto 1", line: 3, kind: "section" },
     ]);
   });
@@ -94,7 +94,7 @@ describe("Fountain outline extraction (T-1.2.2)", () => {
       "[[NOTA IMPORTANTE]]\n\nANA\n\nHola.\n\nINT. CASA - DÍA",
     );
     expect(outline?.items).toEqual([
-      { level: 1, title: "INT. CASA - DÍA", line: 7, kind: "scene" },
+      { level: 1, title: "INT. CASA - DÍA", line: 7, kind: "scene", number: 1 },
     ]);
   });
 });

@@ -1,3 +1,4 @@
+import { startCompletion } from "@codemirror/autocomplete";
 import {
   Compartment,
   EditorState,
@@ -11,6 +12,7 @@ import {
   EditorView,
   highlightActiveLine,
   highlightActiveLineGutter,
+  hoverTooltip,
   keymap,
   lineNumbers as cmLineNumbers,
   ViewPlugin,
@@ -27,12 +29,25 @@ import {
 } from "@codemirror/language";
 import { tags } from "@lezer/highlight";
 import { AppSettings } from "../types";
-import { isMarkdownPath } from "../workspace/state";
+import { isFountainPath, isMarkdownPath } from "../workspace/state";
 import {
   classifyFountainLine,
   createFountainState,
   fountainLineClass,
+  fountainSceneNumbers,
 } from "./fountain";
+import {
+  fountainCompletionExtension,
+  setFountainCompletionIntent,
+} from "./fountainCompletion";
+import {
+  FOUNTAIN_COMMANDS,
+  FountainCommand,
+} from "./fountainCommands";
+import {
+  EMPTY_FOUNTAIN_SYMBOLS,
+  FountainSymbols,
+} from "./fountainSymbols";
 import { computeWrapEdit } from "./markdownFormat";
 
 /**
@@ -79,6 +94,28 @@ const fountainHighlighting = ViewPlugin.fromClass(
   },
 );
 
+const sceneHoverTooltip = hoverTooltip(
+  (view, pos) => {
+    const line = view.state.doc.lineAt(pos);
+    const scene = fountainSceneNumbers(view.state.doc.toString()).find(
+      (candidate) => candidate.line === line.number,
+    );
+    if (!scene) return null;
+    return {
+      pos: line.from,
+      end: line.to,
+      above: true,
+      create: () => {
+        const dom = document.createElement("div");
+        dom.className = "cm-scene-hover";
+        dom.textContent = `${scene.number}.`;
+        return { dom };
+      },
+    };
+  },
+  { hoverTime: 250 },
+);
+
 const writerHighlightStyle = HighlightStyle.define([
   { tag: tags.heading, fontWeight: "700", color: "var(--cm-heading)" },
   { tag: tags.strong, fontWeight: "700", color: "var(--cm-keyword)" },
@@ -120,7 +157,7 @@ const writerHighlightStyle = HighlightStyle.define([
 function languageExtensionForPath(path: string): Extension {
   const lower = path.toLowerCase();
   if (lower.endsWith(".fountain") || lower.endsWith(".spmd")) {
-    return fountainHighlighting;
+    return [fountainHighlighting, sceneHoverTooltip];
   }
   if (lower.endsWith(".md") || lower.endsWith(".mdx") || lower.endsWith(".markdown")) {
     return markdown();
@@ -146,6 +183,8 @@ function buildAppearanceExtension(settings: AppSettings): Extension {
       maxWidth: "820px",
       margin: "0",
       padding: "24px 32px 96px 18px",
+      minHeight: "100%",
+      boxSizing: "border-box",
       caretColor: "var(--accent)",
     },
     ".cm-focused": {
@@ -207,6 +246,7 @@ export interface EditorCallbacks {
   onContentChange: (path: string, content: string) => void;
   onCursorChange: (path: string, line: number, col: number) => void;
   onSaveShortcut: () => void;
+  getFountainBibleSymbols?: () => FountainSymbols;
 }
 
 export class BradbitCodeMirror {
@@ -218,6 +258,7 @@ export class BradbitCodeMirror {
   private lineNumbersCompartment = new Compartment();
   private appearanceCompartment = new Compartment();
   private languageCompartment = new Compartment();
+  private completionCompartment = new Compartment();
 
   constructor(
     private parent: HTMLElement,
@@ -269,6 +310,9 @@ export class BradbitCodeMirror {
 
   public applySettings(settings: AppSettings): void {
     if (!this.view) return;
+    const fountain = Boolean(
+      this.currentPath && isFountainPath(this.currentPath),
+    );
     this.view.dispatch({
       effects: [
         this.wrapCompartment.reconfigure(settings.wordWrap ? EditorView.lineWrapping : []),
@@ -276,6 +320,17 @@ export class BradbitCodeMirror {
           settings.lineNumbers ? [cmLineNumbers(), highlightActiveLineGutter()] : [],
         ),
         this.appearanceCompartment.reconfigure(buildAppearanceExtension(settings)),
+        this.completionCompartment.reconfigure(
+          fountain
+            ? fountainCompletionExtension(
+                () =>
+                  this.callbacks.getFountainBibleSymbols?.() ??
+                  EMPTY_FOUNTAIN_SYMBOLS,
+                settings.language,
+                settings.fountainAutocomplete,
+              )
+            : [],
+        ),
       ],
     });
   }
@@ -317,6 +372,86 @@ export class BradbitCodeMirror {
     this.applyWrap("*");
   }
 
+  public runFountainCommand(command: FountainCommand): void {
+    if (!this.view || !this.currentPath || !isFountainPath(this.currentPath)) {
+      return;
+    }
+    const state = this.view.state;
+    const line = state.doc.lineAt(state.selection.main.from);
+
+    if (command === "note") {
+      this.insertFountainNote();
+      return;
+    }
+
+    this.view.dispatch({
+      effects: setFountainCompletionIntent(command),
+    });
+    this.view.focus();
+    const opened = startCompletion(this.view);
+    if (!opened) {
+      this.view.dispatch({
+        effects: setFountainCompletionIntent(null),
+      });
+      this.insertFountainFallback(command, line.from, line.to);
+    }
+  }
+
+  private insertFountainNote(): void {
+    if (!this.view) return;
+    const { from, to } = this.view.state.selection.main;
+    const selected = this.view.state.sliceDoc(from, to);
+    const content = selected || "";
+    const insert = `[[${content}]]`;
+    const start = from + 2;
+    this.view.dispatch({
+      changes: { from, to, insert },
+      selection: { anchor: start, head: start + content.length },
+    });
+    this.view.focus();
+  }
+
+  private insertFountainFallback(
+    command: FountainCommand,
+    lineFrom: number,
+    lineTo: number,
+  ): void {
+    if (!this.view) return;
+    const fallback =
+      command === "scene"
+        ? "INT. "
+        : command === "character"
+          ? "PERSONAJE"
+          : command === "parenthetical"
+            ? "()"
+            : command === "transition"
+              ? "CUT TO:\n"
+              : command === "section"
+                ? "# \n"
+                : "";
+    if (!fallback) {
+      this.focusLine(lineFrom);
+      return;
+    }
+    const select =
+      command === "character"
+        ? { anchor: lineFrom, head: lineFrom + fallback.length }
+        : command === "parenthetical"
+          ? { anchor: lineFrom + 1, head: lineFrom + 1 }
+          : { anchor: lineFrom + fallback.length, head: lineFrom + fallback.length };
+    this.view.dispatch({
+      changes: { from: lineFrom, to: lineTo, insert: fallback },
+      selection: select,
+    });
+    this.view.focus();
+  }
+
+  private focusLine(position: number): void {
+    if (!this.view) return;
+    this.view.dispatch({ selection: { anchor: position } });
+    this.view.focus();
+  }
+
   private applyWrap(marker: string): void {
     if (!this.view) return;
     const { from, to } = this.view.state.selection.main;
@@ -355,6 +490,7 @@ export class BradbitCodeMirror {
   }
 
   private createState(path: string, content: string, settings: AppSettings): EditorState {
+    const fountain = isFountainPath(path);
     return EditorState.create({
       doc: content,
       extensions: [
@@ -375,6 +511,17 @@ export class BradbitCodeMirror {
           settings.lineNumbers ? [cmLineNumbers(), highlightActiveLineGutter()] : [],
         ),
         this.appearanceCompartment.of(buildAppearanceExtension(settings)),
+        this.completionCompartment.of(
+          fountain
+            ? fountainCompletionExtension(
+                () =>
+                  this.callbacks.getFountainBibleSymbols?.() ??
+                  EMPTY_FOUNTAIN_SYMBOLS,
+                settings.language,
+                settings.fountainAutocomplete,
+              )
+            : [],
+        ),
         this.languageCompartment.of(languageExtensionForPath(path)),
         keymap.of([
           {
@@ -401,6 +548,15 @@ export class BradbitCodeMirror {
                   },
                 },
               ]
+            : []),
+          ...(fountain
+            ? FOUNTAIN_COMMANDS.map((command) => ({
+                key: command.key,
+                run: () => {
+                  this.runFountainCommand(command.id);
+                  return true;
+                },
+              }))
             : []),
           indentWithTab,
           ...searchKeymap,

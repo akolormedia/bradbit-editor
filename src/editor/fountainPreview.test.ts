@@ -27,6 +27,7 @@ describe("Fountain preview (T-2.5.7)", () => {
     expect(lines[0]).toEqual({
       type: "scene",
       text: "EXT. GREYHOUND BUS STATION - DAWN",
+      sceneNumber: 1,
     });
     expect(lines[2]?.type).toBe("action");
     expect(lines[4]?.type).toBe("character");
@@ -55,6 +56,9 @@ describe("Fountain preview (T-2.5.7)", () => {
     expect(
       preview.querySelector(".fountain-scene")?.textContent,
     ).toContain("EXT. GREYHOUND");
+    expect(
+      preview.querySelector(".fountain-scene")?.getAttribute("data-scene-number"),
+    ).toBe("1");
     expect(
       preview.querySelector(".fountain-character")?.textContent,
     ).toContain("REESE");

@@ -4,6 +4,7 @@ import {
   createFountainState,
   estimateFountainPages,
   fountainLineClass,
+  fountainSceneNumbers,
   FountainState,
 } from "./fountain";
 
@@ -20,13 +21,15 @@ function classify(lines: string[]): Array<{ type: string; state: FountainState }
 
 describe("Fountain line classification (T-1.2.2)", () => {
   it("classifies scene headings, sections, transitions and notes", () => {
-    const [scene, section, transition, note] = classify([
+    const [scene, extInt, section, transition, note] = classify([
       "INT. CASA - DÍA",
+      "EXT./INT. CASA / ENTRADA - DÍA",
       "## Acto 1",
       "CUT TO:",
       "[[nota privada]]",
     ]);
     expect(scene.type).toBe("scene");
+    expect(extInt.type).toBe("scene");
     expect(section.type).toBe("section");
     expect(transition.type).toBe("transition");
     expect(note.type).toBe("action");
@@ -109,5 +112,27 @@ describe("Fountain page estimate (T-1.2.2)", () => {
     expect(estimateFountainPages(Array(55).fill("línea").join("\n"))).toBe(1);
     expect(estimateFountainPages(Array(56).fill("línea").join("\n"))).toBe(2);
     expect(estimateFountainPages(Array(110).fill("línea").join("\n"))).toBe(2);
+  });
+});
+
+describe("Fountain scene numbers", () => {
+  it("numbers scene headings in document order", () => {
+    const source = [
+      "Title: Demo",
+      "",
+      "INT. CASA - DÍA",
+      "",
+      "ANA",
+      "Hola.",
+      "",
+      "EXT. CALLE - NOCHE",
+      "",
+      "LUIS",
+      "Adiós.",
+    ].join("\n");
+    expect(fountainSceneNumbers(source)).toEqual([
+      { line: 3, number: 1 },
+      { line: 8, number: 2 },
+    ]);
   });
 });

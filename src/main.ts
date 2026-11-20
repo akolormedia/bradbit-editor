@@ -98,6 +98,19 @@ import { convertDocxToMarkdown, type DocxImportWarning } from "./import/docx";
 import { folderPdfErrorCopy } from "./export/folderPdfError";
 import { createIcon } from "./ui/icons";
 import { createIconButton } from "./ui/iconButton";
+import { createFountainToolbar } from "./editor/fountainToolbar";
+import {
+  matchesAnySource,
+  parseContributionManifest,
+  symbolSourcesForLanguage,
+  SymbolSourceContribution,
+} from "./contributions/manifest";
+import {
+  loadSymbolIndex,
+  symbolNames,
+  SymbolIndex,
+} from "./symbols";
+import { FountainSymbols } from "./editor/fountainSymbols";
 import { MenuSyncQueue } from "./workspace/menuSync";
 import { extractOutline, OutlineItem } from "./workspace/outline";
 import {
@@ -321,6 +334,8 @@ class BradbitApp {
   private diffData: { path: string; original: string; isNew: boolean } | null = null;
   private diffLoadingPath: string | null = null;
   private editor: BradbitCodeMirror | null = null;
+  private symbolSources: SymbolSourceContribution[] = [];
+  private symbolIndex: SymbolIndex = new Map();
 
   constructor(rootEl: HTMLElement) {
     this.rootEl = rootEl;
@@ -418,6 +433,8 @@ class BradbitApp {
     this.stopTerminalSession();
     this.chatPanel = null;
     this.folder = null;
+    this.symbolSources = [];
+    this.symbolIndex = new Map();
     this.kitCatalog = { agents: [], commands: GENERAL_COMMANDS, skills: [] };
     this.chatModels = [];
     this.tabState = { tabs: [], activeTabPath: null };
@@ -448,6 +465,8 @@ class BradbitApp {
       this.stopTerminalSession();
       this.chatPanel = null;
       this.folder = opened;
+      this.symbolSources = [];
+      this.symbolIndex = new Map();
       this.kitCatalog = { agents: [], commands: GENERAL_COMMANDS, skills: [] };
       try {
         this.workspaceState = await backend.loadWorkspaceState(opened.rootPath);
@@ -490,6 +509,7 @@ class BradbitApp {
         this.statusNotice = err instanceof Error ? err.message : String(err);
       }
       await this.refreshKitCatalog();
+      await this.refreshProjectContributions();
       await this.refreshGitStatus();
       await this.refreshGitMeta();
       this.render();
@@ -511,6 +531,44 @@ class BradbitApp {
       tree,
     };
     await this.refreshGitStatus();
+  }
+
+  private async refreshProjectContributions(): Promise<void> {
+    this.symbolSources = [];
+    this.symbolIndex = new Map();
+    if (!this.folder || !isTauriEnvironment()) return;
+    const root = this.folder.rootPath;
+    try {
+      const raw = await backend.readTextFile(root, "bradbit-kit.json");
+      const manifest = parseContributionManifest(raw);
+      this.symbolSources = symbolSourcesForLanguage(manifest, "fountain");
+    } catch {
+      this.symbolSources = [];
+    }
+    if (this.folder?.rootPath !== root) return;
+    await this.refreshProjectSymbols();
+  }
+
+  private async refreshProjectSymbols(): Promise<void> {
+    if (!this.folder || !isTauriEnvironment() || this.symbolSources.length === 0) {
+      this.symbolIndex = new Map();
+      return;
+    }
+    const root = this.folder.rootPath;
+    const index = await loadSymbolIndex(
+      this.folder.tree,
+      this.symbolSources,
+      (path) => backend.readTextFile(root, path),
+    );
+    if (this.folder?.rootPath !== root) return;
+    this.symbolIndex = index;
+  }
+
+  private getFountainSymbols(): FountainSymbols {
+    return {
+      characters: symbolNames(this.symbolIndex, "character"),
+      locations: symbolNames(this.symbolIndex, "location"),
+    };
   }
 
   private async refreshGitStatus(): Promise<void> {
@@ -2484,6 +2542,14 @@ class BradbitApp {
       console.error("Could not update the file tree", err);
     }
 
+    if (event.paths.includes("bradbit-kit.json")) {
+      void this.refreshProjectContributions();
+    } else if (
+      event.paths.some((path) => matchesAnySource(path, this.symbolSources))
+    ) {
+      void this.refreshProjectSymbols();
+    }
+
     if (
       event.paths.some(
         (path) => path.startsWith(".opencode/") || path.startsWith(".bradbit/"),
@@ -3222,6 +3288,7 @@ class BradbitApp {
           onSaveShortcut: () => {
             void this.saveActiveTab();
           },
+          getFountainBibleSymbols: () => this.getFountainSymbols(),
         });
       }
       if (activeTab.viewMode !== "diff") {
@@ -3943,13 +4010,20 @@ class BradbitApp {
 
     const icon = document.createElement("span");
     icon.className = "outline-icon";
-    if (item.kind === "scene") {
-      icon.appendChild(createIcon("clapperboard", 13));
-    } else if (item.kind === "section") {
-      icon.appendChild(createIcon("hash", 13));
-    }
-    if (icon.childElementCount > 0) {
-      row.appendChild(icon);
+    if (item.kind === "scene" && item.number !== undefined) {
+      const number = document.createElement("span");
+      number.className = "outline-scene-number";
+      number.textContent = `${item.number}-`;
+      row.appendChild(number);
+    } else {
+      if (item.kind === "scene") {
+        icon.appendChild(createIcon("clapperboard", 13));
+      } else if (item.kind === "section") {
+        icon.appendChild(createIcon("hash", 13));
+      }
+      if (icon.childElementCount > 0) {
+        row.appendChild(icon);
+      }
     }
 
     const label = document.createElement("span");
@@ -4283,6 +4357,18 @@ class BradbitApp {
           onToggleDiff: () => void this.toggleDiff(),
           canDiscard,
           onDiscard: () => this.requestDiscard(),
+        }),
+      );
+    }
+
+    if (
+      activeTab &&
+      isFountainPath(activeTab.path) &&
+      activeTab.viewMode === "edit"
+    ) {
+      col.appendChild(
+        createFountainToolbar(lang, (command) => {
+          this.editor?.runFountainCommand(command);
         }),
       );
     }
