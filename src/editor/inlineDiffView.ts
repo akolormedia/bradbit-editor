@@ -253,12 +253,17 @@ function buildHunkDecorations(
 
   for (const hunk of hunks) {
     if (hunk.kind === "deleted") {
+      const atDocumentEnd =
+        hunk.from >= state.doc.length &&
+        state.doc.length > 0 &&
+        state.doc.sliceString(state.doc.length - 1) !== "\n";
       const line = state.doc.lineAt(
         Math.min(hunk.from, state.doc.length),
       );
+      const position = atDocumentEnd ? line.to : line.from;
       builder.add(
-        line.from,
-        line.from,
+        position,
+        position,
         Decoration.widget({
           widget: new DeletedLinesWidget(
             hunk.originalText,
@@ -278,7 +283,7 @@ function buildHunkDecorations(
             },
           ),
           block: true,
-          side: -1,
+          side: atDocumentEnd ? 1 : -1,
         }),
       );
       continue;
