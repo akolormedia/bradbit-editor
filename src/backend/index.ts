@@ -643,7 +643,7 @@ export const backend = {
 
   async gitStatus(rootPath: string): Promise<GitStatus> {
     if (!isTauriEnvironment()) {
-      return { isRepository: false, branch: null, ahead: 0, behind: 0, entries: [] };
+      return { isRepository: false, branch: null, head: null, ahead: 0, behind: 0, entries: [] };
     }
     return tauriInvoke<GitStatus>("git_status", { root: rootPath });
   },

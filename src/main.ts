@@ -287,6 +287,9 @@ class BradbitApp {
   private gitHistoryLoading = false;
   private gitPanelError = "";
   private gitRemotes: GitRemote[] = [];
+  private inlineDiffOriginals = new Map<string, string | null>();
+  private inlineDiffLoading = new Set<string>();
+  private gitHeadId: string | null = null;
   private githubTokenPresent = false;
   private githubAccount: string | null = null;
   private githubAccountLoaded = false;
@@ -454,6 +457,9 @@ class BradbitApp {
     this.gitCommitFiles = {};
     this.gitPanelError = "";
     this.gitRemotes = [];
+    this.inlineDiffOriginals.clear();
+    this.inlineDiffLoading.clear();
+    this.gitHeadId = null;
     this.githubPullRequests = [];
     this.githubError = "";
     this.githubPrLoading = false;
@@ -503,6 +509,9 @@ class BradbitApp {
       this.gitCommitFiles = {};
       this.gitPanelError = "";
       this.gitRemotes = [];
+      this.inlineDiffOriginals.clear();
+      this.inlineDiffLoading.clear();
+      this.gitHeadId = null;
       this.githubPullRequests = [];
       this.githubError = "";
       this.githubPrLoading = false;
@@ -585,14 +594,101 @@ class BradbitApp {
   private async refreshGitStatus(): Promise<void> {
     if (!this.folder || !isTauriEnvironment()) {
       this.gitStatus = null;
+      this.gitHeadId = null;
+      this.inlineDiffOriginals.clear();
+      this.inlineDiffLoading.clear();
+      this.editor?.clearGitOriginals();
       return;
     }
     try {
-      this.gitStatus = await backend.gitStatus(this.folder.rootPath);
+      const status = await backend.gitStatus(this.folder.rootPath);
+      this.gitStatus = status;
+      this.syncInlineDiffCache(status);
     } catch (err) {
       console.error("Could not read the Git status", err);
       this.gitStatus = null;
+      this.gitHeadId = null;
+      this.inlineDiffOriginals.clear();
+      this.inlineDiffLoading.clear();
+      this.editor?.clearGitOriginals();
     }
+  }
+
+  /**
+   * Keeps cached HEAD blobs in sync with the repository: a changed HEAD
+   * invalidates every baseline, and files that are no longer modified stop
+   * showing inline change markers.
+   */
+  private syncInlineDiffCache(status: GitStatus): void {
+    const headChanged =
+      this.gitHeadId !== null && status.head !== this.gitHeadId;
+    this.gitHeadId = status.head;
+    if (!status.isRepository) {
+      this.inlineDiffOriginals.clear();
+      this.inlineDiffLoading.clear();
+      this.editor?.clearGitOriginals();
+      return;
+    }
+
+    const changed = new Set(status.entries.map((entry) => entry.path));
+    if (headChanged) {
+      this.inlineDiffOriginals.clear();
+      this.inlineDiffLoading.clear();
+      this.editor?.clearGitOriginals();
+    } else {
+      for (const path of [...this.inlineDiffOriginals.keys()]) {
+        if (changed.has(path)) continue;
+        this.inlineDiffOriginals.delete(path);
+        this.editor?.setGitOriginal(path, undefined);
+      }
+    }
+  }
+
+  private syncInlineDiff(tab: OpenTab | null): void {
+    if (!this.editor) return;
+    if (
+      !tab ||
+      !this.folder ||
+      tab.untitled ||
+      !this.gitStatus?.isRepository
+    ) {
+      if (tab) this.editor.setGitOriginal(tab.path, undefined);
+      return;
+    }
+
+    const entry = this.gitStatus.entries.find(
+      (candidate) => candidate.path === tab.path,
+    );
+    if (!entry) {
+      this.editor.setGitOriginal(tab.path, undefined);
+      return;
+    }
+    if (this.inlineDiffOriginals.has(tab.path)) {
+      this.editor.setGitOriginal(
+        tab.path,
+        this.inlineDiffOriginals.get(tab.path) ?? null,
+      );
+      return;
+    }
+    if (this.inlineDiffLoading.has(tab.path)) return;
+
+    const root = this.folder.rootPath;
+    this.inlineDiffLoading.add(tab.path);
+    void backend
+      .gitHeadFile(root, tab.path)
+      .then((original) => {
+        if (this.folder?.rootPath !== root) return;
+        this.inlineDiffOriginals.set(tab.path, original);
+        if (this.getActiveTab()?.path === tab.path) {
+          this.editor?.setGitOriginal(tab.path, original);
+        }
+      })
+      .catch((err) => {
+        console.error("Could not load the committed version", err);
+      })
+      .finally(() => {
+        this.inlineDiffLoading.delete(tab.path);
+      });
   }
 
   private async refreshGitMeta(): Promise<void> {
@@ -2471,6 +2567,13 @@ class BradbitApp {
     this.render();
   }
 
+  private openDiffForPath(path: string): void {
+    const tab = this.tabState.tabs.find((candidate) => candidate.path === path);
+    if (!tab || !this.folder || isUntitledTab(tab)) return;
+    this.tabState = setTabViewMode(this.tabState, path, "diff");
+    this.render();
+  }
+
   private destroyDiffView(): void {
     this.diffView?.destroy();
     this.diffView = null;
@@ -3382,12 +3485,14 @@ class BradbitApp {
           onSaveShortcut: () => {
             void this.saveActiveTab();
           },
+          onOpenDiff: (path) => this.openDiffForPath(path),
           getFountainBibleSymbols: () => this.getFountainSymbols(),
         });
       }
       if (activeTab.viewMode !== "diff") {
         this.editor.openDocument(activeTab.path, activeTab.content, this.settings);
       }
+      this.syncInlineDiff(activeTab);
     }
 
     this.syncDiffView(activeTab);
@@ -3815,6 +3920,7 @@ class BradbitApp {
 
         const badge = gitBadges.get(node.path);
         if (badge) {
+          row.classList.add(`tree-git-${badgeClass(badge)}`);
           const badgeEl = document.createElement("span");
           badgeEl.className = `tree-git-badge git-badge-${badgeClass(badge)}`;
           badgeEl.textContent = badge;

@@ -48,6 +48,8 @@ import {
   EMPTY_FOUNTAIN_SYMBOLS,
   FountainSymbols,
 } from "./fountainSymbols";
+import { buildInlineDiffHunks } from "./inlineDiff";
+import { InlineDiffView } from "./inlineDiffView";
 import { computeWrapEdit } from "./markdownFormat";
 
 /**
@@ -246,6 +248,7 @@ export interface EditorCallbacks {
   onContentChange: (path: string, content: string) => void;
   onCursorChange: (path: string, line: number, col: number) => void;
   onSaveShortcut: () => void;
+  onOpenDiff?: (path: string) => void;
   getFountainBibleSymbols?: () => FountainSymbols;
 }
 
@@ -254,6 +257,10 @@ export class BradbitCodeMirror {
   private currentPath: string | null = null;
   private statesByPath = new Map<string, EditorState>();
   private scrollPositions = new Map<string, { top: number; left: number }>();
+  private gitOriginals = new Map<string, string | null>();
+  private inlineDiffTimer: number | null = null;
+  private inlineDiff: InlineDiffView;
+  private settings: AppSettings;
 
   private wrapCompartment = new Compartment();
   private lineNumbersCompartment = new Compartment();
@@ -263,11 +270,22 @@ export class BradbitCodeMirror {
 
   constructor(
     private parent: HTMLElement,
-    _initialSettings: AppSettings,
+    initialSettings: AppSettings,
     private callbacks: EditorCallbacks,
-  ) {}
+  ) {
+    this.settings = initialSettings;
+    this.inlineDiff = new InlineDiffView({
+      parent: this.parent,
+      getView: () => this.view,
+      getLanguage: () => this.settings.language,
+      onOpenDiff: () => {
+        if (this.currentPath) this.callbacks.onOpenDiff?.(this.currentPath);
+      },
+    });
+  }
 
   public openDocument(path: string, content: string, settings: AppSettings): void {
+    this.settings = settings;
     const switched = this.currentPath !== path;
     if (this.view && this.currentPath) {
       this.statesByPath.set(this.currentPath, this.view.state);
@@ -307,11 +325,54 @@ export class BradbitCodeMirror {
       }
     }
     this.reportCursor(this.view.state);
+    this.refreshInlineDiff();
+  }
+
+  /** Baseline (HEAD) content used for the inline Git diff; `null` = new file. */
+  public setGitOriginal(path: string, original: string | null | undefined): void {
+    if (original === undefined) {
+      this.gitOriginals.delete(path);
+    } else {
+      this.gitOriginals.set(path, original);
+    }
+    if (this.currentPath === path) this.refreshInlineDiff();
+  }
+
+  public clearGitOriginals(): void {
+    this.gitOriginals.clear();
+    this.inlineDiff.clear();
+  }
+
+  private refreshInlineDiff(): void {
+    if (!this.view || !this.currentPath) return;
+    if (this.inlineDiffTimer !== null) {
+      window.clearTimeout(this.inlineDiffTimer);
+      this.inlineDiffTimer = null;
+    }
+    const original = this.gitOriginals.get(this.currentPath);
+    if (original === undefined) {
+      this.inlineDiff.clear();
+      return;
+    }
+    this.inlineDiff.setHunks(
+      buildInlineDiffHunks(original ?? "", this.view.state.doc.toString()),
+    );
+  }
+
+  private scheduleInlineDiff(): void {
+    if (this.inlineDiffTimer !== null) {
+      window.clearTimeout(this.inlineDiffTimer);
+    }
+    this.inlineDiffTimer = window.setTimeout(() => {
+      this.inlineDiffTimer = null;
+      this.refreshInlineDiff();
+    }, 240);
   }
 
   public closeDocumentState(path: string): void {
     this.statesByPath.delete(path);
     this.scrollPositions.delete(path);
+    this.gitOriginals.delete(path);
     if (this.currentPath === path) {
       this.currentPath = null;
     }
@@ -327,6 +388,11 @@ export class BradbitCodeMirror {
     if (scroll) {
       this.scrollPositions.delete(oldPath);
       this.scrollPositions.set(newPath, scroll);
+    }
+    if (this.gitOriginals.has(oldPath)) {
+      const original = this.gitOriginals.get(oldPath) ?? null;
+      this.gitOriginals.delete(oldPath);
+      this.gitOriginals.set(newPath, original);
     }
     if (this.currentPath === oldPath) {
       this.currentPath = newPath;
@@ -358,6 +424,7 @@ export class BradbitCodeMirror {
   }
 
   public applySettings(settings: AppSettings): void {
+    this.settings = settings;
     if (!this.view) return;
     const fountain = Boolean(
       this.currentPath && isFountainPath(this.currentPath),
@@ -534,6 +601,11 @@ export class BradbitCodeMirror {
   }
 
   public destroy(): void {
+    if (this.inlineDiffTimer !== null) {
+      window.clearTimeout(this.inlineDiffTimer);
+      this.inlineDiffTimer = null;
+    }
+    this.inlineDiff.destroy();
     this.view?.destroy();
     this.view = null;
   }
@@ -572,6 +644,7 @@ export class BradbitCodeMirror {
             : [],
         ),
         this.languageCompartment.of(languageExtensionForPath(path)),
+        this.inlineDiff.extension(),
         keymap.of([
           {
             key: "Mod-s",
@@ -616,6 +689,7 @@ export class BradbitCodeMirror {
           if (!this.currentPath) return;
           if (update.docChanged) {
             this.callbacks.onContentChange(this.currentPath, update.state.doc.toString());
+            this.scheduleInlineDiff();
           }
           if (update.selectionSet || update.docChanged) {
             this.reportCursor(update.state);

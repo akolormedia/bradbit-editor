@@ -149,6 +149,18 @@ fn api_status_and_init_handle_plain_folders() {
     assert!(after.is_repository);
     assert_eq!(after.branch.as_deref(), Some("main"));
     assert!(dir.path().join(".git").is_dir());
+
+    fs::write(dir.path().join("a.md"), "uno").unwrap();
+    commit_all(dir.path(), "primera");
+    let head = GitRepository::open(dir.path())
+        .unwrap()
+        .head()
+        .unwrap()
+        .target()
+        .unwrap()
+        .to_string();
+    let committed = super::api::status(root).unwrap();
+    assert_eq!(committed.head.as_deref(), Some(head.as_str()));
 }
 
 #[test]

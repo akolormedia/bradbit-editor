@@ -169,6 +169,7 @@ export interface GitStatusEntry {
 export interface GitStatus {
   isRepository: boolean;
   branch: string | null;
+  head: string | null;
   ahead: number;
   behind: number;
   entries: GitStatusEntry[];
