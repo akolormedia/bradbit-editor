@@ -415,6 +415,7 @@ export class InlineDiffView {
               update.startState.field(inlineDiffField) !==
                 update.state.field(inlineDiffField)
             ) {
+              host.positionRuler(update.view);
               host.scheduleExpandedBar(update.view);
             }
           }
@@ -485,7 +486,9 @@ export class InlineDiffView {
     if (!view || expandedHunks(view.state).size === 0) {
       this.removeExpandedBar();
     }
-    if (!view || hunks.length === 0) return;
+    if (!view) return;
+    this.positionRuler(view);
+    if (hunks.length === 0) return;
     const totalDeleted = hunks.reduce(
       (sum, hunk) => sum + hunk.deletedLines,
       0,
@@ -720,6 +723,14 @@ export class InlineDiffView {
     );
     this.restoreButton.hidden = !active || active.kind === "added";
     this.scheduleExpandedBar(view);
+  }
+
+  private positionRuler(view: EditorView): void {
+    const scrollbar = Math.max(
+      0,
+      view.scrollDOM.offsetWidth - view.scrollDOM.clientWidth,
+    );
+    this.ruler.style.right = `${Math.max(12, scrollbar + 4)}px`;
   }
 
   private scheduleExpandedBar(view: EditorView | null): void {
