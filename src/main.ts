@@ -2571,12 +2571,6 @@ class BradbitApp {
     this.render();
   }
 
-  private openDiffForPath(path: string): void {
-    const tab = this.tabState.tabs.find((candidate) => candidate.path === path);
-    if (!tab || !this.folder || isUntitledTab(tab)) return;
-    this.tabState = setTabViewMode(this.tabState, path, "diff");
-    this.render();
-  }
 
   private destroyDiffView(): void {
     this.diffView?.destroy();
@@ -3489,7 +3483,6 @@ class BradbitApp {
           onSaveShortcut: () => {
             void this.saveActiveTab();
           },
-          onOpenDiff: (path) => this.openDiffForPath(path),
           getFountainBibleSymbols: () => this.getFountainSymbols(),
         });
       }

@@ -248,7 +248,6 @@ export interface EditorCallbacks {
   onContentChange: (path: string, content: string) => void;
   onCursorChange: (path: string, line: number, col: number) => void;
   onSaveShortcut: () => void;
-  onOpenDiff?: (path: string) => void;
   getFountainBibleSymbols?: () => FountainSymbols;
 }
 
@@ -278,9 +277,6 @@ export class BradbitCodeMirror {
       parent: this.parent,
       getView: () => this.view,
       getLanguage: () => this.settings.language,
-      onOpenDiff: () => {
-        if (this.currentPath) this.callbacks.onOpenDiff?.(this.currentPath);
-      },
     });
   }
 

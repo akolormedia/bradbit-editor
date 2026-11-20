@@ -16,7 +16,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 - **Editor and chat polish:** clicking the last line no longer selects or jumps unexpectedly; per-tab editor scroll and file-tree scroll are preserved; the chat restores to the end when opening a project; showing or hiding the chat/editor surfaces animates smoothly.
 - **Chat Markdown:** user messages render as Markdown. Tool results choose their own display: Markdown when the file/result is Markdown, colored Fountain lines when it is Fountain, and compact plain text otherwise; tool input JSON stays hidden.
 - **Kit writing area:** templates declare `primaryPaths`, and the file tree highlights the folder/files being written in the accent color while the rest stays as context.
-- **Inline Git diff (Zed style):** changed lines show green/yellow bars in the editor gutter, deleted lines show a red triangle with a hover restore action, clicking a marker opens a hunk summary with a diff shortcut, and the right-edge ruler marks every change. Changed files are also tinted in the file tree.
+- **Inline Git diff (Zed style):** changed lines are shaded green/yellow directly in the editor, deleted lines appear as red ghost rows with a hover restore action, gutter bars and triangles mark each change, and arrows at the top right jump between changes. The right-edge ruler marks every change, and changed files are tinted in the file tree.
 
 ### Added
 - **Curated context menus** for the file tree and tabs: open, new file/folder, rename, delete, close tab/others, copy path and show in Finder. The text editor keeps the native macOS menu so spelling, Look Up and services remain available. The WebView inspector is disabled in the packaged app.

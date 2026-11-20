@@ -1,12 +1,20 @@
-import { Extension, RangeSetBuilder, StateEffect, StateField } from "@codemirror/state";
+import {
+  EditorState,
+  Extension,
+  Facet,
+  RangeSet,
+  RangeSetBuilder,
+  StateEffect,
+  StateField,
+} from "@codemirror/state";
 import {
   Decoration,
   DecorationSet,
   EditorView,
   GutterMarker,
-  ViewPlugin,
-  ViewUpdate,
+  WidgetType,
   gutter,
+  lineNumberMarkers,
 } from "@codemirror/view";
 import { Language } from "../types";
 import { t } from "../i18n";
@@ -18,6 +26,10 @@ import {
 } from "./inlineDiff";
 
 const setInlineDiffEffect = StateEffect.define<readonly InlineDiffHunk[]>();
+
+const inlineDiffLanguage = Facet.define<Language, Language>({
+  combine: (values) => values[0] ?? "es",
+});
 
 const inlineDiffField = StateField.define<readonly InlineDiffHunk[]>({
   create: () => [],
@@ -41,53 +53,136 @@ interface InlineDiffViewOptions {
   parent: HTMLElement;
   getView: () => EditorView | null;
   getLanguage: () => Language;
-  onOpenDiff?: () => void;
 }
 
-function buildLineDecorations(view: EditorView): DecorationSet {
-  const hunks = view.state.field(inlineDiffField, false) ?? [];
-  if (hunks.length === 0) return Decoration.none;
-  const builder = new RangeSetBuilder<Decoration>();
+function textLines(text: string): string[] {
+  const lines = text.split("\n");
+  if (lines.length > 0 && lines[lines.length - 1] === "") lines.pop();
+  return lines;
+}
+
+function hunkSummary(lang: Language, hunk: InlineDiffHunk): string {
+  if (hunk.kind === "added") {
+    return hunk.addedLines === 1
+      ? t(lang, "gitDiffAddedLine")
+      : t(lang, "gitDiffAddedLines", { count: String(hunk.addedLines) });
+  }
+  if (hunk.kind === "deleted") {
+    return hunk.deletedLines === 1
+      ? t(lang, "gitDiffDeletedLine")
+      : t(lang, "gitDiffDeletedLines", {
+          count: String(hunk.deletedLines),
+        });
+  }
+  const count = Math.max(hunk.addedLines, hunk.deletedLines);
+  return count === 1
+    ? t(lang, "gitDiffModifiedLine")
+    : t(lang, "gitDiffModifiedLines", { count: String(count) });
+}
+
+function hunkLineLabel(
+  lang: Language,
+  hunk: InlineDiffHunk,
+  view: EditorView,
+): string {
+  if (hunk.kind === "deleted") {
+    return t(lang, "gitDiffBeforeLine", {
+      line: String(hunkAnchorLine(hunk, view.state.doc)),
+    });
+  }
+  const range = hunkLineRange(hunk, view.state.doc);
+  return range.fromLine === range.toLine
+    ? t(lang, "gitDiffLine", { line: String(range.fromLine) })
+    : t(lang, "gitDiffLines", {
+        from: String(range.fromLine),
+        to: String(range.toLine),
+      });
+}
+
+class DeletedLinesWidget extends WidgetType {
+  constructor(
+    private readonly text: string,
+    private readonly from: number,
+    private readonly restoreTitle: string,
+    private readonly onRestore: (view: EditorView) => void,
+  ) {
+    super();
+  }
+
+  eq(other: WidgetType): boolean {
+    return (
+      other instanceof DeletedLinesWidget &&
+      other.text === this.text &&
+      other.from === this.from
+    );
+  }
+
+  toDOM(view: EditorView): HTMLElement {
+    const block = document.createElement("div");
+    block.className = "cm-git-deleted-ghost";
+    for (const line of textLines(this.text)) {
+      const row = document.createElement("div");
+      row.className = "cm-git-deleted-ghost-line";
+      row.textContent = line || "\u00a0";
+      block.appendChild(row);
+    }
+
+    const restore = document.createElement("button");
+    restore.type = "button";
+    restore.className = "cm-git-ghost-restore";
+    restore.textContent = "↺";
+    restore.title = this.restoreTitle;
+    restore.addEventListener("mousedown", (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      this.onRestore(view);
+    });
+    block.appendChild(restore);
+    return block;
+  }
+
+  ignoreEvent(): boolean {
+    return true;
+  }
+}
+
+class LineNumberClassMarker extends GutterMarker {
+  elementClass: string;
+
+  constructor(elementClass: string) {
+    super();
+    this.elementClass = elementClass;
+  }
+
+  eq(other: GutterMarker): boolean {
+    return (
+      other instanceof LineNumberClassMarker &&
+      other.elementClass === this.elementClass
+    );
+  }
+}
+
+function buildLineNumberMarkers(state: EditorState): RangeSet<GutterMarker> {
+  const hunks = state.field(inlineDiffField, false) ?? [];
+  if (hunks.length === 0) return RangeSet.empty;
+  const builder = new RangeSetBuilder<GutterMarker>();
   const seen = new Set<number>();
   for (const hunk of hunks) {
     if (hunk.kind === "deleted") continue;
-    const range = hunkLineRange(hunk, view.state.doc);
+    const range = hunkLineRange(hunk, state.doc);
     for (let number = range.fromLine; number <= range.toLine; number += 1) {
-      const line = view.state.doc.line(number);
+      const line = state.doc.line(number);
       if (seen.has(line.from)) continue;
       seen.add(line.from);
       builder.add(
         line.from,
         line.from,
-        Decoration.line({ class: `cm-git-line-${hunk.kind}` }),
+        new LineNumberClassMarker(`cm-git-line-number-${hunk.kind}`),
       );
     }
   }
   return builder.finish();
 }
-
-const inlineDiffDecorations = ViewPlugin.fromClass(
-  class {
-    decorations: DecorationSet;
-
-    constructor(view: EditorView) {
-      this.decorations = buildLineDecorations(view);
-    }
-
-    update(update: ViewUpdate) {
-      if (
-        update.docChanged ||
-        update.startState.field(inlineDiffField) !==
-          update.state.field(inlineDiffField)
-      ) {
-        this.decorations = buildLineDecorations(update.view);
-      }
-    }
-  },
-  {
-    decorations: (value) => value.decorations,
-  },
-);
 
 class GitLineMarker extends GutterMarker {
   constructor(
@@ -146,71 +241,121 @@ class GutterSpacer extends GutterMarker {
   }
 }
 
-function hunkSummary(lang: Language, hunk: InlineDiffHunk): string {
-  if (hunk.kind === "added") {
-    return hunk.addedLines === 1
-      ? t(lang, "gitDiffAddedLine")
-      : t(lang, "gitDiffAddedLines", { count: String(hunk.addedLines) });
+function buildHunkDecorations(
+  state: EditorState,
+  language: Language,
+): DecorationSet {
+  const hunks = state.field(inlineDiffField, false) ?? [];
+  if (hunks.length === 0) return Decoration.none;
+  const builder = new RangeSetBuilder<Decoration>();
+  const seen = new Set<number>();
+  const restoreTitle = t(language, "gitDiffRestoreDeleted");
+
+  for (const hunk of hunks) {
+    if (hunk.kind === "deleted") {
+      const line = state.doc.lineAt(
+        Math.min(hunk.from, state.doc.length),
+      );
+      builder.add(
+        line.from,
+        line.from,
+        Decoration.widget({
+          widget: new DeletedLinesWidget(
+            hunk.originalText,
+            hunk.from,
+            restoreTitle,
+            (currentView) => {
+              const currentHunks =
+                currentView.state.field(inlineDiffField, false) ?? [];
+              const current =
+                currentHunks.find(
+                  (candidate) =>
+                    candidate.kind === "deleted" &&
+                    candidate.from ===
+                      Math.min(hunk.from, currentView.state.doc.length),
+                ) ?? hunk;
+              restoreHunk(currentView, current);
+            },
+          ),
+          block: true,
+          side: -1,
+        }),
+      );
+      continue;
+    }
+
+    const range = hunkLineRange(hunk, state.doc);
+    for (let number = range.fromLine; number <= range.toLine; number += 1) {
+      const line = state.doc.line(number);
+      if (seen.has(line.from)) continue;
+      seen.add(line.from);
+      builder.add(
+        line.from,
+        line.from,
+        Decoration.line({ class: `cm-git-line-${hunk.kind}` }),
+      );
+    }
   }
-  if (hunk.kind === "deleted") {
-    return hunk.deletedLines === 1
-      ? t(lang, "gitDiffDeletedLine")
-      : t(lang, "gitDiffDeletedLines", {
-          count: String(hunk.deletedLines),
-        });
-  }
-  const count = Math.max(hunk.addedLines, hunk.deletedLines);
-  return count === 1
-    ? t(lang, "gitDiffModifiedLine")
-    : t(lang, "gitDiffModifiedLines", {
-        count: String(count),
-      });
+  return builder.finish();
 }
 
-function hunkLineLabel(
-  lang: Language,
-  hunk: InlineDiffHunk,
-  view: EditorView,
-): string {
-  if (hunk.kind === "deleted") {
-    return t(lang, "gitDiffBeforeLine", {
-      line: String(hunkAnchorLine(hunk, view.state.doc)),
-    });
-  }
-  const range = hunkLineRange(hunk, view.state.doc);
-  return range.fromLine === range.toLine
-    ? t(lang, "gitDiffLine", { line: String(range.fromLine) })
-    : t(lang, "gitDiffLines", {
-        from: String(range.fromLine),
-        to: String(range.toLine),
-      });
-}
-
-function previewLines(text: string): string[] {
-  const lines = text.split("\n");
-  if (lines.length > 0 && lines[lines.length - 1] === "") lines.pop();
-  return lines;
+function restoreHunk(view: EditorView, hunk: InlineDiffHunk): void {
+  if (hunk.kind !== "deleted" || !hunk.originalText) return;
+  const current = view.state.doc.toString();
+  const insert = deletedRestoreText(current, hunk.from, hunk.originalText);
+  if (!insert) return;
+  view.dispatch({
+    changes: { from: hunk.from, insert },
+    selection: { anchor: hunk.from + insert.length },
+  });
+  view.focus();
 }
 
 /**
- * Renders the Zed-style inline diff: gutter bars, hunk popovers, deletion
- * restore buttons and the change ruler on the right edge of the editor.
+ * Renders the Zed-style inline diff: shaded changed lines, ghost rows for
+ * deletions, gutter markers, change navigation and the overview ruler.
  */
 export class InlineDiffView {
   private readonly ruler: HTMLElement;
-  private popover: HTMLElement | null = null;
-  private removeOutsideListener: (() => void) | null = null;
+  private readonly nav: HTMLElement;
+  private readonly prevButton: HTMLButtonElement;
+  private readonly nextButton: HTMLButtonElement;
 
   constructor(private readonly options: InlineDiffViewOptions) {
     this.ruler = document.createElement("div");
     this.ruler.className = "git-diff-ruler";
-    this.options.parent.appendChild(this.ruler);
+
+    this.nav = document.createElement("div");
+    this.nav.className = "git-diff-nav";
+    this.prevButton = document.createElement("button");
+    this.prevButton.type = "button";
+    this.prevButton.className = "git-diff-nav-button";
+    this.prevButton.textContent = "↑";
+    this.prevButton.title = t(this.options.getLanguage(), "gitDiffPreviousChange");
+    this.prevButton.addEventListener("click", () => this.navigate(-1));
+    this.nextButton = document.createElement("button");
+    this.nextButton.type = "button";
+    this.nextButton.className = "git-diff-nav-button";
+    this.nextButton.textContent = "↓";
+    this.nextButton.title = t(this.options.getLanguage(), "gitDiffNextChange");
+    this.nextButton.addEventListener("click", () => this.navigate(1));
+    this.nav.append(this.prevButton, this.nextButton);
+
+    this.options.parent.append(this.ruler, this.nav);
   }
 
   public extension(): Extension {
     return [
       inlineDiffField,
-      inlineDiffDecorations,
+      inlineDiffLanguage.of(this.options.getLanguage()),
+      EditorView.decorations.compute(
+        [inlineDiffField, inlineDiffLanguage],
+        (state) =>
+          buildHunkDecorations(state, state.facet(inlineDiffLanguage)),
+      ),
+      lineNumberMarkers.compute([inlineDiffField], (state) =>
+        buildLineNumberMarkers(state),
+      ),
       gutter({
         class: "cm-git-diff-gutter",
         initialSpacer: () => new GutterSpacer(),
@@ -241,10 +386,13 @@ export class InlineDiffView {
   public rebuildRuler(): void {
     const view = this.options.getView();
     const hunks = view?.state.field(inlineDiffField, false) ?? [];
+    const lang = this.options.getLanguage();
     this.ruler.replaceChildren();
     this.ruler.classList.toggle("visible", hunks.length > 0);
+    this.nav.classList.toggle("visible", hunks.length > 0);
+    this.prevButton.title = t(lang, "gitDiffPreviousChange");
+    this.nextButton.title = t(lang, "gitDiffNextChange");
     if (!view || hunks.length === 0) return;
-    const lang = this.options.getLanguage();
     const total = Math.max(1, view.state.doc.lines);
 
     for (const hunk of hunks) {
@@ -267,17 +415,49 @@ export class InlineDiffView {
       tick.addEventListener("mousedown", (event) => {
         event.preventDefault();
         event.stopPropagation();
-        const line = view.state.doc.line(
-          Math.min(Math.max(1, range.fromLine), view.state.doc.lines),
-        );
-        view.dispatch({
-          selection: { anchor: line.from },
-          effects: EditorView.scrollIntoView(line.from, { y: "center" }),
-        });
-        view.focus();
+        this.selectLine(range.fromLine);
       });
       this.ruler.appendChild(tick);
     }
+  }
+
+  private navigate(direction: 1 | -1): void {
+    const view = this.options.getView();
+    if (!view) return;
+    const hunks = view.state.field(inlineDiffField, false) ?? [];
+    if (hunks.length === 0) return;
+    const doc = view.state.doc;
+    const entries = hunks
+      .map((hunk) => ({
+        line:
+          hunk.kind === "deleted"
+            ? hunkAnchorLine(hunk, doc)
+            : hunkLineRange(hunk, doc).fromLine,
+      }))
+      .sort((a, b) => a.line - b.line);
+    const cursor = doc.lineAt(view.state.selection.main.head).number;
+    let target: { line: number } | undefined;
+    if (direction > 0) {
+      target = entries.find((entry) => entry.line > cursor) ?? entries[0];
+    } else {
+      target =
+        [...entries].reverse().find((entry) => entry.line < cursor) ??
+        entries[entries.length - 1];
+    }
+    if (target) this.selectLine(target.line);
+  }
+
+  private selectLine(lineNumber: number): void {
+    const view = this.options.getView();
+    if (!view) return;
+    const line = view.state.doc.line(
+      Math.min(Math.max(1, lineNumber), view.state.doc.lines),
+    );
+    view.dispatch({
+      selection: { anchor: line.from },
+      effects: EditorView.scrollIntoView(line.from, { y: "center" }),
+    });
+    view.focus();
   }
 
   private buildGutterMarkers(view: EditorView) {
@@ -375,140 +555,15 @@ export class InlineDiffView {
     event.preventDefault();
 
     if (target.closest(".cm-git-restore")) {
-      this.restoreDeleted(view, hunk);
+      restoreHunk(view, hunk);
       return true;
     }
-    const anchor = target.closest<HTMLElement>(".cm-git-marker");
-    if (anchor) this.showPopover(view, hunk, anchor);
+    this.selectLine(hunkAnchorLine(hunk, view.state.doc));
     return true;
   }
 
-  private restoreDeleted(view: EditorView, hunk: InlineDiffHunk): void {
-    if (hunk.kind !== "deleted" || !hunk.originalText) return;
-    const current = view.state.doc.toString();
-    const insert = deletedRestoreText(current, hunk.from, hunk.originalText);
-    if (!insert) return;
-    view.dispatch({
-      changes: { from: hunk.from, insert },
-      selection: { anchor: hunk.from + insert.length },
-    });
-    view.focus();
-    this.closePopover();
-  }
-
-  private showPopover(
-    view: EditorView,
-    hunk: InlineDiffHunk,
-    anchor: HTMLElement,
-  ): void {
-    this.closePopover();
-    const lang = this.options.getLanguage();
-    const popover = document.createElement("div");
-    popover.className = "cm-git-popover";
-
-    const header = document.createElement("div");
-    header.className = "cm-git-popover-header";
-    const summary = document.createElement("strong");
-    summary.textContent = hunkSummary(lang, hunk);
-    const location = document.createElement("span");
-    location.textContent = hunkLineLabel(lang, hunk, view);
-    header.append(summary, location);
-
-    const preview = document.createElement("div");
-    preview.className = "cm-git-popover-preview";
-    if (hunk.kind !== "added" && hunk.originalText) {
-      this.appendPreview(preview, hunk.originalText, "removed");
-    }
-    if (hunk.kind !== "deleted") {
-      this.appendPreview(
-        preview,
-        view.state.doc.sliceString(hunk.from, hunk.to),
-        hunk.kind === "modified" ? "replacement" : "added",
-      );
-    }
-
-    const actions = document.createElement("div");
-    actions.className = "cm-git-popover-actions";
-    if (hunk.kind === "deleted") {
-      const restore = document.createElement("button");
-      restore.type = "button";
-      restore.className = "cm-git-popover-action";
-      restore.textContent = t(lang, "gitDiffRestore");
-      restore.addEventListener("click", () => this.restoreDeleted(view, hunk));
-      actions.appendChild(restore);
-    }
-    if (this.options.onOpenDiff) {
-      const openDiff = document.createElement("button");
-      openDiff.type = "button";
-      openDiff.className = "cm-git-popover-action secondary";
-      openDiff.textContent = t(lang, "gitDiffOpen");
-      openDiff.addEventListener("click", () => {
-        this.closePopover();
-        this.options.onOpenDiff?.();
-      });
-      actions.appendChild(openDiff);
-    }
-
-    popover.append(header, preview);
-    if (actions.childElementCount > 0) popover.appendChild(actions);
-    document.body.appendChild(popover);
-    this.popover = popover;
-
-    const rect = anchor.getBoundingClientRect();
-    const width = popover.offsetWidth || 300;
-    const height = popover.offsetHeight || 160;
-    popover.style.left = `${Math.min(
-      Math.max(8, rect.right + 10),
-      window.innerWidth - width - 8,
-    )}px`;
-    popover.style.top = `${Math.min(
-      Math.max(8, rect.top - 6),
-      window.innerHeight - height - 8,
-    )}px`;
-
-    const onOutside = (event: MouseEvent) => {
-      if (this.popover && !this.popover.contains(event.target as Node)) {
-        this.closePopover();
-      }
-    };
-    document.addEventListener("mousedown", onOutside, true);
-    this.removeOutsideListener = () =>
-      document.removeEventListener("mousedown", onOutside, true);
-  }
-
-  private appendPreview(
-    parent: HTMLElement,
-    text: string,
-    kind: "added" | "removed" | "replacement",
-  ): void {
-    const lines = previewLines(text);
-    const limit = 8;
-    for (const line of lines.slice(0, limit)) {
-      const row = document.createElement("div");
-      row.className = `cm-git-preview-line cm-git-preview-${kind}`;
-      const prefix = kind === "removed" ? "−" : "+";
-      row.textContent = `${prefix} ${line}`;
-      parent.appendChild(row);
-    }
-    if (lines.length > limit) {
-      const more = document.createElement("div");
-      more.className = "cm-git-preview-more";
-      more.textContent = t(this.options.getLanguage(), "gitDiffMoreLines", {
-        count: String(lines.length - limit),
-      });
-      parent.appendChild(more);
-    }
-  }
-
-  public closePopover(): void {
-    this.removeOutsideListener?.();
-    this.removeOutsideListener = null;
-    this.popover?.remove();
-    this.popover = null;
-  }
-
   public destroy(): void {
-    this.closePopover();
     this.ruler.remove();
+    this.nav.remove();
   }
 }
