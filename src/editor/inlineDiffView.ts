@@ -301,6 +301,7 @@ export class InlineDiffView {
   private activeHunkKey: string | null = null;
   private expandedBar: HTMLElement | null = null;
   private barFrame: number | null = null;
+  private readonly rulerTicks = new Map<string, HTMLElement>();
 
   constructor(private readonly options: InlineDiffViewOptions) {
     this.ruler = document.createElement("div");
@@ -475,11 +476,15 @@ export class InlineDiffView {
     const hunks = view?.state.field(inlineDiffField, false) ?? [];
     const lang = this.options.getLanguage();
     this.ruler.replaceChildren();
+    this.rulerTicks.clear();
     this.ruler.classList.toggle("visible", hunks.length > 0);
     this.prevButton.title = t(lang, "gitDiffPreviousChange");
     this.nextButton.title = t(lang, "gitDiffNextChange");
     this.restoreButton.title = t(lang, "gitDiffRestore");
     this.updateNav();
+    if (!view || expandedHunks(view.state).size === 0) {
+      this.removeExpandedBar();
+    }
     if (!view || hunks.length === 0) return;
     const totalDeleted = hunks.reduce(
       (sum, hunk) => sum + hunk.deletedLines,
@@ -506,6 +511,7 @@ export class InlineDiffView {
         hunk,
         view,
       )}`;
+      this.rulerTicks.set(hunkKey(hunk), tick);
       this.ruler.appendChild(tick);
     }
   }
@@ -557,7 +563,7 @@ export class InlineDiffView {
       ],
     });
     view.focus();
-    this.updateNav();
+    this.rebuildRuler();
   }
 
   private buildGutterMarkers(view: EditorView) {
@@ -663,7 +669,7 @@ export class InlineDiffView {
     this.activeHunkKey = next.has(key) ? key : null;
     view.dispatch({ effects: setExpandedHunksEffect.of(next) });
     view.requestMeasure();
-    this.updateNav();
+    this.rebuildRuler();
     return true;
   }
 
@@ -673,7 +679,7 @@ export class InlineDiffView {
     view.dispatch({
       effects: setExpandedHunksEffect.of(new Set<string>()),
     });
-    this.updateNav();
+    this.rebuildRuler();
     return true;
   }
 
@@ -687,7 +693,7 @@ export class InlineDiffView {
     next.delete(this.activeHunkKey);
     this.activeHunkKey = null;
     view.dispatch({ effects: setExpandedHunksEffect.of(next) });
-    this.updateNav();
+    this.rebuildRuler();
   }
 
   private updateNav(): void {
@@ -783,15 +789,44 @@ export class InlineDiffView {
     let bar = this.expandedBar;
     if (!bar) {
       bar = document.createElement("div");
+      bar.addEventListener("mousedown", (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+      });
+      bar.addEventListener("click", (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        this.collapseExpanded();
+      });
       this.expandedBar = bar;
     }
     bar.className = `git-diff-expanded-bar git-diff-expanded-bar-${hunk.kind}`;
+    bar.title = t(this.options.getLanguage(), "gitDiffCollapse");
     if (bar.parentElement !== gutters) gutters.appendChild(bar);
-    bar.style.top = `${top - guttersRect.top}px`;
-    bar.style.height = `${bottom - top}px`;
+    const offsetTop = top - guttersRect.top;
+    const height = bottom - top;
+    bar.style.top = `${offsetTop}px`;
+    bar.style.height = `${height}px`;
     bar.style.left = `${
       gutterRect.left - guttersRect.left + gutterRect.width / 2
     }px`;
+
+    const totalHeight = view.scrollDOM.scrollHeight;
+    const tick = this.rulerTicks.get([...expanded][0]);
+    if (tick && totalHeight > 0) {
+      tick.style.top = `${(offsetTop / totalHeight) * 100}%`;
+      tick.style.height = `${(height / totalHeight) * 100}%`;
+    }
+  }
+
+  private collapseExpanded(): void {
+    const view = this.options.getView();
+    if (!view) return;
+    this.activeHunkKey = null;
+    view.dispatch({
+      effects: setExpandedHunksEffect.of(new Set<string>()),
+    });
+    this.rebuildRuler();
   }
 
   private removeExpandedBar(): void {

@@ -119,6 +119,45 @@ describe("inline diff view (T-3.9.2)", () => {
     holder.view?.destroy();
   });
 
+  it("collapses an expanded hunk by clicking its solid rail", async () => {
+    const { parent, holder, diff } = mount("uno\ndos");
+    diff.setHunks(buildInlineDiffHunks("uno\ndos", "UNO\ndos"));
+    click(parent.querySelector(".cm-git-marker-modified"));
+    await new Promise((resolve) => setTimeout(resolve, 30));
+
+    const rail = parent.querySelector<HTMLElement>(
+      ".git-diff-expanded-bar-modified",
+    );
+    expect(rail).not.toBeNull();
+    rail?.dispatchEvent(
+      new MouseEvent("click", { bubbles: true, cancelable: true }),
+    );
+
+    expect(parent.querySelector(".cm-git-deleted-ghost")).toBeNull();
+    expect(parent.querySelector(".git-diff-expanded-bar")).toBeNull();
+    expect(parent.querySelectorAll(".cm-git-marker-expanded")).toHaveLength(0);
+    holder.view?.destroy();
+  });
+
+  it("collapses an expanded deletion by clicking its red rail", async () => {
+    const { parent, holder, diff } = mount("dos");
+    diff.setHunks(buildInlineDiffHunks("uno\ndos", "dos"));
+    click(parent.querySelector(".cm-git-marker-deleted"));
+    await new Promise((resolve) => setTimeout(resolve, 30));
+
+    const rail = parent.querySelector<HTMLElement>(
+      ".git-diff-expanded-bar-deleted",
+    );
+    expect(rail).not.toBeNull();
+    rail?.dispatchEvent(
+      new MouseEvent("click", { bubbles: true, cancelable: true }),
+    );
+
+    expect(parent.querySelector(".cm-git-deleted-ghost")).toBeNull();
+    expect(parent.querySelector(".git-diff-expanded-bar")).toBeNull();
+    holder.view?.destroy();
+  });
+
   it("collapses an expanded hunk when its bar is clicked again", () => {
     const { parent, holder, diff } = mount("uno\ndos");
     diff.setHunks(buildInlineDiffHunks("uno\ndos", "UNO\ndos"));

@@ -3056,8 +3056,18 @@ textarea.text-input {
   position: absolute;
   z-index: 6;
   border-radius: 2px;
-  pointer-events: none;
+  pointer-events: auto;
+  cursor: pointer;
   transform: translateX(-50%);
+}
+
+.git-diff-expanded-bar::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: -4px;
+  right: -4px;
 }
 
 .git-diff-expanded-bar-modified {
