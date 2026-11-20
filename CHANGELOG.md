@@ -14,7 +14,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 - **Saving a version** falls back to `Bradbit Writer <writer@bradbit.local>` when no author is configured.
 - **Compact first-run checklist:** the welcome card no longer repeats the intro, checks sit in two columns and details stay on one line with ellipsis.
 - **Editor and chat polish:** clicking the last line no longer selects or jumps unexpectedly; per-tab editor scroll and file-tree scroll are preserved; the chat restores to the end when opening a project; showing or hiding the chat/editor surfaces animates smoothly.
-- **Chat Markdown:** user messages and agent tool results render as Markdown; tool accordions no longer dump the input JSON.
+- **Chat Markdown:** user messages render as Markdown. Tool results choose their own display: Markdown when the file/result is Markdown, colored Fountain lines when it is Fountain, and compact plain text otherwise; tool input JSON stays hidden.
 - **Kit writing area:** templates declare `primaryPaths`, and the file tree highlights the folder/files being written in the accent color while the rest stays as context.
 
 ### Added

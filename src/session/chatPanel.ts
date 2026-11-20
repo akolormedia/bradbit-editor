@@ -3,6 +3,7 @@ import { t } from "../i18n";
 import { KitCatalog, Language, OpenCodeFormField, OpenCodeModel } from "../types";
 import { createIcon, IconName } from "../ui/icons";
 import { renderMarkdownPreview } from "../editor/preview";
+import { classifyFountainLines } from "../editor/fountainPreview";
 import { createIconButton } from "../ui/iconButton";
 import { kitCommandCandidates, localizedKitText } from "../kit/localize";
 import { QuickOpenFile } from "../workspace/quickOpen";
@@ -1405,6 +1406,74 @@ export class ChatPanel {
     return section;
   }
 
+  private toolFountainSection(
+    lang: Language,
+    labelKey: "chatToolOutput",
+    text: string,
+    className: string,
+  ): HTMLElement {
+    const section = document.createElement("div");
+    section.className = `chat-tool-section ${className}`.trim();
+    const label = document.createElement("div");
+    label.className = "chat-tool-section-label";
+    label.textContent = t(lang, labelKey);
+    const content = document.createElement("div");
+    content.className = "chat-tool-fountain";
+    for (const line of classifyFountainLines(text)) {
+      const lineEl = document.createElement("div");
+      lineEl.className = `chat-fountain-line chat-fountain-${line.type}`;
+      lineEl.textContent = line.text || "\u00a0";
+      content.appendChild(lineEl);
+    }
+    section.append(label, content);
+    return section;
+  }
+
+  private toolOutputKind(
+    tool: ChatToolCall,
+  ): "markdown" | "fountain" | "text" {
+    const path = tool.files[0]?.toLowerCase() ?? "";
+    if (/\.(md|markdown|mdx)$/.test(path)) return "markdown";
+    if (/\.(fountain|spmd)$/.test(path)) return "fountain";
+    // A known non-Markdown/non-Fountain file type is shown as plain text.
+    if (/\.[a-z0-9]+$/.test(path)) return "text";
+
+    const text = tool.output.trim();
+    if (!text) return "text";
+    if (this.looksLikeFountain(text)) return "fountain";
+    if (this.looksLikeMarkdown(text)) return "markdown";
+    return "text";
+  }
+
+  private looksLikeFountain(text: string): boolean {
+    const lines = classifyFountainLines(text).filter(
+      (line) => line.text.trim().length > 0,
+    );
+    if (lines.length === 0) return false;
+    const screenplayLines = lines.filter((line) =>
+      ["scene", "character", "dialogue", "parenthetical", "transition"].includes(
+        line.type,
+      ),
+    );
+    return (
+      screenplayLines.length >= 2 &&
+      screenplayLines.length >= lines.length * 0.5
+    );
+  }
+
+  private looksLikeMarkdown(text: string): boolean {
+    const signals = [
+      /^#{1,6}\s+\S/m,
+      /\*\*[^*]+\*\*/,
+      /(?:^|\n)\s*[-*+]\s+\S/,
+      /(?:^|\n)\s*\d+\.\s+\S/,
+      /\[[^\]]+\]\([^)]+\)/,
+      /(?:^|\n)```/,
+      /(?:^|\n)>\s+\S/,
+    ];
+    return signals.filter((pattern) => pattern.test(text)).length >= 2;
+  }
+
   private renderTool(tool: ChatToolCall): HTMLElement {
     const lang = this.options.language;
     const container = document.createElement("div");
@@ -1483,13 +1552,14 @@ export class ChatPanel {
       body.appendChild(renderQuestionTool(tool, prompts));
     } else {
       if (tool.output) {
+        const output = this.clip(tool.output, 8000);
+        const kind = this.toolOutputKind(tool);
         body.appendChild(
-          this.toolMarkdownSection(
-            lang,
-            "chatToolOutput",
-            this.clip(tool.output, 8000),
-            "",
-          ),
+          kind === "fountain"
+            ? this.toolFountainSection(lang, "chatToolOutput", output, "")
+            : kind === "markdown"
+              ? this.toolMarkdownSection(lang, "chatToolOutput", output, "")
+              : this.toolSection(lang, "chatToolOutput", output, ""),
         );
       }
       if (tool.error) {

@@ -391,6 +391,91 @@ describe("chat panel (T-2.1.1)", () => {
     );
   });
 
+  it("chooses Markdown, Fountain or plain rendering for tool results", () => {
+    const panel = new ChatPanel(options());
+    panel.update({
+      ...readyState(),
+      messages: [
+        {
+          id: "assistant:msg_a",
+          role: "assistant",
+          parts: [
+            {
+              type: "tool",
+              tool: {
+                id: "tool_md",
+                name: "read",
+                status: "completed",
+                input: {},
+                output: "**Negrita** y `código`",
+                error: "",
+                executed: true,
+                files: ["/proyecto/notas.md"],
+                answers: [],
+              },
+            },
+            {
+              type: "tool",
+              tool: {
+                id: "tool_fountain",
+                name: "read",
+                status: "completed",
+                input: {},
+                output: "INT. CASA - DÍA\n\nANA\nHola.",
+                error: "",
+                executed: true,
+                files: ["/proyecto/script/acto.fountain"],
+                answers: [],
+              },
+            },
+            {
+              type: "tool",
+              tool: {
+                id: "tool_text",
+                name: "shell",
+                status: "completed",
+                input: {},
+                output: "línea uno\nlínea dos",
+                error: "",
+                executed: true,
+                files: ["/proyecto/logs/app.txt"],
+                answers: [],
+              },
+            },
+          ],
+        },
+      ],
+      streaming: false,
+    });
+
+    for (const id of ["tool_md", "tool_fountain", "tool_text"]) {
+      panel.element
+        .querySelector<HTMLButtonElement>(`[data-testid="tool-toggle-${id}"]`)!
+        .click();
+    }
+
+    expect(
+      panel.element.querySelector('[data-testid="tool-tool_md"] .chat-tool-markdown strong')
+        ?.textContent,
+    ).toBe("Negrita");
+    expect(
+      panel.element.querySelector(
+        '[data-testid="tool-tool_fountain"] .chat-fountain-scene',
+      )?.textContent,
+    ).toContain("INT. CASA");
+    expect(
+      panel.element.querySelector('[data-testid="tool-tool_fountain"] .chat-fountain-character')
+        ?.textContent,
+    ).toBe("ANA");
+    expect(
+      panel.element.querySelector('[data-testid="tool-tool_text"] .chat-tool-pre')
+        ?.textContent,
+    ).toContain("línea dos");
+    expect(
+      panel.element.querySelector('[data-testid="tool-tool_text"] .chat-tool-markdown'),
+    ).toBeNull();
+  });
+
   it("renders permission cards and sends allow/reject decisions (T-2.1.3)", () => {
     const onPermissionReply = vi.fn();
     const panel = new ChatPanel(options({ onPermissionReply }));
