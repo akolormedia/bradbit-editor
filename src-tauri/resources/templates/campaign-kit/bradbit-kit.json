@@ -14,5 +14,11 @@
     "library/",
     "README.md",
     "LICENSE"
-  ]
+  ],
+  "contributes": {
+    "primaryPaths": [
+      "campaigns",
+      "campaigns/**"
+    ]
+  }
 }

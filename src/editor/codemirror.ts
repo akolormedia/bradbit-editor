@@ -253,6 +253,7 @@ export class BradbitCodeMirror {
   private view: EditorView | null = null;
   private currentPath: string | null = null;
   private statesByPath = new Map<string, EditorState>();
+  private scrollPositions = new Map<string, { top: number; left: number }>();
 
   private wrapCompartment = new Compartment();
   private lineNumbersCompartment = new Compartment();
@@ -267,8 +268,13 @@ export class BradbitCodeMirror {
   ) {}
 
   public openDocument(path: string, content: string, settings: AppSettings): void {
+    const switched = this.currentPath !== path;
     if (this.view && this.currentPath) {
       this.statesByPath.set(this.currentPath, this.view.state);
+      this.scrollPositions.set(this.currentPath, {
+        top: this.view.scrollDOM.scrollTop,
+        left: this.view.scrollDOM.scrollLeft,
+      });
     }
     this.currentPath = path;
 
@@ -283,15 +289,29 @@ export class BradbitCodeMirror {
         state,
         parent: this.parent,
       });
+      this.installClickGuard(this.view);
     } else {
       this.view.setState(state);
       this.applySettings(settings);
+    }
+    if (switched && this.view) {
+      const target = this.scrollPositions.get(path) ?? { top: 0, left: 0 };
+      const restore = () => {
+        if (!this.view || this.currentPath !== path) return;
+        this.view.scrollDOM.scrollTop = target.top;
+        this.view.scrollDOM.scrollLeft = target.left;
+      };
+      restore();
+      if (typeof window.requestAnimationFrame === "function") {
+        window.requestAnimationFrame(restore);
+      }
     }
     this.reportCursor(this.view.state);
   }
 
   public closeDocumentState(path: string): void {
     this.statesByPath.delete(path);
+    this.scrollPositions.delete(path);
     if (this.currentPath === path) {
       this.currentPath = null;
     }
@@ -303,9 +323,38 @@ export class BradbitCodeMirror {
       this.statesByPath.delete(oldPath);
       this.statesByPath.set(newPath, existing);
     }
+    const scroll = this.scrollPositions.get(oldPath);
+    if (scroll) {
+      this.scrollPositions.delete(oldPath);
+      this.scrollPositions.set(newPath, scroll);
+    }
     if (this.currentPath === oldPath) {
       this.currentPath = newPath;
     }
+  }
+
+  /**
+   * Clicking the blank area below the last line can leave the native selection
+   * anchored to a previous line. Put the caret at the nearest document
+   * position and prevent the browser's multi-line selection.
+   */
+  private installClickGuard(view: EditorView): void {
+    view.scrollDOM.addEventListener(
+      "mousedown",
+      (event) => {
+        if (event.button !== 0 || event.shiftKey) return;
+        if (event.target !== view.contentDOM) return;
+        const position = view.posAtCoords({
+          x: event.clientX,
+          y: event.clientY,
+        });
+        if (position === null) return;
+        event.preventDefault();
+        view.dispatch({ selection: { anchor: position } });
+        view.focus();
+      },
+      { capture: true },
+    );
   }
 
   public applySettings(settings: AppSettings): void {

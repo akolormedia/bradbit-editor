@@ -160,6 +160,19 @@ describe("chat panel (T-2.1.1)", () => {
     expect(onStop).toHaveBeenCalledOnce();
   });
 
+  it("renders user messages as markdown", () => {
+    const panel = new ChatPanel(options());
+    const state = appendUserMessage(
+      readyState(),
+      "**Hola** con `código`",
+    );
+    panel.update(state);
+    const bubbles = panel.element.querySelectorAll(".chat-message-user .chat-message-markdown");
+    expect(bubbles).toHaveLength(1);
+    expect(bubbles[0].querySelector("strong")?.textContent).toBe("Hola");
+    expect(bubbles[0].querySelector("code")?.textContent).toBe("código");
+  });
+
   it("renders user and assistant messages, errors and the retry action", () => {
     const onRetry = vi.fn();
     const panel = new ChatPanel(options({ onRetry }));
@@ -245,7 +258,7 @@ describe("chat panel (T-2.1.1)", () => {
     panel.update(state);
 
     const bubble = panel.element.querySelector(
-      ".chat-message-markdown",
+      ".chat-message-assistant .chat-message-markdown",
     ) as HTMLElement | null;
     expect(bubble).not.toBeNull();
     expect(bubble?.querySelector("strong")?.textContent).toBe("Negrita");
@@ -345,7 +358,7 @@ describe("chat panel (T-2.1.1)", () => {
                 id: "tool_1",
                 name: "edit",
                 status: "completed",
-                input: { path: "notas.md" },
+                input: { path: "notas.md", internalJson: "NO_MOSTRAR" },
                 output: "Editado",
                 error: "",
                 executed: true,
@@ -366,6 +379,8 @@ describe("chat panel (T-2.1.1)", () => {
     toggle.click();
     expect(toggle.getAttribute("aria-expanded")).toBe("true");
     expect(panel.element.textContent).toContain("Resultado");
+    expect(panel.element.textContent).not.toContain("NO_MOSTRAR");
+    expect(panel.element.querySelector(".chat-tool-markdown")).not.toBeNull();
 
     panel.element
       .querySelector<HTMLButtonElement>('[data-testid="tool-file-tool_1-0"]')

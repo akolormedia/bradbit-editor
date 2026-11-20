@@ -1151,6 +1151,19 @@ textarea.text-input {
   color: var(--accent);
 }
 
+.tree-row.tree-primary {
+  box-shadow: inset 2px 0 var(--accent);
+}
+
+.tree-row.tree-primary .tree-icon,
+.tree-row.tree-primary .tree-row-name {
+  color: var(--accent);
+}
+
+.tree-row.tree-primary .tree-row-name {
+  font-weight: 600;
+}
+
 .sidebar-resizer {
   position: relative;
   width: 6px;
@@ -1190,6 +1203,27 @@ textarea.text-input {
   border: 1px solid var(--border-color);
   border-radius: 10px;
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.08);
+}
+
+@keyframes surface-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.surface-enter {
+  animation: surface-in 0.18s ease-out;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .surface-enter {
+    animation: none;
+  }
 }
 
 .session-column {
@@ -1831,6 +1865,39 @@ textarea.text-input {
   line-height: 1.45;
   white-space: pre-wrap;
   overflow-wrap: anywhere;
+}
+
+.chat-tool-markdown {
+  max-height: 260px;
+  overflow: auto;
+  padding: 7px;
+  border-radius: 5px;
+  background: var(--bg-input);
+  font-size: 11.5px;
+  line-height: 1.45;
+}
+
+.chat-tool-markdown > :first-child {
+  margin-top: 0;
+}
+
+.chat-tool-markdown > :last-child {
+  margin-bottom: 0;
+}
+
+.chat-tool-markdown h1,
+.chat-tool-markdown h2,
+.chat-tool-markdown h3 {
+  font-size: 13px;
+  margin: 0.6em 0 0.3em;
+}
+
+.chat-tool-markdown p,
+.chat-tool-markdown ul,
+.chat-tool-markdown ol,
+.chat-tool-markdown pre,
+.chat-tool-markdown blockquote {
+  margin: 0.4em 0;
 }
 
 .chat-tool-section.error .chat-tool-section-label,

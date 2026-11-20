@@ -396,8 +396,12 @@ export class ChatPanel {
   }
 
   public update(state: ChatState, options?: Partial<ChatPanelOptions>): void {
+    const previousActive = this.options.activeSessionId;
     if (options) {
       this.options = { ...this.options, ...options };
+    }
+    if (previousActive !== this.options.activeSessionId) {
+      this.stickToBottom = true;
     }
     this.state = state;
     const lang = this.options.language;
@@ -1195,13 +1199,20 @@ export class ChatPanel {
             : t(this.options.language, "chatSystem");
       row.appendChild(role);
 
-      if (message.role === "user" || message.role === "system") {
+      if (message.role === "system") {
         const text = messageText(message);
         if (text.length === 0) continue;
         const bubble = document.createElement("div");
         bubble.className = "chat-message-bubble";
         if (message.streaming) bubble.classList.add("streaming");
         bubble.textContent = text;
+        if (message.error) bubble.classList.add("error");
+        row.appendChild(bubble);
+      } else if (message.role === "user") {
+        const text = messageText(message);
+        if (text.length === 0) continue;
+        const bubble = this.markdownBubble(text);
+        if (message.streaming) bubble.classList.add("streaming");
         if (message.error) bubble.classList.add("error");
         row.appendChild(bubble);
       } else {
@@ -1214,22 +1225,10 @@ export class ChatPanel {
             continue;
           }
           if (part.text.length === 0) continue;
-          const bubble = document.createElement("div");
-          bubble.className = "chat-message-bubble chat-message-markdown";
+          const bubble = this.markdownBubble(part.text);
           if (message.streaming && part === lastText) {
             bubble.classList.add("streaming");
           }
-          bubble.innerHTML = renderMarkdownPreview(part.text);
-          bubble.addEventListener("click", (event) => {
-            const target = (event.target as HTMLElement).closest("a");
-            if (!target) return;
-            const href = target.getAttribute("href");
-            if (!href) return;
-            event.preventDefault();
-            if (/^(https?:|mailto:)/i.test(href)) {
-              void backend.openExternalUrl(href);
-            }
-          });
           if (message.error) bubble.classList.add("error");
           row.appendChild(bubble);
         }
@@ -1257,10 +1256,40 @@ export class ChatPanel {
     this.renderRequests();
 
     if (shouldStick) {
-      this.messagesEl.scrollTop = this.messagesEl.scrollHeight;
+      const scrollToBottom = () => {
+        if (!this.stickToBottom) return;
+        this.messagesEl.scrollTop = this.messagesEl.scrollHeight;
+      };
+      scrollToBottom();
+      if (typeof window.requestAnimationFrame === "function") {
+        window.requestAnimationFrame(scrollToBottom);
+      } else {
+        window.setTimeout(scrollToBottom, 0);
+      }
     } else {
       this.messagesEl.scrollTop = previousScrollTop;
     }
+  }
+
+  private markdownBubble(text: string): HTMLElement {
+    const bubble = document.createElement("div");
+    bubble.className = "chat-message-bubble chat-message-markdown";
+    bubble.innerHTML = renderMarkdownPreview(text);
+    this.bindMarkdownLinks(bubble);
+    return bubble;
+  }
+
+  private bindMarkdownLinks(element: HTMLElement): void {
+    element.addEventListener("click", (event) => {
+      const target = (event.target as HTMLElement).closest("a");
+      if (!target) return;
+      const href = target.getAttribute("href");
+      if (!href) return;
+      event.preventDefault();
+      if (/^(https?:|mailto:)/i.test(href)) {
+        void backend.openExternalUrl(href);
+      }
+    });
   }
 
   private toolVerb(name: string): string {
@@ -1351,20 +1380,29 @@ export class ChatPanel {
     return text.length > max ? `${text.slice(0, max)}…` : text;
   }
 
-  private formatInput(input: unknown): string {
-    if (input === null || input === undefined) return "";
-    if (typeof input === "string") return this.clip(input, 6000);
-    try {
-      return this.clip(JSON.stringify(input, null, 2), 6000);
-    } catch {
-      return this.clip(String(input), 6000);
-    }
-  }
-
   private isEditTool(name: string): boolean {
     return ["edit", "write", "patch", "multiedit", "apply_patch"].includes(
       name,
     );
+  }
+
+  private toolMarkdownSection(
+    lang: Language,
+    labelKey: "chatToolOutput",
+    text: string,
+    className: string,
+  ): HTMLElement {
+    const section = document.createElement("div");
+    section.className = `chat-tool-section ${className}`.trim();
+    const label = document.createElement("div");
+    label.className = "chat-tool-section-label";
+    label.textContent = t(lang, labelKey);
+    const content = document.createElement("div");
+    content.className = "chat-tool-markdown markdown-preview";
+    content.innerHTML = renderMarkdownPreview(text);
+    this.bindMarkdownLinks(content);
+    section.append(label, content);
+    return section;
   }
 
   private renderTool(tool: ChatToolCall): HTMLElement {
@@ -1444,15 +1482,9 @@ export class ChatPanel {
     if (prompts) {
       body.appendChild(renderQuestionTool(tool, prompts));
     } else {
-      const inputText = this.formatInput(tool.input);
-      if (inputText) {
-        body.appendChild(
-          this.toolSection(lang, "chatToolInput", inputText, ""),
-        );
-      }
       if (tool.output) {
         body.appendChild(
-          this.toolSection(
+          this.toolMarkdownSection(
             lang,
             "chatToolOutput",
             this.clip(tool.output, 8000),
