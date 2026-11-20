@@ -2956,7 +2956,7 @@ textarea.text-input {
   width: 3px;
   height: 100%;
   min-height: 1.1em;
-  border-radius: 2px;
+  border-radius: 0;
 }
 
 .cm-git-marker-added .cm-git-bar {
@@ -3055,7 +3055,8 @@ textarea.text-input {
 .git-diff-expanded-bar {
   position: absolute;
   z-index: 6;
-  border-radius: 2px;
+  width: 3px;
+  border-radius: 0;
   pointer-events: auto;
   cursor: pointer;
   transform: translateX(-50%);
@@ -3070,13 +3071,15 @@ textarea.text-input {
   right: -4px;
 }
 
+.git-diff-expanded-bar-added {
+  background: var(--git-added);
+}
+
 .git-diff-expanded-bar-modified {
-  width: 7px;
   background: var(--git-modified);
 }
 
 .git-diff-expanded-bar-deleted {
-  width: 3px;
   background: var(--git-deleted);
 }
 

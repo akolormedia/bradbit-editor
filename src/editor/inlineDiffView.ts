@@ -768,7 +768,7 @@ export class InlineDiffView {
       return;
     }
     const hunk = currentHunk(view, [...expanded][0]);
-    if (!hunk || hunk.kind === "added") {
+    if (!hunk) {
       this.removeExpandedBar();
       return;
     }

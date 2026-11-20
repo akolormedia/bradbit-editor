@@ -67,18 +67,30 @@ describe("inline diff view (T-3.9.2)", () => {
     holder.view?.destroy();
   });
 
-  it("marks added lines green when their bar is clicked and offers no restore", () => {
+  it("keeps one solid green rail over every expanded added line", async () => {
     const { parent, holder, diff } = mount("uno");
     diff.setHunks(buildInlineDiffHunks("", "uno"));
 
     expect(parent.querySelector(".cm-git-line-expanded")).toBeNull();
     click(parent.querySelector(".cm-git-marker-added"));
+    await new Promise((resolve) => setTimeout(resolve, 30));
 
     expect(parent.querySelector(".cm-git-line-expanded")).not.toBeNull();
     expect(parent.querySelector(".cm-git-deleted-ghost")).toBeNull();
     expect(
+      parent.querySelector(".git-diff-expanded-bar-added"),
+    ).not.toBeNull();
+    expect(
       parent.querySelector<HTMLButtonElement>(".git-diff-nav-restore")?.hidden,
     ).toBe(true);
+
+    const rail = parent.querySelector<HTMLElement>(
+      ".git-diff-expanded-bar-added",
+    );
+    rail?.dispatchEvent(
+      new MouseEvent("click", { bubbles: true, cancelable: true }),
+    );
+    expect(parent.querySelector(".cm-git-line-expanded")).toBeNull();
     holder.view?.destroy();
   });
 
