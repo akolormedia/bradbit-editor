@@ -535,6 +535,13 @@ export class BradbitCodeMirror {
         }
         if (!target || !view.contentDOM.contains(target)) return;
         if (target.closest(".cm-gutter, button, a, .cm-inline-blame")) return;
+        if (!view.hasFocus) {
+          const top = view.scrollDOM.scrollTop;
+          const left = view.scrollDOM.scrollLeft;
+          view.contentDOM.focus({ preventScroll: true });
+          view.scrollDOM.scrollTop = top;
+          view.scrollDOM.scrollLeft = left;
+        }
         pressed = {
           x: event.clientX,
           y: event.clientY,

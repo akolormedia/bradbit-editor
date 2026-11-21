@@ -5333,6 +5333,29 @@ textarea.text-input {
 }
 
 
+/* Stable editor scrollbar: avoids the macOS overlay bar stealing clicks
+   from the text and keeps the diff ruler to its left. */
+.cm-scroller::-webkit-scrollbar {
+  width: 12px;
+  height: 12px;
+}
+
+.cm-scroller::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.cm-scroller::-webkit-scrollbar-thumb {
+  border: 3px solid transparent;
+  border-radius: 6px;
+  background: var(--border-color);
+  background-clip: content-box;
+}
+
+.cm-scroller::-webkit-scrollbar-thumb:hover {
+  background: var(--text-muted);
+  background-clip: content-box;
+}
+
 /* Buffer search panel (T-3.10.6) */
 .cm-editor .cm-panel.cm-search {
   padding: 7px 10px;
