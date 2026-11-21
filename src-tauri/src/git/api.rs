@@ -145,6 +145,19 @@ pub fn head_file(root: &str, rel_path: &str) -> Result<Option<String>, String> {
     }
 }
 
+/// Read a file from a branch without touching the working tree.
+pub fn branch_file(root: &str, branch: &str, rel_path: &str) -> Result<Option<String>, String> {
+    if !Path::new(root).join(".git").exists() {
+        return Ok(None);
+    }
+    let repo =
+        Repository::open(Path::new(root), OpOptions::default()).map_err(|e| e.to_string())?;
+    match repo.show_file(branch, rel_path, OpOptions::default()) {
+        Ok(content) => Ok(Some(content)),
+        Err(_) => Ok(None),
+    }
+}
+
 /// Restore a tracked file to HEAD, or delete an untracked/new file. Staged
 /// new files are removed from the index before the file is deleted.
 pub fn discard_file(root: &str, rel_path: &str) -> Result<DiscardResult, String> {

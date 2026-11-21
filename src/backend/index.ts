@@ -475,6 +475,27 @@ export const backend = {
     });
   },
 
+  async exportMarkdownEpub(
+    rootPath: string,
+    relPath: string,
+    content: string,
+    title: string,
+    author: string,
+    language: string,
+  ): Promise<string> {
+    if (!isTauriEnvironment()) {
+      throw new Error("EPUB export requires the desktop app");
+    }
+    return tauriInvoke<string>("export_markdown_epub", {
+      root: rootPath,
+      relPath,
+      content,
+      title,
+      author,
+      language,
+    });
+  },
+
   async exportMarkdownDocx(
     rootPath: string,
     relPath: string,
@@ -678,6 +699,19 @@ export const backend = {
       throw new Error("Git requires the desktop app");
     }
     return tauriInvoke<GitStatus>("git_restore_file", { root: rootPath, relPath });
+  },
+
+  async gitBranchFile(
+    rootPath: string,
+    branch: string,
+    relPath: string,
+  ): Promise<string | null> {
+    if (!isTauriEnvironment()) return null;
+    return tauriInvoke<string | null>("git_branch_file", {
+      root: rootPath,
+      branch,
+      relPath,
+    });
   },
 
   async gitBlameFile(

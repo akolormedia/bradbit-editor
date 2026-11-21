@@ -85,9 +85,26 @@ export function buildAppMenu(state: MenuUiState): AppMenuGroup[] {
           separatorBefore: true,
         },
         {
-          command: { id: "file.exportDocx" },
-          label: t(lang, "exportDocx"),
-          enabled: hasTab && state.isMarkdown,
+          command: { id: "file.exportMenu" },
+          label: t(lang, "exportMenu"),
+          enabled: hasTab,
+          children: [
+            {
+              command: { id: "file.exportPdf" },
+              label: t(lang, "exportPdf"),
+              enabled: hasTab && state.isFountain,
+            },
+            {
+              command: { id: "file.exportDocx" },
+              label: t(lang, "exportDocx"),
+              enabled: hasTab && state.isMarkdown,
+            },
+            {
+              command: { id: "file.exportEpub" },
+              label: t(lang, "exportEpub"),
+              enabled: hasTab && state.isMarkdown,
+            },
+          ],
         },
         {
           command: { id: "file.closeTab" },

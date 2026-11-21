@@ -2,6 +2,7 @@ pub mod book_pdf;
 pub mod byok;
 pub mod cancel;
 pub mod docx_export;
+pub mod epub_export;
 pub mod fdx;
 pub mod folder_pdf;
 pub mod fountain;
@@ -85,6 +86,24 @@ fn export_markdown_docx(
     app.opener()
         .open_path(&output, None::<&str>)
         .map_err(|e| format!("DOCX saved to {} but could not be opened: {}", output, e))?;
+    Ok(output)
+}
+
+#[tauri::command]
+fn export_markdown_epub(
+    app: tauri::AppHandle,
+    root: String,
+    rel_path: String,
+    content: String,
+    title: String,
+    author: String,
+    language: String,
+) -> Result<String, String> {
+    let output =
+        epub_export::export_to_project(&root, &rel_path, &content, &title, &author, &language)?;
+    app.opener()
+        .open_path(&output, None::<&str>)
+        .map_err(|e| format!("EPUB saved to {} but could not be opened: {}", output, e))?;
     Ok(output)
 }
 
@@ -272,6 +291,15 @@ fn git_restore_file(root: String, rel_path: String) -> Result<git::api::GitStatu
 #[tauri::command]
 fn git_head_file(root: String, rel_path: String) -> Result<Option<String>, String> {
     git::api::head_file(&root, &rel_path)
+}
+
+#[tauri::command]
+fn git_branch_file(
+    root: String,
+    branch: String,
+    rel_path: String,
+) -> Result<Option<String>, String> {
+    git::api::branch_file(&root, &branch, &rel_path)
 }
 
 #[tauri::command]
@@ -853,6 +881,7 @@ pub fn run() {
             refresh_menu,
             export_fountain_pdf,
             export_markdown_docx,
+            export_markdown_epub,
             export_folder_pdf,
             search_in_folder,
             list_templates,
@@ -871,6 +900,7 @@ pub fn run() {
             git_diff_file,
             git_restore_file,
             git_head_file,
+            git_branch_file,
             git_blame_file,
             git_discard_file,
             git_save_version,

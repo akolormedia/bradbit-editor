@@ -30,6 +30,7 @@ export class SearchPalette {
   private readonly root: HTMLElement;
   private readonly input: HTMLInputElement;
   private readonly results: HTMLElement;
+  private readonly count: HTMLElement;
   private items: PaletteItem[] = [];
   private selectedIndex = 0;
   private requestGeneration = 0;
@@ -61,8 +62,11 @@ export class SearchPalette {
       options.mode === "files" ? "quickOpenTitle" : "globalSearchTitle",
     );
     const hint = document.createElement("span");
+    hint.className = "search-palette-hint";
     hint.textContent = t(options.language, "paletteHint");
-    footer.append(title, hint);
+    this.count = document.createElement("span");
+    this.count.className = "search-palette-count";
+    footer.append(title, this.count, hint);
 
     this.root.append(this.input, this.results, footer);
 
@@ -137,6 +141,11 @@ export class SearchPalette {
 
   private renderItems(): void {
     this.results.innerHTML = "";
+    this.count.textContent = this.items.length
+      ? t(this.options.language, "paletteResultCount", {
+          count: String(this.items.length),
+        })
+      : "";
     if (this.items.length === 0) {
       this.renderMessage(
         t(
@@ -147,7 +156,27 @@ export class SearchPalette {
       return;
     }
 
+    let lastPath = "";
     this.items.forEach((item, index) => {
+      if (item.kind === "match" && item.match.path !== lastPath) {
+        lastPath = item.match.path;
+        const file = document.createElement("div");
+        file.className = "search-palette-file";
+        const filePath = document.createElement("span");
+        filePath.className = "search-palette-file-path";
+        filePath.textContent = item.match.path;
+        const count = document.createElement("span");
+        count.className = "search-palette-file-count";
+        count.textContent = String(
+          this.items.filter(
+            (candidate) =>
+              candidate.kind === "match" &&
+              candidate.match.path === item.match.path,
+          ).length,
+        );
+        file.append(filePath, count);
+        this.results.appendChild(file);
+      }
       const row = document.createElement("button");
       row.type = "button";
       row.className = "search-palette-item";
@@ -162,8 +191,8 @@ export class SearchPalette {
         title.textContent = item.file.name;
         subtitle.textContent = item.file.path;
       } else {
-        title.textContent = `${item.match.path}:${item.match.line}`;
-        subtitle.textContent = item.match.snippet;
+        title.textContent = `L${item.match.line}: ${item.match.snippet}`;
+        subtitle.textContent = `${item.match.path}:${item.match.line}`;
       }
 
       row.append(title, subtitle);

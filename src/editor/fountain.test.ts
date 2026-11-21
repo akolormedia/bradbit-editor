@@ -32,7 +32,26 @@ describe("Fountain line classification (T-1.2.2)", () => {
     expect(extInt.type).toBe("scene");
     expect(section.type).toBe("section");
     expect(transition.type).toBe("transition");
-    expect(note.type).toBe("action");
+    expect(note.type).toBe("note");
+  });
+
+  it("greys the title page until the first blank line", () => {
+    const result = classify([
+      "Title: Demo",
+      "Credit: Escena 1",
+      "Author: —",
+      "Draft date: 2026-11-07",
+      "",
+      "INT. CASA - DÍA",
+    ]);
+    expect(result.slice(0, 4).map((line) => line.type)).toEqual([
+      "titlepage",
+      "titlepage",
+      "titlepage",
+      "titlepage",
+    ]);
+    expect(result[4].type).toBe("blank");
+    expect(result[5].type).toBe("scene");
   });
 
   it("detects a character cue only after a blank line", () => {
@@ -98,6 +117,8 @@ describe("Fountain line classes (T-2.5.5)", () => {
     );
     expect(fountainLineClass("transition")).toBe("fountain-line-transition");
     expect(fountainLineClass("action")).toBe("fountain-line-action");
+    expect(fountainLineClass("titlepage")).toBe("fountain-line-titlepage");
+    expect(fountainLineClass("note")).toBe("fountain-line-note");
   });
 });
 

@@ -95,6 +95,30 @@ describe("search palette (T-1.2.4)", () => {
     expect(onOpenMatch).toHaveBeenCalledWith(match);
   });
 
+  it("groups content results by file and shows a total count", async () => {
+    vi.useFakeTimers();
+    const matches = [
+      { path: "biblia/premisa.md", line: 2, column: 1, snippet: "Ana" },
+      { path: "biblia/premisa.md", line: 8, column: 4, snippet: "Ana otra vez" },
+      { path: "guion/acto-1.fountain", line: 3, column: 1, snippet: "ANA" },
+    ];
+    const palette = new SearchPalette({
+      mode: "content",
+      language: "es",
+      search: async () => matches,
+      onOpenMatch: () => {},
+      onClose: () => {},
+    });
+    document.body.appendChild(palette.element());
+    const input = palette.element().querySelector<HTMLInputElement>("input")!;
+    type(input, "ana");
+    await vi.advanceTimersByTimeAsync(200);
+
+    expect(palette.element().querySelectorAll(".search-palette-file")).toHaveLength(2);
+    expect(palette.element().textContent).toContain("3 resultados");
+    expect(palette.element().textContent).toContain("biblia/premisa.md");
+  });
+
   it("waits for at least two characters in content mode", async () => {
     vi.useFakeTimers();
     const search = vi.fn(async () => []);

@@ -59,7 +59,10 @@ export function fountainElementAt(
     case "dialogue":
       return "dialogue";
     case "action":
+    case "titlepage":
       return "action";
+    case "note":
+      return "note";
     case "blank":
       return previousType === "character" ? "dialogue" : null;
   }

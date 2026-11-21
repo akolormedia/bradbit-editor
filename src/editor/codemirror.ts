@@ -468,17 +468,43 @@ export class BradbitCodeMirror {
    * position and prevent the browser's multi-line selection. Expanded diff
    * ghost rows are not document text either, so they must never start a
    * native selection.
+   *
+   * After scrolling, the browser can also resolve a single click against a
+   * stale line map and leave a range selected. A simple click (no drag and no
+   * modifier) is collapsed to the pointer position on mouseup; drag, double
+   * click and multi-cursor clicks keep their native behavior.
    */
   private installClickGuard(view: EditorView): void {
+    let pressed: {
+      x: number;
+      y: number;
+      detail: number;
+      fromContent: boolean;
+    } | null = null;
+    let moved = false;
+
     view.scrollDOM.addEventListener(
       "mousedown",
       (event) => {
-        if (event.button !== 0 || event.shiftKey) return;
+        if (event.button !== 0) return;
         const target = event.target as HTMLElement | null;
         if (target?.closest(".cm-git-deleted-ghost")) {
           if (target.closest("button")) return;
           event.preventDefault();
           view.focus();
+          return;
+        }
+        if (!target || !view.contentDOM.contains(target)) return;
+        if (target.closest(".cm-gutter, button, a, .cm-inline-blame")) return;
+        pressed = {
+          x: event.clientX,
+          y: event.clientY,
+          detail: event.detail,
+          fromContent: true,
+        };
+        moved = false;
+
+        if (event.shiftKey || event.metaKey || event.ctrlKey || event.altKey) {
           return;
         }
         if (target !== view.contentDOM) return;
@@ -490,6 +516,50 @@ export class BradbitCodeMirror {
         event.preventDefault();
         view.dispatch({ selection: { anchor: position } });
         view.focus();
+      },
+      { capture: true },
+    );
+
+    view.scrollDOM.addEventListener(
+      "mousemove",
+      (event) => {
+        if (!pressed) return;
+        if (
+          Math.abs(event.clientX - pressed.x) > 4 ||
+          Math.abs(event.clientY - pressed.y) > 4
+        ) {
+          moved = true;
+        }
+      },
+      { capture: true },
+    );
+
+    view.scrollDOM.addEventListener(
+      "mouseup",
+      (event) => {
+        const start = pressed;
+        pressed = null;
+        if (
+          !start ||
+          !start.fromContent ||
+          moved ||
+          start.detail > 1 ||
+          event.button !== 0 ||
+          event.shiftKey ||
+          event.metaKey ||
+          event.ctrlKey ||
+          event.altKey
+        ) {
+          return;
+        }
+        const position = view.posAtCoords({
+          x: event.clientX,
+          y: event.clientY,
+        });
+        if (position === null) return;
+        const selection = view.state.selection.main;
+        if (selection.empty && selection.head === position) return;
+        view.dispatch({ selection: { anchor: position } });
       },
       { capture: true },
     );

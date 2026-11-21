@@ -79,7 +79,10 @@ describe("application menu model (T-2.4.2)", () => {
       "file.newFile",
       "file.quickOpen",
       "file.save",
+      "file.exportMenu",
+      "file.exportPdf",
       "file.exportDocx",
+      "file.exportEpub",
       "file.closeTab",
       "file.closeFolder",
       "edit.find",
@@ -102,7 +105,10 @@ describe("application menu model (T-2.4.2)", () => {
     expect(commandItem(empty, "file.importDocx").enabled).toBe(false);
     expect(commandItem(empty, "file.importFdx").enabled).toBe(false);
     expect(commandItem(empty, "file.save").enabled).toBe(false);
+    expect(commandItem(empty, "file.exportMenu").enabled).toBe(false);
+    expect(commandItem(empty, "file.exportPdf").enabled).toBe(false);
     expect(commandItem(empty, "file.exportDocx").enabled).toBe(false);
+    expect(commandItem(empty, "file.exportEpub").enabled).toBe(false);
     expect(commandItem(empty, "view.togglePreview").enabled).toBe(false);
     expect(commandItem(empty, "view.wordWrap").enabled).toBe(true);
     expect(commandItem(empty, "app.settings").enabled).toBe(true);
