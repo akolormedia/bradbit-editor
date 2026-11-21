@@ -77,8 +77,10 @@ struct MenuLabels {
     open_templates_folder: &'static str,
     new_file: &'static str,
     save: &'static str,
+    export: &'static str,
     export_pdf: &'static str,
     export_docx: &'static str,
+    export_epub: &'static str,
     quick_open: &'static str,
     close_tab: &'static str,
     edit: &'static str,
@@ -128,8 +130,10 @@ impl MenuLabels {
                 open_templates_folder: "Open Templates Folder",
                 new_file: "New File",
                 save: "Save",
+                export: "Export",
                 export_pdf: "Export PDF…",
                 export_docx: "Export DOCX…",
+                export_epub: "Export EPUB…",
                 quick_open: "Quick Open…",
                 close_tab: "Close Tab",
                 edit: "Edit",
@@ -176,8 +180,10 @@ impl MenuLabels {
                 open_templates_folder: "Abrir carpeta de plantillas",
                 new_file: "Nuevo archivo",
                 save: "Guardar",
+                export: "Exportar",
                 export_pdf: "Exportar PDF…",
                 export_docx: "Exportar DOCX…",
+                export_epub: "Exportar EPUB…",
                 quick_open: "Apertura rápida…",
                 close_tab: "Cerrar pestaña",
                 edit: "Edición",
@@ -230,6 +236,7 @@ pub fn is_known_command(id: &str) -> bool {
             | "file.save"
             | "file.exportPdf"
             | "file.exportDocx"
+            | "file.exportEpub"
             | "file.quickOpen"
             | "file.closeTab"
             | "edit.undo"
@@ -261,7 +268,7 @@ pub fn command_enabled(state: &MenuUiState, id: &str) -> bool {
         "file.save" | "file.closeTab" | "edit.undo" | "edit.redo" | "edit.find"
         | "edit.findReplace" => state.has_active_tab,
         "file.exportPdf" => state.has_active_tab && state.is_fountain,
-        "file.exportDocx" => state.has_active_tab && state.is_markdown,
+        "file.exportDocx" | "file.exportEpub" => state.has_active_tab && state.is_markdown,
         "edit.bold" | "edit.italic" | "view.togglePreview" => {
             state.has_active_tab && state.is_markdown
         }
@@ -395,6 +402,15 @@ pub fn build_menu<R: Runtime>(
         .id("file.exportDocx")
         .enabled(state.has_active_tab && state.is_markdown)
         .build(app)?;
+    let export_epub = MenuItemBuilder::new(labels.export_epub)
+        .id("file.exportEpub")
+        .enabled(state.has_active_tab && state.is_markdown)
+        .build(app)?;
+    let export_menu = SubmenuBuilder::new(app, labels.export)
+        .item(&export_pdf)
+        .item(&export_docx)
+        .item(&export_epub)
+        .build()?;
     let close_tab = MenuItemBuilder::new(labels.close_tab)
         .id("file.closeTab")
         .accelerator("CmdOrCtrl+W")
@@ -424,8 +440,7 @@ pub fn build_menu<R: Runtime>(
         .separator()
         .item(&new_file)
         .item(&save)
-        .item(&export_pdf)
-        .item(&export_docx)
+        .item(&export_menu)
         .separator()
         .item(&close_tab)
         .build()?;
@@ -652,6 +667,7 @@ mod tests {
         assert!(is_known_command("file.save"));
         assert!(is_known_command("file.exportPdf"));
         assert!(is_known_command("file.exportDocx"));
+        assert!(is_known_command("file.exportEpub"));
         assert!(is_known_command("file.newProject"));
         assert!(is_known_command("file.importDocx"));
         assert!(is_known_command("file.importFdx"));
@@ -682,6 +698,8 @@ mod tests {
         assert_eq!(es.preview, "Vista previa");
         assert_eq!(es.export_pdf, "Exportar PDF…");
         assert_eq!(es.export_docx, "Exportar DOCX…");
+        assert_eq!(es.export_epub, "Exportar EPUB…");
+        assert_eq!(es.export, "Exportar");
         assert_eq!(es.quick_open, "Apertura rápida…");
         assert_eq!(es.new_project, "Nuevo proyecto…");
         assert_eq!(es.import, "Importar");
@@ -698,6 +716,8 @@ mod tests {
         assert_eq!(en.preview, "Preview");
         assert_eq!(en.export_pdf, "Export PDF…");
         assert_eq!(en.export_docx, "Export DOCX…");
+        assert_eq!(en.export_epub, "Export EPUB…");
+        assert_eq!(en.export, "Export");
         assert_eq!(en.quick_open, "Quick Open…");
         assert_eq!(en.new_project, "New Project…");
         assert_eq!(en.import, "Import");

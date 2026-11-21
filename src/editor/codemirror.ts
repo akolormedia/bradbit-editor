@@ -186,7 +186,6 @@ function buildAppearanceExtension(settings: AppSettings): Extension {
       lineHeight: "1.68",
     },
     ".cm-content": {
-      maxWidth: "820px",
       margin: "0",
       padding: "24px 32px 96px 18px",
       minHeight: "100%",
@@ -468,12 +467,65 @@ export class BradbitCodeMirror {
    * position and prevent the browser's multi-line selection. Expanded diff
    * ghost rows are not document text either, so they must never start a
    * native selection.
+   *
+   * After scrolling, the browser can also resolve a single click against a
+   * stale line map and leave a range selected. A simple click (no drag and no
+   * modifier) is collapsed to the pointer position on mouseup; drag, double
+   * click and multi-cursor clicks keep their native behavior.
    */
+  private clickPosition(view: EditorView, event: MouseEvent): number | null {
+    const position = view.posAtCoords({
+      x: event.clientX,
+      y: event.clientY,
+    });
+    let lineElement: HTMLElement | null = null;
+    for (const candidate of view.contentDOM.querySelectorAll<HTMLElement>(
+      ".cm-line",
+    )) {
+      const rect = candidate.getBoundingClientRect();
+      if (event.clientY >= rect.top && event.clientY <= rect.bottom) {
+        lineElement = candidate;
+        break;
+      }
+    }
+    if (!lineElement) return position;
+    const lineStart = view.posAtDOM(lineElement, 0);
+    const line = view.state.doc.lineAt(lineStart);
+    if (position === null || position < line.from || position > line.to) {
+      return line.from;
+    }
+    return position;
+  }
+
+  private selectWithoutScrolling(view: EditorView, position: number): void {
+    const top = view.scrollDOM.scrollTop;
+    const left = view.scrollDOM.scrollLeft;
+    view.dispatch({ selection: { anchor: position } });
+    const restore = () => {
+      if (!view.dom.isConnected) return;
+      view.scrollDOM.scrollTop = top;
+      view.scrollDOM.scrollLeft = left;
+    };
+    restore();
+    if (typeof window.requestAnimationFrame === "function") {
+      window.requestAnimationFrame(restore);
+    }
+  }
+
   private installClickGuard(view: EditorView): void {
+    let pressed: {
+      x: number;
+      y: number;
+      detail: number;
+      fromContent: boolean;
+    } | null = null;
+    let moved = false;
+    let recentClick: { position: number; until: number } | null = null;
+
     view.scrollDOM.addEventListener(
       "mousedown",
       (event) => {
-        if (event.button !== 0 || event.shiftKey) return;
+        if (event.button !== 0) return;
         const target = event.target as HTMLElement | null;
         if (target?.closest(".cm-git-deleted-ghost")) {
           if (target.closest("button")) return;
@@ -481,18 +533,107 @@ export class BradbitCodeMirror {
           view.focus();
           return;
         }
-        if (target !== view.contentDOM) return;
-        const position = view.posAtCoords({
+        if (!target || !view.contentDOM.contains(target)) return;
+        if (target.closest(".cm-gutter, button, a, .cm-inline-blame")) return;
+        if (!view.hasFocus) {
+          const top = view.scrollDOM.scrollTop;
+          const left = view.scrollDOM.scrollLeft;
+          view.contentDOM.focus({ preventScroll: true });
+          view.scrollDOM.scrollTop = top;
+          view.scrollDOM.scrollLeft = left;
+        }
+        pressed = {
           x: event.clientX,
           y: event.clientY,
-        });
+          detail: event.detail,
+          fromContent: true,
+        };
+        moved = false;
+        if (event.shiftKey || event.metaKey || event.ctrlKey || event.altKey) {
+          recentClick = null;
+          return;
+        }
+        if (target !== view.contentDOM) return;
+        const position = this.clickPosition(view, event);
         if (position === null) return;
         event.preventDefault();
-        view.dispatch({ selection: { anchor: position } });
+        this.selectWithoutScrolling(view, position);
         view.focus();
       },
       { capture: true },
     );
+
+    view.scrollDOM.addEventListener(
+      "mousemove",
+      (event) => {
+        if (!pressed) return;
+        if (
+          Math.abs(event.clientX - pressed.x) > 4 ||
+          Math.abs(event.clientY - pressed.y) > 4
+        ) {
+          moved = true;
+        }
+      },
+      { capture: true },
+    );
+
+    view.scrollDOM.addEventListener(
+      "mouseup",
+      (event) => {
+        const start = pressed;
+        pressed = null;
+        if (
+          !start ||
+          !start.fromContent ||
+          moved ||
+          start.detail > 1 ||
+          event.button !== 0 ||
+          event.shiftKey ||
+          event.metaKey ||
+          event.ctrlKey ||
+          event.altKey
+        ) {
+          return;
+        }
+        const position = this.clickPosition(view, event);
+        if (position === null) return;
+        recentClick = { position, until: performance.now() + 220 };
+        const collapse = () => {
+          if (!view.dom.isConnected) return;
+          const selection = view.state.selection.main;
+          if (selection.empty && selection.head === position) return;
+          this.selectWithoutScrolling(view, position);
+        };
+        collapse();
+        // WebKit can apply its native selection after mouseup; settle once
+        // more on the next frames without affecting keyboard input later.
+        window.setTimeout(collapse, 0);
+        window.setTimeout(collapse, 20);
+      },
+      { capture: true },
+    );
+
+    // WebKit sometimes publishes a native range after our mouseup handlers.
+    // While a simple click is settling, collapse any range that appears.
+    document.addEventListener(
+      "selectionchange",
+      () => {
+        if (!view.dom.isConnected || !recentClick) return;
+        if (performance.now() > recentClick.until) {
+          recentClick = null;
+          return;
+        }
+        const selection = view.state.selection.main;
+        if (!selection.empty || selection.head !== recentClick.position) {
+          this.selectWithoutScrolling(view, recentClick.position);
+        }
+      },
+      { capture: true },
+    );
+
+    view.contentDOM.addEventListener("keydown", () => {
+      recentClick = null;
+    });
   }
 
   public applySettings(settings: AppSettings): void {

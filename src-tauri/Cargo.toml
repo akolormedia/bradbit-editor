@@ -24,7 +24,7 @@ serde_yaml = "0.9"
 ureq = { version = "3", features = ["json"] }
 dirs = "6"
 pdf-writer = "0.15"
-pulldown-cmark = { version = "0.13", default-features = false }
+pulldown-cmark = { version = "0.13", default-features = false, features = ["html"] }
 docx-rs = { version = "0.4.22", default-features = false }
 include_dir = "0.7"
 keyring = "4"
@@ -35,6 +35,7 @@ git2 = { version = "0.21", features = ["https", "vendored-libgit2", "vendored-op
 jumpcut = { version = "2.1", default-features = false }
 time = { version = "0.3", features = ["formatting"] }
 imara-diff = "0.2"
+zip = "8"
 
 [target.'cfg(target_os = "macos")'.dependencies]
 block2 = "0.6"
@@ -43,4 +44,3 @@ objc2-app-kit = { version = "0.3", features = ["NSEvent", "block2"] }
 
 [dev-dependencies]
 tempfile = "3"
-zip = "8"

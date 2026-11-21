@@ -1,6 +1,6 @@
 import { backend, isTauriEnvironment } from "./backend";
 import { BradbitCodeMirror } from "./editor/codemirror";
-import { BradbitDiffView } from "./editor/diff";
+import { BradbitDiffView, DiffViewMode } from "./editor/diff";
 import { renderMarkdownPreview } from "./editor/preview";
 import { renderFountainPreview } from "./editor/fountainPreview";
 import { t } from "./i18n";
@@ -292,6 +292,7 @@ class BradbitApp {
   private inlineDiffLoading = new Set<string>();
   private gitHeadId: string | null = null;
   private inlineBlameEnabled = false;
+  private diffAgainstDefaultBranch = false;
   private blameByPath = new Map<string, GitBlameLine[]>();
   private blameLoading = new Set<string>();
   private githubTokenPresent = false;
@@ -340,6 +341,7 @@ class BradbitApp {
   private diffHostEl: HTMLElement | null = null;
   private diffView: BradbitDiffView | null = null;
   private diffViewKey: string | null = null;
+  private diffViewMode: DiffViewMode = "split";
   private diffData: { path: string; original: string; isNew: boolean } | null = null;
   private diffLoadingPath: string | null = null;
   private editor: BradbitCodeMirror | null = null;
@@ -658,6 +660,36 @@ class BradbitApp {
     }
   }
 
+  private defaultBranchName(): string | null {
+    const names = this.gitBranches.map((branch) => branch.name);
+    return (
+      ["main", "master"].find((name) => names.includes(name)) ??
+      this.gitStatus?.branch ??
+      names[0] ??
+      null
+    );
+  }
+
+  private async loadBaseline(
+    root: string,
+    path: string,
+  ): Promise<string | null> {
+    if (this.diffAgainstDefaultBranch) {
+      const branch = this.defaultBranchName();
+      if (branch) return backend.gitBranchFile(root, branch, path);
+    }
+    return backend.gitHeadFile(root, path);
+  }
+
+  private toggleDiffAgainstDefaultBranch(): void {
+    this.diffAgainstDefaultBranch = !this.diffAgainstDefaultBranch;
+    this.inlineDiffOriginals.clear();
+    this.editor?.clearGitOriginals();
+    this.diffData = null;
+    this.destroyDiffView();
+    this.render();
+  }
+
   private syncInlineDiff(tab: OpenTab | null): void {
     if (!this.editor) return;
     if (
@@ -681,14 +713,17 @@ class BradbitApp {
 
     const root = this.folder.rootPath;
     this.inlineDiffLoading.add(tab.path);
-    void backend
-      .gitHeadFile(root, tab.path)
+    void this.loadBaseline(root, tab.path)
       .then((original) => {
         if (this.folder?.rootPath !== root) return;
         const trackedChange = this.gitStatus?.entries.some(
           (entry) => entry.path === tab.path,
         );
-        if (original === null && !trackedChange) {
+        if (
+          original === null &&
+          !trackedChange &&
+          !this.diffAgainstDefaultBranch
+        ) {
           // Ignored or untracked-without-status files have no baseline.
           this.inlineDiffOriginals.delete(tab.path);
           this.editor?.setGitOriginal(tab.path, undefined);
@@ -2330,6 +2365,15 @@ class BradbitApp {
     if (!this.folder) return;
     try {
       const existing = this.tabState.tabs.find((t) => t.path === relPath);
+      // Re-clicking the already active file should not rebuild the shell or
+      // disturb the editor scroll/selection.
+      if (
+        existing &&
+        !existing.preview &&
+        this.tabState.activeTabPath === relPath
+      ) {
+        return;
+      }
       const content = existing
         ? existing.content
         : await backend.readTextFile(this.folder.rootPath, relPath);
@@ -2656,20 +2700,25 @@ class BradbitApp {
       return;
     }
 
-    const key = `${activeTab.path}\u0000${data.original}\u0000${activeTab.content}`;
+    const key = `${activeTab.path}\u0000${this.diffViewMode}\u0000${data.original}\u0000${activeTab.content}`;
     if (this.diffView && this.diffViewKey === key) return;
 
     this.destroyDiffView();
     this.diffView = new BradbitDiffView(this.diffHostEl);
     this.diffViewKey = key;
-    this.diffView.open(data.original, activeTab.content, this.settings);
+    this.diffView.open(
+      data.original,
+      activeTab.content,
+      this.settings,
+      this.diffViewMode,
+    );
   }
 
   private async loadDiffData(tab: OpenTab): Promise<void> {
     if (!this.folder || this.diffLoadingPath === tab.path) return;
     this.diffLoadingPath = tab.path;
     try {
-      const original = await backend.gitHeadFile(this.folder.rootPath, tab.path);
+      const original = await this.loadBaseline(this.folder.rootPath, tab.path);
       if (this.getActiveTab()?.path !== tab.path) return;
       this.diffData = {
         path: tab.path,
@@ -3020,6 +3069,37 @@ class BradbitApp {
     }
   }
 
+  private async exportActiveMarkdownEpub(): Promise<void> {
+    const active = this.getActiveTab();
+    if (
+      !active ||
+      !this.folder ||
+      !isTauriEnvironment() ||
+      !isMarkdownPath(active.path)
+    ) {
+      return;
+    }
+
+    const title = active.name.replace(/\.(md|mdx|markdown)$/i, "");
+    const author = effectiveGitAuthor(this.settings).name || "Bradbit Writer";
+
+    try {
+      const output = await backend.exportMarkdownEpub(
+        this.folder.rootPath,
+        active.path,
+        active.content,
+        title,
+        author,
+        this.settings.language,
+      );
+      this.showStatusNotice(
+        `${t(this.settings.language, "epubExported")}: ${output}`,
+      );
+    } catch (err) {
+      this.showStatusNotice(err instanceof Error ? err.message : String(err));
+    }
+  }
+
   private async exportFolderPdf(node: FileTreeNode): Promise<void> {
     if (!this.folder || !isTauriEnvironment()) {
       return;
@@ -3342,6 +3422,9 @@ class BradbitApp {
         break;
       case "file.exportDocx":
         await this.exportActiveMarkdownDocx();
+        break;
+      case "file.exportEpub":
+        await this.exportActiveMarkdownEpub();
         break;
       case "file.quickOpen":
         this.openQuickOpen();
@@ -4200,6 +4283,19 @@ class BradbitApp {
           icon: "message-square",
           action: () => this.toggleInlineBlame(),
         });
+        if (this.defaultBranchName()) {
+          items.push({
+            id: "diff-default-branch",
+            label: t(
+              lang,
+              this.diffAgainstDefaultBranch
+                ? "diffDefaultBranchOn"
+                : "diffDefaultBranchOff",
+            ),
+            icon: "git-branch",
+            action: () => this.toggleDiffAgainstDefaultBranch(),
+          });
+        }
       }
       items.push(
         { id: "tab-separator-2", label: "", separator: true },
@@ -4694,14 +4790,55 @@ class BradbitApp {
       const banner = document.createElement("div");
       banner.className = "diff-banner";
       const ready = this.diffData?.path === activeTab.path;
+      const bannerLabel = document.createElement("span");
+      bannerLabel.className = "diff-banner-label";
       if (!ready) {
-        banner.textContent = t(lang, "diffLoading");
+        bannerLabel.textContent = t(lang, "diffLoading");
       } else if (this.diffData?.isNew) {
-        banner.textContent = t(lang, "diffNewFile");
+        bannerLabel.textContent = t(lang, "diffNewFile");
         banner.classList.add("new-file");
       } else {
-        banner.textContent = t(lang, "diffWithHead");
+        const branch = this.defaultBranchName();
+        bannerLabel.textContent =
+          this.diffAgainstDefaultBranch && branch
+            ? t(lang, "diffWithBranch", { branch })
+            : t(lang, "diffWithHead");
       }
+      const bannerActions = document.createElement("div");
+      bannerActions.className = "diff-banner-actions";
+      const branch = this.defaultBranchName();
+      if (branch) {
+        const branchButton = createIconButton({
+          icon: "git-branch",
+          label: t(lang, "diffDefaultBranch", { branch }),
+          title: t(lang, "diffDefaultBranch", { branch }),
+          className: "diff-mode-btn",
+          active: this.diffAgainstDefaultBranch,
+          onClick: () => this.toggleDiffAgainstDefaultBranch(),
+        });
+        branchButton.dataset.action = "diff-default-branch";
+        bannerActions.appendChild(branchButton);
+      }
+      const modeToggle = document.createElement("div");
+      modeToggle.className = "diff-mode-toggle";
+      for (const mode of ["split", "unified"] as const) {
+        const modeButton = createIconButton({
+          icon: mode === "split" ? "columns-2" : "rows-3",
+          label: t(lang, mode === "split" ? "diffSplit" : "diffUnified"),
+          title: t(lang, mode === "split" ? "diffSplit" : "diffUnified"),
+          className: "diff-mode-btn",
+          active: this.diffViewMode === mode,
+          onClick: () => {
+            if (this.diffViewMode === mode) return;
+            this.diffViewMode = mode;
+            this.render();
+          },
+        });
+        modeButton.dataset.diffMode = mode;
+        modeToggle.appendChild(modeButton);
+      }
+      bannerActions.appendChild(modeToggle);
+      banner.append(bannerLabel, bannerActions);
       wrapper.appendChild(banner);
 
       if (ready && this.diffHostEl) {

@@ -111,6 +111,31 @@ fn blame_reports_authors_for_working_tree_lines() {
 }
 
 #[test]
+fn branch_file_reads_from_another_branch() {
+    let (dir, repo) = initialized_repo();
+    let root = dir.path().to_str().unwrap();
+    fs::write(dir.path().join("a.md"), "main").unwrap();
+    repo.stage_all(options()).unwrap();
+    repo.commit("main", "Test", "test@example.com", options())
+        .unwrap();
+    repo.checkout_new("otra", options()).unwrap();
+    fs::write(dir.path().join("a.md"), "otra").unwrap();
+    repo.stage_all(options()).unwrap();
+    repo.commit("otra", "Test", "test@example.com", options())
+        .unwrap();
+    repo.checkout("main", options()).unwrap();
+
+    assert_eq!(
+        super::api::branch_file(root, "otra", "a.md").unwrap(),
+        Some("otra".to_string())
+    );
+    assert_eq!(
+        super::api::branch_file(root, "main", "a.md").unwrap(),
+        Some("main".to_string())
+    );
+}
+
+#[test]
 fn diff_and_restore_return_a_tracked_file_to_head() {
     let (dir, repo) = initialized_repo();
     fs::write(dir.path().join("a.md"), "original").unwrap();

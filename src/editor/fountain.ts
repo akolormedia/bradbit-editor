@@ -1,10 +1,14 @@
 export interface FountainState {
   afterCue: boolean;
   previousBlank: boolean;
+  /** True until the first blank line or non-title-page line. */
+  inTitlePage: boolean;
 }
 
 export type FountainLineType =
   | "blank"
+  | "titlepage"
+  | "note"
   | "scene"
   | "section"
   | "transition"
@@ -14,13 +18,14 @@ export type FountainLineType =
   | "action";
 
 export function createFountainState(): FountainState {
-  return { afterCue: false, previousBlank: true };
+  return { afterCue: false, previousBlank: true, inTitlePage: true };
 }
 
 const SCENE_RE =
   /^(EXT\.\/INT\.|INT\.\/EXT\.|INT\/EXT\.|EXT\/INT\.|I\/E\.|INT\.|EXT\.|EST\.)/i;
 const TRANSITION_RE =
   /^(FADE (IN|OUT)|FADE TO BLACK|CUT TO|SMASH CUT TO|DISSOLVE TO|MATCH CUT TO)/i;
+const TITLE_PAGE_RE = /^[A-Za-z][A-Za-z0-9 ]*:\s?.*$/;
 
 /**
  * Classifies a single Fountain line and returns the state for the next line.
@@ -34,13 +39,21 @@ export function classifyFountainLine(
   const wasBlank = state.previousBlank;
 
   if (line.length === 0) {
-    return { type: "blank", state: { afterCue: false, previousBlank: true } };
+    return {
+      type: "blank",
+      state: { afterCue: false, previousBlank: true, inTitlePage: false },
+    };
   }
 
-  const next = (afterCue: boolean): FountainState => ({
+  const next = (afterCue: boolean, titlePage = false): FountainState => ({
     afterCue,
     previousBlank: false,
+    inTitlePage: titlePage && state.inTitlePage,
   });
+
+  if (state.inTitlePage && TITLE_PAGE_RE.test(line)) {
+    return { type: "titlepage", state: next(false, true) };
+  }
 
   if (SCENE_RE.test(line) || line.startsWith(".")) {
     return { type: "scene", state: next(false) };
@@ -56,7 +69,7 @@ export function classifyFountainLine(
   }
   if (line.startsWith("[[")) {
     // Notes and boneyard markers never start a character cue.
-    return { type: "action", state: next(false) };
+    return { type: "note", state: next(false) };
   }
   if (!state.afterCue && wasBlank && isCharacterCue(line)) {
     return { type: "character", state: next(true) };

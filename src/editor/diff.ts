@@ -1,30 +1,59 @@
-import { MergeView } from "@codemirror/merge";
+import { MergeView, unifiedMergeView } from "@codemirror/merge";
 import { EditorState, Extension } from "@codemirror/state";
 import { EditorView } from "@codemirror/view";
 import { AppSettings } from "../types";
 
+export type DiffViewMode = "split" | "unified";
+
 /**
- * Read-only side-by-side diff between the last committed version (left) and
- * the current editor content (right).
+ * Read-only diff between the last committed version and the current editor
+ * content. Split mode shows two columns; unified mode shows every change
+ * inline in a single document.
  */
 export class BradbitDiffView {
   private mergeView: MergeView | null = null;
+  private editorView: EditorView | null = null;
 
   constructor(private readonly parent: HTMLElement) {}
 
-  public open(original: string, current: string, settings: AppSettings): void {
+  public open(
+    original: string,
+    current: string,
+    settings: AppSettings,
+    mode: DiffViewMode = "split",
+  ): void {
     this.destroy();
     this.parent.innerHTML = "";
 
-    const extensions: Extension[] = [
+    const readOnly: Extension[] = [
       EditorState.readOnly.of(true),
       EditorView.editable.of(false),
       buildDiffTheme(settings),
     ];
 
+    if (mode === "unified") {
+      this.editorView = new EditorView({
+        state: EditorState.create({
+          doc: current,
+          extensions: [
+            ...readOnly,
+            unifiedMergeView({
+              original,
+              highlightChanges: true,
+              gutter: true,
+              mergeControls: false,
+              syntaxHighlightDeletions: false,
+            }),
+          ],
+        }),
+        parent: this.parent,
+      });
+      return;
+    }
+
     this.mergeView = new MergeView({
-      a: { doc: original, extensions },
-      b: { doc: current, extensions },
+      a: { doc: original, extensions: readOnly },
+      b: { doc: current, extensions: readOnly },
       parent: this.parent,
       highlightChanges: true,
       gutter: true,
@@ -35,6 +64,8 @@ export class BradbitDiffView {
   public destroy(): void {
     this.mergeView?.destroy();
     this.mergeView = null;
+    this.editorView?.destroy();
+    this.editorView = null;
   }
 }
 
