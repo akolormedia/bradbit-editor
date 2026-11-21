@@ -478,8 +478,16 @@ export class BradbitCodeMirror {
       x: event.clientX,
       y: event.clientY,
     });
-    const element = document.elementFromPoint(event.clientX, event.clientY);
-    const lineElement = element?.closest<HTMLElement>(".cm-line") ?? null;
+    let lineElement: HTMLElement | null = null;
+    for (const candidate of view.contentDOM.querySelectorAll<HTMLElement>(
+      ".cm-line",
+    )) {
+      const rect = candidate.getBoundingClientRect();
+      if (event.clientY >= rect.top && event.clientY <= rect.bottom) {
+        lineElement = candidate;
+        break;
+      }
+    }
     if (!lineElement) return position;
     const lineStart = view.posAtDOM(lineElement, 0);
     const line = view.state.doc.lineAt(lineStart);
