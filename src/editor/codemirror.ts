@@ -512,6 +512,7 @@ export class BradbitCodeMirror {
       fromContent: boolean;
     } | null = null;
     let moved = false;
+    let recentClick: { position: number; until: number } | null = null;
 
     view.scrollDOM.addEventListener(
       "mousedown",
@@ -533,8 +534,8 @@ export class BradbitCodeMirror {
           fromContent: true,
         };
         moved = false;
-
         if (event.shiftKey || event.metaKey || event.ctrlKey || event.altKey) {
+          recentClick = null;
           return;
         }
         if (target !== view.contentDOM) return;
@@ -581,7 +582,9 @@ export class BradbitCodeMirror {
         }
         const position = this.clickPosition(view, event);
         if (position === null) return;
+        recentClick = { position, until: performance.now() + 220 };
         const collapse = () => {
+          if (!view.dom.isConnected) return;
           const selection = view.state.selection.main;
           if (selection.empty && selection.head === position) return;
           this.selectWithoutScrolling(view, position);
@@ -594,6 +597,28 @@ export class BradbitCodeMirror {
       },
       { capture: true },
     );
+
+    // WebKit sometimes publishes a native range after our mouseup handlers.
+    // While a simple click is settling, collapse any range that appears.
+    document.addEventListener(
+      "selectionchange",
+      () => {
+        if (!view.dom.isConnected || !recentClick) return;
+        if (performance.now() > recentClick.until) {
+          recentClick = null;
+          return;
+        }
+        const selection = view.state.selection.main;
+        if (!selection.empty || selection.head !== recentClick.position) {
+          this.selectWithoutScrolling(view, recentClick.position);
+        }
+      },
+      { capture: true },
+    );
+
+    view.contentDOM.addEventListener("keydown", () => {
+      recentClick = null;
+    });
   }
 
   public applySettings(settings: AppSettings): void {
