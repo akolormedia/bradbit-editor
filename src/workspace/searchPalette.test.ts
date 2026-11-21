@@ -119,6 +119,42 @@ describe("search palette (T-1.2.4)", () => {
     expect(palette.element().textContent).toContain("biblia/premisa.md");
   });
 
+  it("uses file accordions and expands long groups in place", async () => {
+    vi.useFakeTimers();
+    const matches = [
+      ...Array.from({ length: 7 }, (_, index) => ({
+        path: "biblia/premisa.md",
+        line: index + 1,
+        column: 1,
+        snippet: `Ana ${index + 1}`,
+      })),
+      { path: "guion/acto-1.fountain", line: 3, column: 1, snippet: "ANA" },
+    ];
+    const palette = new SearchPalette({
+      mode: "content",
+      language: "es",
+      search: async () => matches,
+      onOpenMatch: () => {},
+      onClose: () => {},
+    });
+    document.body.appendChild(palette.element());
+    const input = palette.element().querySelector<HTMLInputElement>("input")!;
+    type(input, "ana");
+    await vi.advanceTimersByTimeAsync(200);
+
+    expect(palette.element().querySelectorAll(".search-palette-item")).toHaveLength(5);
+    expect(palette.element().querySelector("[data-search-more]")).not.toBeNull();
+    palette.element().querySelector<HTMLButtonElement>("[data-search-more]")!.click();
+    expect(palette.element().querySelectorAll(".search-palette-item")).toHaveLength(7);
+
+    const secondFile = palette.element().querySelector<HTMLButtonElement>(
+      '[data-search-file="guion/acto-1.fountain"]',
+    );
+    expect(secondFile).not.toBeNull();
+    secondFile!.click();
+    expect(palette.element().querySelectorAll(".search-palette-item")).toHaveLength(8);
+  });
+
   it("waits for at least two characters in content mode", async () => {
     vi.useFakeTimers();
     const search = vi.fn(async () => []);

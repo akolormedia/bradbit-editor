@@ -186,7 +186,6 @@ function buildAppearanceExtension(settings: AppSettings): Extension {
       lineHeight: "1.68",
     },
     ".cm-content": {
-      maxWidth: "820px",
       margin: "0",
       padding: "24px 32px 96px 18px",
       minHeight: "100%",
@@ -474,6 +473,37 @@ export class BradbitCodeMirror {
    * modifier) is collapsed to the pointer position on mouseup; drag, double
    * click and multi-cursor clicks keep their native behavior.
    */
+  private clickPosition(view: EditorView, event: MouseEvent): number | null {
+    const position = view.posAtCoords({
+      x: event.clientX,
+      y: event.clientY,
+    });
+    const element = document.elementFromPoint(event.clientX, event.clientY);
+    const lineElement = element?.closest<HTMLElement>(".cm-line") ?? null;
+    if (!lineElement) return position;
+    const lineStart = view.posAtDOM(lineElement, 0);
+    const line = view.state.doc.lineAt(lineStart);
+    if (position === null || position < line.from || position > line.to) {
+      return line.from;
+    }
+    return position;
+  }
+
+  private selectWithoutScrolling(view: EditorView, position: number): void {
+    const top = view.scrollDOM.scrollTop;
+    const left = view.scrollDOM.scrollLeft;
+    view.dispatch({ selection: { anchor: position } });
+    const restore = () => {
+      if (!view.dom.isConnected) return;
+      view.scrollDOM.scrollTop = top;
+      view.scrollDOM.scrollLeft = left;
+    };
+    restore();
+    if (typeof window.requestAnimationFrame === "function") {
+      window.requestAnimationFrame(restore);
+    }
+  }
+
   private installClickGuard(view: EditorView): void {
     let pressed: {
       x: number;
@@ -508,13 +538,10 @@ export class BradbitCodeMirror {
           return;
         }
         if (target !== view.contentDOM) return;
-        const position = view.posAtCoords({
-          x: event.clientX,
-          y: event.clientY,
-        });
+        const position = this.clickPosition(view, event);
         if (position === null) return;
         event.preventDefault();
-        view.dispatch({ selection: { anchor: position } });
+        this.selectWithoutScrolling(view, position);
         view.focus();
       },
       { capture: true },
@@ -552,14 +579,18 @@ export class BradbitCodeMirror {
         ) {
           return;
         }
-        const position = view.posAtCoords({
-          x: event.clientX,
-          y: event.clientY,
-        });
+        const position = this.clickPosition(view, event);
         if (position === null) return;
-        const selection = view.state.selection.main;
-        if (selection.empty && selection.head === position) return;
-        view.dispatch({ selection: { anchor: position } });
+        const collapse = () => {
+          const selection = view.state.selection.main;
+          if (selection.empty && selection.head === position) return;
+          this.selectWithoutScrolling(view, position);
+        };
+        collapse();
+        // WebKit can apply its native selection after mouseup; settle once
+        // more on the next frames without affecting keyboard input later.
+        window.setTimeout(collapse, 0);
+        window.setTimeout(collapse, 20);
       },
       { capture: true },
     );
