@@ -57,7 +57,6 @@ function handlers(): VersionChangesViewHandlers {
     onStageSelected: vi.fn(),
     onUnstageSelected: vi.fn(),
     onStageAll: vi.fn(),
-    onUnstageFile: vi.fn(),
     onDiscardFile: vi.fn(),
     onExpandAll: vi.fn(),
     onCollapseAll: vi.fn(),
@@ -110,18 +109,16 @@ describe("version changes view (T-3.11.3)", () => {
 
   });
 
-  it("shows file actions for the whole diff block", () => {
+  it("offers Discard changes for the whole hunk block", () => {
     const calls = handlers();
     const root = createVersionChangesView(state(), calls);
     const pill = root.querySelector(".version-hunk-actions");
     expect(pill).not.toBeNull();
-    expect(pill?.textContent).toContain("Unstage");
-    expect(pill?.textContent).toContain("Restore");
-    const buttons = pill!.querySelectorAll<HTMLButtonElement>(
-      ".version-hunk-action",
+    expect(pill?.textContent).toContain("Discard changes");
+    pill!.querySelector<HTMLButtonElement>(".version-hunk-action")!.click();
+    expect(calls.onDiscardFile).toHaveBeenCalledWith(
+      "guion/acto-1.fountain",
     );
-    buttons[0].click();
-    expect(calls.onUnstageFile).toHaveBeenCalledWith("guion/acto-1.fountain");
   });
 
   it("stages the selected file and focuses the composer", () => {

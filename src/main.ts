@@ -5191,7 +5191,6 @@ class BradbitApp {
           }
         },
         onStageAll: () => void this.stageAllVersions(),
-        onUnstageFile: (path) => void this.stageVersionPaths([path], false),
         onDiscardFile: (path) => this.requestDiscardPath(path),
         onExpandAll: () => {
           for (const entry of entries) this.versionExpanded.add(entry.path);

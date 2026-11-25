@@ -765,3 +765,22 @@ fn diff_file_keeps_unified_patch_markers() {
     assert!(patch.lines().any(|line| line == "+DOS"), "{patch}");
     assert!(patch.lines().any(|line| line == " uno"), "{patch}");
 }
+
+#[test]
+fn unstage_restores_a_tracked_file_to_head() {
+    let dir = tempdir().unwrap();
+    let repo = Repository::init_with_branch(dir.path(), "main", options()).unwrap();
+    fs::write(dir.path().join("a.md"), "uno\ndos\n").unwrap();
+    repo.stage(&["a.md"], options()).unwrap();
+    repo.commit("base", "Ana", "ana@example.com", options())
+        .unwrap();
+
+    fs::write(dir.path().join("a.md"), "uno\ntres\n").unwrap();
+    repo.stage(&["a.md"], options()).unwrap();
+    repo.unstage_path("a.md", options()).unwrap();
+
+    let (_, entries) = repo.status(options()).unwrap();
+    let entry = entries.iter().find(|entry| entry.path == "a.md").unwrap();
+    assert_eq!(entry.index, WorktreeStatus::Unmodified);
+    assert_eq!(entry.worktree, WorktreeStatus::Modified);
+}

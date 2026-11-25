@@ -40,7 +40,6 @@ export interface VersionChangesViewHandlers {
   onStageSelected: () => void;
   onUnstageSelected: () => void;
   onStageAll: () => void;
-  onUnstageFile: (path: string) => void;
   onDiscardFile: (path: string) => void;
   onExpandAll: () => void;
   onCollapseAll: () => void;
@@ -264,25 +263,15 @@ function renderFileCard(
   card.appendChild(header);
 
   if (expanded) {
-    const staged = isEntryStaged(entry);
-    const worktreeChanged =
-      entry.worktree !== "unmodified" || entry.index === "untracked";
-    const actions = { unstage: staged, discard: worktreeChanged };
-    card.appendChild(renderDiff(state, entry, handlers, actions));
+    card.appendChild(renderDiff(state, entry, handlers));
   }
   return card;
-}
-
-interface DiffLineActions {
-  unstage: boolean;
-  discard: boolean;
 }
 
 function renderDiff(
   state: VersionChangesViewState,
   entry: GitStatusEntry,
   handlers: VersionChangesViewHandlers,
-  actions: DiffLineActions,
 ): HTMLElement {
   const container = document.createElement("div");
   container.className = "version-diff";
@@ -335,7 +324,6 @@ function renderDiff(
     const hunkActions = renderHunkActions(
       entry,
       handlers,
-      actions,
       state.language,
       state.developerTerms,
     );
@@ -395,51 +383,27 @@ function renderDiffLine(line: VersionDiffLine): HTMLElement {
 function renderHunkActions(
   entry: GitStatusEntry,
   handlers: VersionChangesViewHandlers,
-  actions: DiffLineActions,
   language: Language,
   developerTerms: boolean,
-): HTMLElement | null {
-  if (!actions.unstage && !actions.discard) return null;
+): HTMLElement {
   const pill = document.createElement("div");
   pill.className = "version-hunk-actions";
-
-  if (actions.unstage) {
-    pill.appendChild(
-      hunkActionButton(
-        "Unstage",
-        versionTerm(language, developerTerms, "versionUnstageFileTooltip"),
-        () => handlers.onUnstageFile(entry.path),
-      ),
-    );
-  }
-  if (actions.discard) {
-    pill.appendChild(
-      hunkActionButton(
-        "Restore",
-        versionTerm(language, developerTerms, "versionDiscardFileTooltip"),
-        () => handlers.onDiscardFile(entry.path),
-      ),
-    );
-  }
-  return pill;
-}
-
-function hunkActionButton(
-  label: string,
-  title: string,
-  onClick: () => void,
-): HTMLButtonElement {
   const button = document.createElement("button");
   button.type = "button";
   button.className = "version-hunk-action";
-  button.textContent = label;
-  button.title = title;
-  button.setAttribute("aria-label", title);
+  button.textContent = "Discard changes";
+  button.title = versionTerm(
+    language,
+    developerTerms,
+    "versionDiscardFileTooltip",
+  );
+  button.setAttribute("aria-label", button.title);
   button.onclick = (event) => {
     event.stopPropagation();
-    onClick();
+    handlers.onDiscardFile(entry.path);
   };
-  return button;
+  pill.appendChild(button);
+  return pill;
 }
 
 function statSpan(kind: "added" | "removed", text: string): HTMLElement {

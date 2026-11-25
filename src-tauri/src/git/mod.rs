@@ -685,12 +685,19 @@ impl Repository {
         // A path present in HEAD resets to its committed version; a new path
         // is simply removed from the index.
         let in_head = repo.revparse_single(&format!("HEAD:{path}")).is_ok();
-        let tree = if in_head {
-            head_tree(&repo).map_err(|error| git_error("reset", error))?
+        // `git_reset_default` expects a commitish object; a tree cannot be
+        // peeled into a commit and libgit2 fails with "can not be
+        // successfully peeled". Pass the HEAD commit itself.
+        let target = if in_head {
+            let head = repo.head().map_err(|error| git_error("reset", error))?;
+            Some(
+                head.peel(ObjectType::Commit)
+                    .map_err(|error| git_error("reset", error))?,
+            )
         } else {
             None
         };
-        repo.reset_default(tree.as_ref().map(Tree::as_object), [path])
+        repo.reset_default(target.as_ref(), [path])
             .map_err(|error| git_error("reset", error))
     }
 
