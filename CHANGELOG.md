@@ -19,6 +19,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 - **Fountain reading:** the title page (Title/Credit/Author/Draft date) and `[[notes]]` are now muted grey in the editor and preview, like Zed.
 - **Editor width:** the code editor now uses the full available pane width instead of an 820px content column.
 - **Click stability:** a simple click after scrolling collapses any accidental native text selection to the pointer position (with a short WebKit settle pass); drag, double click and multi-cursor clicks keep their normal behavior.
+- **Chat scrolling:** the chat uses the same stable 12px scrollbar as the editor, updates streaming text in place instead of rebuilding the message list on every token, and keeps its position, text selection and pending question forms while the answer grows.
+- **Chat questions in history:** answered question cards leave the chat footer and stay at the point where the agent asked them, so the next thinking or answer appears below and only pending questions remain pinned above the composer.
 - **Diff views:** the diff tab can switch between the existing two-column view and a unified inline view with compact split/unified buttons. The diff can also compare against the repository's default branch instead of `HEAD`.
 - **Search:** global results are grouped in collapsible file accordions with per-file counts, a total count and internal “show more/less” controls for long files; the buffer search panel uses the compact Zed-style layout.
 - **Diff hunks:** computed in Rust with the same `imara-diff` Histogram algorithm and line post-processing Zed uses, so the gutter and ruler hunks match for the same saved buffer and Git base.

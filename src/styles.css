@@ -1508,6 +1508,9 @@ textarea.text-input {
   max-width: 860px;
   margin: 0 auto;
   overflow-y: auto;
+  /* The panel restores its own scroll position after every render; disable
+     native anchoring so WebKit cannot move the chat a second time. */
+  overflow-anchor: none;
   padding: 14px 12px 18px;
   display: flex;
   flex-direction: column;
@@ -1551,6 +1554,19 @@ textarea.text-input {
 .chat-message-system {
   align-self: flex-start;
   align-items: flex-start;
+}
+
+/* Answered questions live inside the history; let the card use the same
+   width as the tool call that asked it instead of shrinking to its text. */
+.chat-message > .chat-request {
+  align-self: stretch;
+}
+
+/* Answered questions stay readable in history without competing with the
+   pending question the author still has to answer. */
+.chat-request.answered,
+.chat-request.cancelled {
+  border-color: var(--border-color);
 }
 
 .chat-message-role {
@@ -5334,24 +5350,29 @@ textarea.text-input {
 
 
 /* Stable editor scrollbar: avoids the macOS overlay bar stealing clicks
-   from the text and keeps the diff ruler to its left. */
-.cm-scroller::-webkit-scrollbar {
+   from the text and keeps the diff ruler to its left. The chat uses the same
+   bar so dragging it never turns into a text selection. */
+.cm-scroller::-webkit-scrollbar,
+.chat-messages::-webkit-scrollbar {
   width: 12px;
   height: 12px;
 }
 
-.cm-scroller::-webkit-scrollbar-track {
+.cm-scroller::-webkit-scrollbar-track,
+.chat-messages::-webkit-scrollbar-track {
   background: transparent;
 }
 
-.cm-scroller::-webkit-scrollbar-thumb {
+.cm-scroller::-webkit-scrollbar-thumb,
+.chat-messages::-webkit-scrollbar-thumb {
   border: 3px solid transparent;
   border-radius: 6px;
   background: var(--border-color);
   background-clip: content-box;
 }
 
-.cm-scroller::-webkit-scrollbar-thumb:hover {
+.cm-scroller::-webkit-scrollbar-thumb:hover,
+.chat-messages::-webkit-scrollbar-thumb:hover {
   background: var(--text-muted);
   background-clip: content-box;
 }
