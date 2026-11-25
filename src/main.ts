@@ -1204,6 +1204,17 @@ class BradbitApp {
     const lang = this.settings.language;
     const items: ContextMenuItem[] = [
       {
+        id: "version-open-file",
+        label: this.versionLabel("versionOpenFile"),
+        icon: "file",
+        action: () => {
+          this.versionOpen = false;
+          this.render();
+          void this.openFileFromTree(path, true);
+        },
+      },
+      { id: "version-open-separator", label: "", separator: true },
+      {
         id: "version-discard-file",
         label: t(lang, "discardChangesTitle"),
         icon: "rotate-ccw",
@@ -5180,11 +5191,6 @@ class BradbitApp {
           }
         },
         onStageAll: () => void this.stageAllVersions(),
-        onOpenFile: (path) => {
-          this.versionOpen = false;
-          this.render();
-          void this.openFileFromTree(path, true);
-        },
         onUnstageFile: (path) => void this.stageVersionPaths([path], false),
         onDiscardFile: (path) => this.requestDiscardPath(path),
         onExpandAll: () => {

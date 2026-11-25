@@ -40,7 +40,6 @@ export interface VersionChangesViewHandlers {
   onStageSelected: () => void;
   onUnstageSelected: () => void;
   onStageAll: () => void;
-  onOpenFile: (path: string) => void;
   onUnstageFile: (path: string) => void;
   onDiscardFile: (path: string) => void;
   onExpandAll: () => void;
@@ -261,30 +260,7 @@ function renderFileCard(
     );
   }
 
-  const open = document.createElement("button");
-  open.type = "button";
-  open.className = "version-open-file";
-  open.dataset.testid = `version-open-${entry.path}`;
-  open.title = versionTerm(state.language, state.developerTerms, "versionOpenFile");
-  const openLabel = document.createElement("span");
-  openLabel.className = "version-open-label";
-  openLabel.textContent = versionTerm(
-    state.language,
-    state.developerTerms,
-    "versionOpenFile",
-  );
-  open.append(createIcon("external-link", 11), openLabel);
-  open.onclick = (event) => {
-    event.stopPropagation();
-    handlers.onOpenFile(entry.path);
-  };
-
-  header.append(toggle, badge, name, dir, label, stats, checkbox, open);
-  if (kind === "deleted") {
-    open.classList.add("hidden");
-    open.tabIndex = -1;
-    open.setAttribute("aria-hidden", "true");
-  }
+  header.append(toggle, checkbox, badge, name, dir, label, stats);
   card.appendChild(header);
 
   if (expanded) {
@@ -292,15 +268,7 @@ function renderFileCard(
     const worktreeChanged =
       entry.worktree !== "unmodified" || entry.index === "untracked";
     const actions = { unstage: staged, discard: worktreeChanged };
-    const actionsBar = renderDiffActions(
-      entry,
-      handlers,
-      actions,
-      state.language,
-      state.developerTerms,
-    );
-    if (actionsBar) card.appendChild(actionsBar);
-    card.appendChild(renderDiff(state, entry));
+    card.appendChild(renderDiff(state, entry, handlers, actions));
   }
   return card;
 }
@@ -313,6 +281,8 @@ interface DiffLineActions {
 function renderDiff(
   state: VersionChangesViewState,
   entry: GitStatusEntry,
+  handlers: VersionChangesViewHandlers,
+  actions: DiffLineActions,
 ): HTMLElement {
   const container = document.createElement("div");
   container.className = "version-diff";
@@ -353,11 +323,23 @@ function renderDiff(
 
   let rendered = 0;
   for (const hunk of parsed.hunks) {
+    const hunkEl = document.createElement("div");
+    hunkEl.className = "version-diff-hunk";
+
     const symbol = document.createElement("div");
     symbol.className = "version-diff-hunk-header";
     symbol.title = hunk.header;
     symbol.setAttribute("aria-label", hunk.header);
-    container.appendChild(symbol);
+    hunkEl.appendChild(symbol);
+
+    const hunkActions = renderHunkActions(
+      entry,
+      handlers,
+      actions,
+      state.language,
+      state.developerTerms,
+    );
+    if (hunkActions) hunkEl.appendChild(hunkActions);
 
     for (const line of hunk.lines) {
       if (rendered >= MAX_DIFF_LINES) {
@@ -369,12 +351,14 @@ function renderDiff(
           "versionDiffTruncated",
           { count: String(MAX_DIFF_LINES) },
         );
-        container.appendChild(note);
+        hunkEl.appendChild(note);
+        container.appendChild(hunkEl);
         return container;
       }
-      container.appendChild(renderDiffLine(line));
+      hunkEl.appendChild(renderDiffLine(line));
       rendered += 1;
     }
+    container.appendChild(hunkEl);
   }
   return container;
 }
@@ -408,7 +392,7 @@ function renderDiffLine(line: VersionDiffLine): HTMLElement {
   return row;
 }
 
-function renderDiffActions(
+function renderHunkActions(
   entry: GitStatusEntry,
   handlers: VersionChangesViewHandlers,
   actions: DiffLineActions,
@@ -416,44 +400,41 @@ function renderDiffActions(
   developerTerms: boolean,
 ): HTMLElement | null {
   if (!actions.unstage && !actions.discard) return null;
-  const bar = document.createElement("div");
-  bar.className = "version-diff-actions-bar";
+  const pill = document.createElement("div");
+  pill.className = "version-hunk-actions";
 
   if (actions.unstage) {
-    bar.appendChild(
-      diffActionButton(
-        "x",
-        versionTerm(language, developerTerms, "versionUnstageAction"),
+    pill.appendChild(
+      hunkActionButton(
+        "Unstage",
         versionTerm(language, developerTerms, "versionUnstageFileTooltip"),
         () => handlers.onUnstageFile(entry.path),
       ),
     );
   }
   if (actions.discard) {
-    bar.appendChild(
-      diffActionButton(
-        "rotate-ccw",
-        versionTerm(language, developerTerms, "versionDiscardFile"),
+    pill.appendChild(
+      hunkActionButton(
+        "Restore",
         versionTerm(language, developerTerms, "versionDiscardFileTooltip"),
         () => handlers.onDiscardFile(entry.path),
       ),
     );
   }
-  return bar;
+  return pill;
 }
 
-function diffActionButton(
-  icon: "x" | "rotate-ccw",
+function hunkActionButton(
   label: string,
   title: string,
   onClick: () => void,
 ): HTMLButtonElement {
   const button = document.createElement("button");
   button.type = "button";
-  button.className = "version-diff-action-btn";
+  button.className = "version-hunk-action";
+  button.textContent = label;
   button.title = title;
   button.setAttribute("aria-label", title);
-  button.append(createIcon(icon, 11), document.createTextNode(label));
   button.onclick = (event) => {
     event.stopPropagation();
     onClick();

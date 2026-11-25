@@ -57,7 +57,6 @@ function handlers(): VersionChangesViewHandlers {
     onStageSelected: vi.fn(),
     onUnstageSelected: vi.fn(),
     onStageAll: vi.fn(),
-    onOpenFile: vi.fn(),
     onUnstageFile: vi.fn(),
     onDiscardFile: vi.fn(),
     onExpandAll: vi.fn(),
@@ -109,23 +108,18 @@ describe("version changes view (T-3.11.3)", () => {
       expect.any(MouseEvent),
     );
 
-    root
-      .querySelector<HTMLButtonElement>(
-        '[data-testid="version-open-guion/acto-1.fountain"]',
-      )!
-      .click();
-    expect(calls.onOpenFile).toHaveBeenCalledWith("guion/acto-1.fountain");
   });
 
   it("shows file actions for the whole diff block", () => {
     const calls = handlers();
     const root = createVersionChangesView(state(), calls);
-    const bar = root.querySelector(".version-diff-actions-bar");
-    expect(bar).not.toBeNull();
-    const buttons = root.querySelectorAll<HTMLButtonElement>(
-      ".version-diff-action-btn",
+    const pill = root.querySelector(".version-hunk-actions");
+    expect(pill).not.toBeNull();
+    expect(pill?.textContent).toContain("Unstage");
+    expect(pill?.textContent).toContain("Restore");
+    const buttons = pill!.querySelectorAll<HTMLButtonElement>(
+      ".version-hunk-action",
     );
-    expect(buttons.length).toBeGreaterThan(0);
     buttons[0].click();
     expect(calls.onUnstageFile).toHaveBeenCalledWith("guion/acto-1.fountain");
   });
