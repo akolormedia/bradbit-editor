@@ -11,6 +11,7 @@
   --bg-active-line: rgba(255, 255, 255, 0.03);
   --bg-selection: rgba(124, 140, 255, 0.28);
   --border-color: #2a2f3a;
+  --border-strong: #3a4150;
   --text-primary: #e6e9ef;
   --text-secondary: #a5adcb;
   --text-muted: #6e768c;
@@ -48,6 +49,7 @@
   --bg-active-line: rgba(0, 0, 0, 0.03);
   --bg-selection: rgba(68, 92, 230, 0.22);
   --border-color: #d5d9e2;
+  --border-strong: #b9c0ce;
   --text-primary: #1e222a;
   --text-secondary: #4c5567;
   --text-muted: #7c8599;
@@ -5353,18 +5355,24 @@ textarea.text-input {
    from the text and keeps the diff ruler to its left. The chat uses the same
    bar so dragging it never turns into a text selection. */
 .cm-scroller::-webkit-scrollbar,
-.chat-messages::-webkit-scrollbar {
+.chat-messages::-webkit-scrollbar,
+.version-sidebar-body::-webkit-scrollbar,
+.version-file-list::-webkit-scrollbar {
   width: 12px;
   height: 12px;
 }
 
 .cm-scroller::-webkit-scrollbar-track,
-.chat-messages::-webkit-scrollbar-track {
+.chat-messages::-webkit-scrollbar-track,
+.version-sidebar-body::-webkit-scrollbar-track,
+.version-file-list::-webkit-scrollbar-track {
   background: transparent;
 }
 
 .cm-scroller::-webkit-scrollbar-thumb,
-.chat-messages::-webkit-scrollbar-thumb {
+.chat-messages::-webkit-scrollbar-thumb,
+.version-sidebar-body::-webkit-scrollbar-thumb,
+.version-file-list::-webkit-scrollbar-thumb {
   border: 3px solid transparent;
   border-radius: 6px;
   background: var(--border-color);
@@ -5372,7 +5380,9 @@ textarea.text-input {
 }
 
 .cm-scroller::-webkit-scrollbar-thumb:hover,
-.chat-messages::-webkit-scrollbar-thumb:hover {
+.chat-messages::-webkit-scrollbar-thumb:hover,
+.version-sidebar-body::-webkit-scrollbar-thumb:hover,
+.version-file-list::-webkit-scrollbar-thumb:hover {
   background: var(--text-muted);
   background-clip: content-box;
 }
@@ -5417,4 +5427,872 @@ textarea.text-input {
 .cm-editor .cm-search button:hover {
   background: var(--bg-hover);
   color: var(--text-primary);
+}
+
+/* --- Versioning workspace (T-3.11) -------------------------------------- */
+
+.version-sidebar {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  container-type: inline-size;
+}
+
+.version-view-tabs {
+  display: flex;
+  flex-shrink: 0;
+  border-bottom: 1px solid var(--border-color);
+  background: var(--bg-sidebar);
+}
+
+.version-view-tab {
+  flex: 1;
+  padding: 9px 10px;
+  border: none;
+  border-bottom: 2px solid transparent;
+  background: transparent;
+  color: var(--text-muted);
+  font-family: var(--font-ui);
+  font-size: 11.5px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.version-view-tab:hover {
+  color: var(--text-primary);
+  background: var(--bg-hover);
+}
+
+.version-view-tab.active {
+  color: var(--text-primary);
+  border-bottom-color: var(--accent);
+}
+
+.version-sidebar-body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 8px 8px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.version-changes-header {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding-bottom: 4px;
+}
+
+.version-filter {
+  width: 100%;
+  padding: 5px 7px;
+  border: 1px solid var(--border-color);
+  border-radius: 5px;
+  background: var(--bg-editor);
+  color: var(--text-primary);
+  font-family: var(--font-ui);
+  font-size: 11px;
+}
+
+.version-changes-header .version-link-btn {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  width: 100%;
+}
+
+.version-stage-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.version-stage-btn {
+  padding: 4px 8px;
+  border: 1px solid var(--border-color);
+  border-radius: 5px;
+  background: transparent;
+  color: var(--text-secondary);
+  font-family: var(--font-ui);
+  font-size: 10.5px;
+  cursor: pointer;
+}
+
+.version-stage-btn:hover:not(:disabled) {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+
+.version-stage-btn:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.version-group {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.version-group-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 6px;
+  border: 1px solid transparent;
+  color: var(--text-muted);
+  font-size: 10px;
+  font-weight: 650;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.version-group-title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.version-group-count {
+  color: var(--text-muted);
+  font-size: 9.5px;
+  opacity: 0.8;
+}
+
+.version-group-header .version-checkbox {
+  margin-left: auto;
+}
+
+.version-change-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 6px;
+  border: 1px solid transparent;
+  border-radius: 5px;
+  cursor: pointer;
+}
+
+.version-change-row:hover {
+  background: var(--bg-hover);
+}
+
+.version-change-row.selected {
+  background: var(--bg-active);
+  border-color: var(--accent);
+}
+
+.version-change-name {
+  flex: 1 1 auto;
+  min-width: 0;
+  max-width: 62%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 11.5px;
+  color: var(--text-primary);
+}
+
+.version-change-dir {
+  flex: 0 1 auto;
+  min-width: 0;
+  max-width: 40%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 10px;
+  color: var(--text-muted);
+}
+
+.version-change-label {
+  display: none;
+}
+
+.version-file-stats,
+.version-total-stats {
+  display: flex;
+  flex-shrink: 0;
+  gap: 4px;
+  font-size: 10.5px;
+  font-variant-numeric: tabular-nums;
+}
+
+.version-file-stats {
+  min-width: 62px;
+  margin-left: auto;
+  justify-content: flex-end;
+  text-align: right;
+}
+
+.version-stat-added {
+  color: var(--success);
+}
+
+.version-stat-removed {
+  color: var(--danger);
+}
+
+.version-checkbox {
+  position: relative;
+  flex-shrink: 0;
+  width: 13px;
+  height: 13px;
+  margin: 0;
+  appearance: none;
+  border: 1px solid var(--border-strong);
+  border-radius: 3px;
+  background: transparent;
+  cursor: pointer;
+}
+
+.version-checkbox:checked,
+.version-checkbox:indeterminate {
+  border-color: var(--accent);
+  background: var(--accent);
+}
+
+.version-checkbox:checked::after {
+  content: "";
+  position: absolute;
+  left: 3px;
+  top: 0;
+  width: 4px;
+  height: 8px;
+  border: solid var(--bg-editor);
+  border-width: 0 2px 2px 0;
+  transform: rotate(45deg);
+}
+
+.version-checkbox:indeterminate::after {
+  content: "";
+  position: absolute;
+  left: 2px;
+  top: 5px;
+  width: 7px;
+  height: 2px;
+  background: var(--bg-editor);
+}
+
+.version-sidebar-footer {
+  flex-shrink: 0;
+  border-top: 1px solid var(--border-color);
+  background: var(--bg-sidebar);
+}
+
+.version-branch-bar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 8px;
+}
+
+.version-branch-name {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 11px;
+  color: var(--text-secondary);
+}
+
+.version-branch-counters {
+  display: flex;
+  gap: 4px;
+  font-size: 9.5px;
+  color: var(--text-muted);
+}
+
+.version-ahead {
+  color: var(--success);
+}
+
+.version-behind {
+  color: var(--git-modified);
+}
+
+.version-publish {
+  display: flex;
+  margin-left: auto;
+}
+
+.version-publish-primary,
+.version-publish-more {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  border: 1px solid var(--border-color);
+  background: var(--bg-editor);
+  color: var(--text-primary);
+  font-family: var(--font-ui);
+  font-size: 10.5px;
+  cursor: pointer;
+}
+
+.version-publish-primary {
+  padding: 3px 7px;
+  border-radius: 5px 0 0 5px;
+}
+
+.version-publish-more {
+  padding: 3px 4px;
+  border-left: none;
+  border-radius: 0 5px 5px 0;
+}
+
+.version-publish-primary:hover:not(:disabled),
+.version-publish-more:hover:not(:disabled) {
+  background: var(--bg-hover);
+}
+
+.version-publish-primary:disabled,
+.version-publish-more:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.version-composer {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px;
+  border-top: 1px solid var(--border-color);
+}
+
+.version-composer-header {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.version-composer-label {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 10px;
+  font-weight: 650;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+.version-composer-input {
+  width: 100%;
+  min-height: 58px;
+  max-height: 160px;
+  padding: 7px 8px;
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  background: var(--bg-editor);
+  color: var(--text-primary);
+  font: 11.5px/1.45 var(--font-ui);
+  resize: vertical;
+}
+
+.version-composer.expanded .version-composer-input {
+  min-height: 150px;
+}
+
+.version-composer-input:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
+.version-composer-meta {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  justify-content: space-between;
+  font-size: 9.5px;
+}
+
+.version-staged-count {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text-secondary);
+  font-size: 10px;
+}
+
+.version-composer-actions {
+  display: flex;
+  margin-left: auto;
+}
+
+.version-commit-btn,
+.version-commit-more {
+  border: 1px solid var(--accent);
+  background: var(--accent);
+  color: var(--accent-text, #fff);
+  font-family: var(--font-ui);
+  font-size: 10.5px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.version-commit-btn {
+  padding: 4px 9px;
+  border-radius: 5px 0 0 5px;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.version-commit-more {
+  display: flex;
+  align-items: center;
+  padding: 4px;
+  border-left: 1px solid color-mix(in srgb, var(--accent) 70%, #000);
+  border-radius: 0 5px 5px 0;
+}
+
+.version-commit-btn:disabled,
+.version-commit-more:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.version-history,
+.version-branches,
+.version-github {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  padding: 4px 2px;
+}
+
+.version-section-label {
+  font-size: 10px;
+  font-weight: 650;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+.version-branch-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 5px;
+  border-radius: 4px;
+}
+
+.version-branch-row.current {
+  background: var(--bg-active);
+}
+
+.version-pr-header {
+  margin-top: 4px;
+}
+
+.version-empty {
+  padding: 10px 4px;
+}
+
+/* Pseudo-tab shown while the changes workspace is open */
+.tab-item.version-tab {
+  gap: 6px;
+}
+
+.tab-version-icon {
+  display: flex;
+  color: var(--accent);
+}
+
+.tab-version-count {
+  padding: 0 5px;
+  border-radius: 8px;
+  background: var(--bg-active);
+  color: var(--text-muted);
+  font-size: 9.5px;
+}
+
+.version-changes-surface {
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  overflow: hidden;
+}
+
+.version-changes-view {
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.version-changes-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  row-gap: 4px;
+  flex-shrink: 0;
+  padding: 5px 10px;
+  border-bottom: 1px solid var(--border-color);
+  background: var(--bg-editor);
+}
+
+.version-changes-tools {
+  display: flex;
+  gap: 2px;
+}
+
+.version-tool-btn {
+  color: var(--text-muted);
+}
+
+.version-changes-toolbar .version-total-stats {
+  font-size: 11px;
+}
+
+.version-changes-actions {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  margin-left: auto;
+}
+
+.version-save-view-btn {
+  padding: 4px 9px;
+  border: 1px solid var(--accent);
+  border-radius: 5px;
+  background: var(--accent);
+  color: var(--accent-text, #fff);
+  font-family: var(--font-ui);
+  font-size: 10.5px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.version-save-view-btn:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.version-file-list {
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 0 10px 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.version-file-list > .version-file-card:first-child {
+  margin-top: 6px;
+}
+
+.version-file-card {
+  min-width: 0;
+  flex-shrink: 0;
+  container-type: inline-size;
+  border: 1px solid var(--border-color);
+  border-radius: 10px;
+  background: var(--bg-editor);
+  /* Keep the sticky header's rounded top border visible; clipping the card
+     squares it off when the card scrolls under the toolbar. */
+  overflow: visible;
+}
+
+.version-file-card.selected {
+  border-color: var(--accent);
+}
+
+.version-file-card.expanded .version-file-header {
+  position: sticky;
+  top: 6px;
+  z-index: 3;
+  width: calc(100% + 2px);
+  margin: -1px -1px 0;
+  border: 1px solid var(--border-strong);
+  border-radius: 10px 10px 0 0;
+  background: var(--bg-editor);
+  box-shadow: 0 1px 0 var(--border-color);
+}
+
+/* Cover the breathing room above the sticky header so diff lines never
+   scroll through the small gap. */
+.version-file-card.expanded .version-file-header::before {
+  content: "";
+  position: absolute;
+  left: -1px;
+  right: -1px;
+  top: -6px;
+  height: 6px;
+  background: var(--bg-editor);
+}
+
+.version-file-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 35px;
+  padding: 6px 8px;
+  cursor: pointer;
+}
+
+.version-file-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  border: none;
+  border-radius: 3px;
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+}
+
+.version-file-toggle:hover {
+  background: var(--bg-active);
+  color: var(--text-primary);
+}
+
+.version-file-name {
+  flex: 1 1 auto;
+  min-width: 0;
+  max-width: 55%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 12px;
+  color: var(--text-primary);
+}
+
+.version-file-dir {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 10.5px;
+  color: var(--text-muted);
+}
+
+.version-file-label {
+  flex-shrink: 0;
+  font-size: 10px;
+  color: var(--text-muted);
+}
+
+.version-diff {
+  min-width: 0;
+  overflow-x: auto;
+  border-radius: 0 0 10px 10px;
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  line-height: 1.55;
+}
+
+.version-diff-line {
+  display: flex;
+  min-width: max-content;
+  padding-right: 10px;
+  white-space: pre;
+}
+
+.version-diff-number {
+  flex-shrink: 0;
+  width: 38px;
+  padding-right: 8px;
+  text-align: right;
+  color: var(--text-muted);
+  user-select: none;
+}
+
+.version-diff-marker {
+  flex-shrink: 0;
+  width: 16px;
+  text-align: center;
+}
+
+.version-diff-text {
+  flex: 1;
+  padding-left: 4px;
+}
+
+.version-diff-added {
+  background: color-mix(in srgb, var(--success) 12%, transparent);
+}
+
+.version-diff-removed {
+  background: color-mix(in srgb, var(--danger) 12%, transparent);
+}
+
+.version-diff-added .version-diff-marker {
+  color: var(--success);
+}
+
+.version-diff-removed .version-diff-marker {
+  color: var(--danger);
+}
+
+.version-diff-meta {
+  padding: 2px 8px 2px 100px;
+  color: var(--text-muted);
+  font-style: italic;
+}
+
+.version-diff-note {
+  padding: 10px;
+  color: var(--text-muted);
+  font-family: var(--font-ui);
+  font-size: 11.5px;
+}
+
+.version-diff-note.error {
+  color: var(--danger);
+}
+
+.version-changes-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 48px 20px;
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
+.version-changes-empty p {
+  margin: 0;
+}
+
+.version-history-view {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+/* Outlined change marks for the versioning workspace. */
+.version-status {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 16px;
+  height: 16px;
+  border: 1px solid currentColor;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--text-muted);
+}
+
+.version-status svg {
+  width: 10px;
+  height: 10px;
+}
+
+.version-status-added {
+  color: var(--git-added);
+}
+
+.version-status-deleted,
+.version-status-conflicted {
+  color: var(--git-deleted);
+}
+
+.version-status-modified {
+  color: var(--git-modified);
+}
+
+.version-status-renamed,
+.version-status-copied {
+  color: var(--accent);
+}
+
+
+
+/* Hunk block: yellow left rail, thin separator and hover actions, matching
+   the versioning diff reference. */
+.version-diff-hunk {
+  position: relative;
+  border-left: 3px solid var(--git-modified);
+}
+
+.version-diff-hunk-header {
+  height: 1px;
+  margin: 0;
+  background: color-mix(in srgb, var(--git-modified) 45%, transparent);
+}
+
+.version-hunk-actions {
+  position: absolute;
+  top: 6px;
+  right: 8px;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 6px 12px;
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  background: var(--bg-elevated);
+  color: var(--text-primary);
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.28);
+  font-family: var(--font-ui);
+  font-size: 12px;
+  font-weight: 600;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.version-diff-hunk:hover .version-hunk-actions,
+.version-hunk-actions:focus-within {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.version-hunk-actions button {
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+
+.version-hunk-actions button:hover {
+  text-decoration: underline;
+}
+
+
+/* Keep the filename readable when the versioning panel is narrow: hide the
+   secondary folder/status text first, never the filename. */
+@container (max-width: 320px) {
+  .version-change-dir {
+    display: none;
+  }
+
+  .version-change-name {
+    max-width: none;
+  }
+}
+
+@container (max-width: 620px) {
+  .version-file-dir,
+  .version-file-label {
+    display: none;
+  }
+
+  .version-file-name {
+    max-width: none;
+  }
 }

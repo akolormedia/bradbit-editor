@@ -13,6 +13,7 @@ import {
   GitCommitFile,
   GitDiscardResult,
   GitEngineStatus,
+  GitFileChange,
   GitRemote,
   GitStatus,
   GitHubBranch,
@@ -763,6 +764,69 @@ export const backend = {
     });
   },
 
+  async gitDiffStats(
+    rootPath: string,
+    scope: "worktree" | "staged" | "all" = "all",
+  ): Promise<GitFileChange[]> {
+    if (!isTauriEnvironment()) return [];
+    return tauriInvoke<GitFileChange[]>("git_diff_stats", {
+      root: rootPath,
+      scope,
+    });
+  },
+
+  async gitStage(rootPath: string, paths: string[]): Promise<GitStatus> {
+    if (!isTauriEnvironment()) {
+      throw new Error("Git requires the desktop app");
+    }
+    return tauriInvoke<GitStatus>("git_stage", { root: rootPath, paths });
+  },
+
+  async gitUnstage(rootPath: string, paths: string[]): Promise<GitStatus> {
+    if (!isTauriEnvironment()) {
+      throw new Error("Git requires the desktop app");
+    }
+    return tauriInvoke<GitStatus>("git_unstage", { root: rootPath, paths });
+  },
+
+  async gitStageAll(rootPath: string): Promise<GitStatus> {
+    if (!isTauriEnvironment()) {
+      throw new Error("Git requires the desktop app");
+    }
+    return tauriInvoke<GitStatus>("git_stage_all", { root: rootPath });
+  },
+
+  async gitUnstageAll(rootPath: string): Promise<GitStatus> {
+    if (!isTauriEnvironment()) {
+      throw new Error("Git requires the desktop app");
+    }
+    return tauriInvoke<GitStatus>("git_unstage_all", { root: rootPath });
+  },
+
+  async gitCommitStaged(
+    rootPath: string,
+    message: string,
+    authorName: string,
+    authorEmail: string,
+  ): Promise<GitStatus> {
+    if (!isTauriEnvironment()) {
+      throw new Error("Git requires the desktop app");
+    }
+    return tauriInvoke<GitStatus>("git_commit_staged", {
+      root: rootPath,
+      message,
+      authorName,
+      authorEmail,
+    });
+  },
+
+  async gitFetch(rootPath: string, remote: string): Promise<GitStatus> {
+    if (!isTauriEnvironment()) {
+      throw new Error("Git requires the desktop app");
+    }
+    return tauriInvoke<GitStatus>("git_fetch", { root: rootPath, remote });
+  },
+
   async gitHistory(rootPath: string, limit = 30): Promise<GitCommit[]> {
     if (!isTauriEnvironment()) return [];
     return tauriInvoke<GitCommit[]>("git_history", { root: rootPath, limit });
@@ -984,6 +1048,21 @@ export const backend = {
     return tauriInvoke<ByokTestResult>("byok_test_connection", {
       provider,
       key,
+    });
+  },
+
+  async byokComplete(
+    providerId: string,
+    prompt: string,
+    model?: string,
+  ): Promise<string> {
+    if (!isTauriEnvironment()) {
+      throw new Error("AI notes require the desktop app");
+    }
+    return tauriInvoke<string>("byok_complete", {
+      providerId,
+      prompt,
+      model,
     });
   },
 

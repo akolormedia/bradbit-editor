@@ -465,7 +465,7 @@ fn api_remotes_push_and_pull_with_a_local_bare_remote() {
     commit_all(clone.path(), "remoto");
     push_main(clone.path());
 
-    let fetched = super::api::fetch(root, "origin").unwrap();
+    let fetched = super::api::fetch(root, "origin", None).unwrap();
     assert!(fetched.is_repository);
     let pulled = super::api::pull(root, "origin", "main", None).unwrap();
     assert!(pulled.is_repository);
@@ -676,4 +676,111 @@ fn stage_all_respects_gitignore_and_binary_diffs_stay_summarized() {
     let diff = repo.diff(DiffScope::WorktreeVsHead, options()).unwrap();
     assert!(diff.contains("Binary files"), "{diff}");
     assert!(diff.contains("cambiado"), "{diff}");
+}
+
+#[test]
+fn api_commit_staged_leaves_unstaged_worktree_changes_alone() {
+    let dir = tempdir().unwrap();
+    let root = dir.path().to_str().unwrap();
+    let repo = Repository::init_with_branch(dir.path(), "main", options()).unwrap();
+    fs::write(dir.path().join("a.md"), "uno\n").unwrap();
+    fs::write(dir.path().join("b.md"), "dos\n").unwrap();
+    repo.stage(&["a.md", "b.md"], options()).unwrap();
+    repo.commit("base", "Ana", "ana@example.com", options())
+        .unwrap();
+
+    fs::write(dir.path().join("a.md"), "uno\nmas\n").unwrap();
+    fs::write(dir.path().join("b.md"), "dos\nmas\n").unwrap();
+
+    super::api::stage(root, &["a.md".to_string()]).unwrap();
+    let stats = super::api::diff_stats(root, "all").unwrap();
+    let a = stats.iter().find(|change| change.path == "a.md").unwrap();
+    assert_eq!((a.added, a.removed), (1, 0));
+
+    super::api::commit_staged(root, "solo a", "Ana", "ana@example.com").unwrap();
+    let after = super::api::status(root).unwrap();
+    assert!(!after.entries.iter().any(|entry| entry.path == "a.md"));
+    assert!(after.entries.iter().any(|entry| entry.path == "b.md"));
+
+    super::api::unstage_all(root).unwrap();
+    let unstaged = super::api::status(root).unwrap();
+    assert!(unstaged.entries.iter().any(|entry| entry.path == "b.md"));
+}
+
+#[test]
+fn api_diff_stats_reports_per_file_changes() {
+    let dir = tempdir().unwrap();
+    let root = dir.path().to_str().unwrap();
+    let repo = Repository::init_with_branch(dir.path(), "main", options()).unwrap();
+    fs::write(dir.path().join("a.md"), "uno\ndos\n").unwrap();
+    repo.stage(&["a.md"], options()).unwrap();
+    repo.commit("base", "Ana", "ana@example.com", options())
+        .unwrap();
+
+    fs::write(dir.path().join("a.md"), "uno\ntres\n").unwrap();
+    let stats = super::api::diff_stats(root, "worktree").unwrap();
+    assert_eq!(stats.len(), 1);
+    assert_eq!(stats[0].path, "a.md");
+    assert_eq!(stats[0].added, 1);
+    assert_eq!(stats[0].removed, 1);
+}
+
+#[test]
+fn diff_stats_include_untracked_files() {
+    let dir = tempdir().unwrap();
+    let root = dir.path().to_str().unwrap();
+    let repo = Repository::init_with_branch(dir.path(), "main", options()).unwrap();
+    fs::write(dir.path().join("base.md"), "base\n").unwrap();
+    repo.stage(&["base.md"], options()).unwrap();
+    repo.commit("base", "Ana", "ana@example.com", options())
+        .unwrap();
+
+    fs::write(dir.path().join("nuevo.md"), "uno\ndos\ntres\n").unwrap();
+    let stats = super::api::diff_stats(root, "all").unwrap();
+    let nuevo = stats
+        .iter()
+        .find(|change| change.path == "nuevo.md")
+        .unwrap();
+    assert_eq!((nuevo.added, nuevo.removed), (3, 0));
+
+    let patch = super::api::diff_file(root, "nuevo.md").unwrap();
+    assert!(patch.contains("+uno"));
+    assert!(patch.contains("+tres"));
+}
+
+#[test]
+fn diff_file_keeps_unified_patch_markers() {
+    let dir = tempdir().unwrap();
+    let root = dir.path().to_str().unwrap();
+    let repo = Repository::init_with_branch(dir.path(), "main", options()).unwrap();
+    fs::write(dir.path().join("escena.md"), "uno\ndos\ntres\n").unwrap();
+    repo.stage(&["escena.md"], options()).unwrap();
+    repo.commit("base", "Ana", "ana@example.com", options())
+        .unwrap();
+
+    fs::write(dir.path().join("escena.md"), "uno\nDOS\ntres\n").unwrap();
+    let patch = super::api::diff_file(root, "escena.md").unwrap();
+    assert!(patch.contains("@@ -1,3 +1,3 @@"), "{patch}");
+    assert!(patch.lines().any(|line| line == "-dos"), "{patch}");
+    assert!(patch.lines().any(|line| line == "+DOS"), "{patch}");
+    assert!(patch.lines().any(|line| line == " uno"), "{patch}");
+}
+
+#[test]
+fn unstage_restores_a_tracked_file_to_head() {
+    let dir = tempdir().unwrap();
+    let repo = Repository::init_with_branch(dir.path(), "main", options()).unwrap();
+    fs::write(dir.path().join("a.md"), "uno\ndos\n").unwrap();
+    repo.stage(&["a.md"], options()).unwrap();
+    repo.commit("base", "Ana", "ana@example.com", options())
+        .unwrap();
+
+    fs::write(dir.path().join("a.md"), "uno\ntres\n").unwrap();
+    repo.stage(&["a.md"], options()).unwrap();
+    repo.unstage_path("a.md", options()).unwrap();
+
+    let (_, entries) = repo.status(options()).unwrap();
+    let entry = entries.iter().find(|entry| entry.path == "a.md").unwrap();
+    assert_eq!(entry.index, WorktreeStatus::Unmodified);
+    assert_eq!(entry.worktree, WorktreeStatus::Modified);
 }

@@ -47,6 +47,7 @@ export interface AppSettings {
   fountainAutocomplete: boolean;
   showConfigFiles: boolean;
   showDeveloperOptions: boolean;
+  gitDeveloperTerms: boolean;
   gitAuthorName: string;
   gitAuthorEmail: string;
   hiddenModels: string[];
@@ -195,6 +196,12 @@ export interface GitStatus {
 export interface GitDiscardResult {
   deleted: boolean;
   status: GitStatus;
+}
+
+export interface GitFileChange {
+  path: string;
+  added: number;
+  removed: number;
 }
 
 export interface GitCommit {

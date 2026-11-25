@@ -617,6 +617,25 @@ export class SettingsPanel {
         group,
       ),
     );
+
+    if (
+      this.options.settings.showDeveloperOptions &&
+      has("gitDeveloperTerms")
+    ) {
+      this.contentEl.appendChild(
+        this.row(
+          t(this.options.language, "gitDeveloperTerms"),
+          t(this.options.language, "gitDeveloperTermsHint"),
+          this.switchControl(
+            "settings-git-developer-terms",
+            this.options.settings.gitDeveloperTerms,
+            (checked) =>
+              this.options.onUpdateSettings({ gitDeveloperTerms: checked }),
+            t(this.options.language, "gitDeveloperTerms"),
+          ),
+        ),
+      );
+    }
   }
 
   private renderGithub(has: (id: string) => boolean): void {
