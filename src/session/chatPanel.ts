@@ -120,7 +120,10 @@ export class ChatPanel {
   private tabsEl: HTMLElement;
   private titleEl: HTMLElement;
   private subtitleEl: HTMLElement;
-  private stickToBottom = true;
+  private forceScrollToBottom = false;
+  private lastRenderStructure = "";
+  private textBubbles = new Map<string, HTMLElement>();
+  private renderedTexts = new Map<string, string>();
   private lastTabClick = { id: null as string | null, time: 0 };
   private drafts = new Map<string, string>();
   private draftSessionId: string | null = null;
@@ -181,13 +184,6 @@ export class ChatPanel {
 
     this.messagesEl = document.createElement("div");
     this.messagesEl.className = "chat-messages";
-    this.messagesEl.addEventListener("scroll", () => {
-      const distance =
-        this.messagesEl.scrollHeight -
-        this.messagesEl.scrollTop -
-        this.messagesEl.clientHeight;
-      this.stickToBottom = distance < 48;
-    });
 
     this.requestsEl = document.createElement("div");
     this.requestsEl.className = "chat-requests";
@@ -402,7 +398,7 @@ export class ChatPanel {
       this.options = { ...this.options, ...options };
     }
     if (previousActive !== this.options.activeSessionId) {
-      this.stickToBottom = true;
+      this.forceScrollToBottom = true;
     }
     this.state = state;
     const lang = this.options.language;
@@ -937,9 +933,21 @@ export class ChatPanel {
       button.onclick = () => this.selectPopoverItem(index);
       this.popoverEl.appendChild(button);
     });
-    this.popoverEl
-      .querySelector<HTMLElement>('[data-active="true"]')
-      ?.scrollIntoView?.({ block: "nearest" });
+    const active = this.popoverEl.querySelector<HTMLElement>(
+      '[data-active="true"]',
+    );
+    if (active) {
+      const top = active.offsetTop;
+      const bottom = top + active.offsetHeight;
+      if (top < this.popoverEl.scrollTop) {
+        this.popoverEl.scrollTop = top;
+      } else if (
+        bottom >
+        this.popoverEl.scrollTop + this.popoverEl.clientHeight
+      ) {
+        this.popoverEl.scrollTop = bottom - this.popoverEl.clientHeight;
+      }
+    }
   }
 
   private movePopover(delta: number): void {
@@ -1165,8 +1173,11 @@ export class ChatPanel {
 
   private renderMessages(): void {
     const previousScrollTop = this.messagesEl.scrollTop;
-    const shouldStick = this.stickToBottom;
-    this.messagesEl.innerHTML = "";
+    const shouldStick = this.forceScrollToBottom || this.isNearBottom();
+    this.forceScrollToBottom = false;
+    const structure = this.messageStructureKey();
+    const fragment = document.createDocumentFragment();
+
     if (this.state.messages.length === 0) {
       const empty = document.createElement("div");
       empty.className = "chat-empty";
@@ -1177,14 +1188,78 @@ export class ChatPanel {
       hint.className = "chat-empty-hint";
       hint.textContent = t(this.options.language, "chatEmptyHint");
       empty.append(title, hint);
-      this.messagesEl.appendChild(empty);
-      this.messagesEl.appendChild(this.requestsEl);
+      fragment.append(empty);
+      for (const form of this.state.forms) {
+        if (form.status === "pending") continue;
+        fragment.appendChild(this.renderForm(form));
+      }
+      fragment.append(this.requestsEl);
       this.renderRequests();
+      this.messagesEl.replaceChildren(fragment);
+      this.textBubbles.clear();
+      this.renderedTexts.clear();
+      this.lastRenderStructure = structure;
       return;
     }
 
+    // Streaming text arrives token by token. Reuse the existing rows and
+    // update only the bubble that changed so the chat keeps its scroll
+    // position and any text selection the author is holding.
+    if (structure === this.lastRenderStructure) {
+      if (this.updateMessageTexts()) {
+        if (shouldStick) this.pinToBottom();
+        return;
+      }
+    }
+
+    this.textBubbles.clear();
+    this.renderedTexts.clear();
+
+    // Answered and cancelled forms belong to the message history, right where
+    // the question was asked. Only pending forms stay in the footer so the
+    // author can act on them, and the conversation continues below.
+    const inlineForms = this.state.forms.filter(
+      (form) => form.status !== "pending",
+    );
+    const formsByTool = new Map<string, ChatForm[]>();
+    const formsByMessage = new Map<string, ChatForm[]>();
+    const placedForms = new Set<string>();
+    for (const form of inlineForms) {
+      if (form.toolId) {
+        const list = formsByTool.get(form.toolId) ?? [];
+        list.push(form);
+        formsByTool.set(form.toolId, list);
+      }
+      if (form.messageId) {
+        const messageIds = form.messageId.startsWith("assistant:")
+          ? [form.messageId]
+          : [form.messageId, `assistant:${form.messageId}`];
+        for (const messageId of messageIds) {
+          const list = formsByMessage.get(messageId) ?? [];
+          list.push(form);
+          formsByMessage.set(messageId, list);
+        }
+      }
+    }
+    const appendForms = (
+      parent: HTMLElement,
+      forms: ChatForm[] | undefined,
+    ): void => {
+      if (!forms) return;
+      for (const form of forms) {
+        if (placedForms.has(form.id)) continue;
+        placedForms.add(form.id);
+        parent.appendChild(this.renderForm(form));
+      }
+    };
+
     for (const message of this.state.messages) {
-      if (message.role === "assistant" && message.parts.length === 0) {
+      const messageForms = formsByMessage.get(message.id);
+      if (
+        message.role === "assistant" &&
+        message.parts.length === 0 &&
+        !messageForms
+      ) {
         continue;
       }
       const row = document.createElement("div");
@@ -1209,6 +1284,8 @@ export class ChatPanel {
         bubble.textContent = text;
         if (message.error) bubble.classList.add("error");
         row.appendChild(bubble);
+        this.textBubbles.set(`${message.id}:text`, bubble);
+        this.renderedTexts.set(`${message.id}:text`, text);
       } else if (message.role === "user") {
         const text = messageText(message);
         if (text.length === 0) continue;
@@ -1216,13 +1293,17 @@ export class ChatPanel {
         if (message.streaming) bubble.classList.add("streaming");
         if (message.error) bubble.classList.add("error");
         row.appendChild(bubble);
+        this.textBubbles.set(`${message.id}:text`, bubble);
+        this.renderedTexts.set(`${message.id}:text`, text);
       } else {
         const lastText = [...message.parts]
           .reverse()
           .find((part) => part.type === "text" && part.text.length > 0);
-        for (const part of message.parts) {
+        for (let index = 0; index < message.parts.length; index += 1) {
+          const part = message.parts[index];
           if (part.type === "tool") {
             row.appendChild(this.renderTool(part.tool));
+            appendForms(row, formsByTool.get(part.tool.id));
             continue;
           }
           if (part.text.length === 0) continue;
@@ -1232,11 +1313,19 @@ export class ChatPanel {
           }
           if (message.error) bubble.classList.add("error");
           row.appendChild(bubble);
+          this.textBubbles.set(`${message.id}:${index}`, bubble);
+          this.renderedTexts.set(`${message.id}:${index}`, part.text);
         }
       }
+      appendForms(row, messageForms);
       if (row.childElementCount > 1) {
-        this.messagesEl.appendChild(row);
+        fragment.appendChild(row);
       }
+    }
+
+    for (const form of inlineForms) {
+      if (placedForms.has(form.id)) continue;
+      fragment.appendChild(this.renderForm(form));
     }
 
     const hasAssistantContent = this.state.messages.some(
@@ -1250,25 +1339,119 @@ export class ChatPanel {
       const thinking = document.createElement("div");
       thinking.className = "chat-thinking";
       thinking.textContent = t(this.options.language, "chatThinking");
-      this.messagesEl.appendChild(thinking);
+      fragment.appendChild(thinking);
     }
 
-    this.messagesEl.appendChild(this.requestsEl);
+    fragment.appendChild(this.requestsEl);
     this.renderRequests();
+    this.messagesEl.replaceChildren(fragment);
+    this.lastRenderStructure = structure;
 
     if (shouldStick) {
-      const scrollToBottom = () => {
-        if (!this.stickToBottom) return;
-        this.messagesEl.scrollTop = this.messagesEl.scrollHeight;
-      };
-      scrollToBottom();
-      if (typeof window.requestAnimationFrame === "function") {
-        window.requestAnimationFrame(scrollToBottom);
-      } else {
-        window.setTimeout(scrollToBottom, 0);
-      }
+      this.pinToBottom();
     } else {
       this.messagesEl.scrollTop = previousScrollTop;
+    }
+  }
+
+  private messageStructureKey(): string {
+    const messages = this.state.messages
+      .map((message) =>
+        [
+          message.id,
+          message.role,
+          message.streaming ? "s" : "",
+          message.error ? "e" : "",
+          message.parts
+            .map((part) =>
+              part.type === "tool"
+                ? `tool:${JSON.stringify(part.tool)}`
+                : `text:${part.text.length > 0 ? 1 : 0}`,
+            )
+            .join(","),
+        ].join(":"),
+      )
+      .join("|");
+    return [
+      this.options.language,
+      this.state.streaming ? "1" : "0",
+      messages,
+      JSON.stringify(this.state.permissions),
+      JSON.stringify(this.state.forms),
+    ].join("#");
+  }
+
+  private updateMessageTexts(): boolean {
+    for (const message of this.state.messages) {
+      if (message.role === "assistant" && message.parts.length === 0) {
+        continue;
+      }
+
+      if (message.role !== "assistant") {
+        const text = messageText(message);
+        if (text.length === 0) continue;
+        const key = `${message.id}:text`;
+        const bubble = this.textBubbles.get(key);
+        if (!bubble) return false;
+        this.updateTextBubble(key, bubble, text, message.role !== "system");
+        continue;
+      }
+
+      const lastText = [...message.parts]
+        .reverse()
+        .find((part) => part.type === "text" && part.text.length > 0);
+      for (let index = 0; index < message.parts.length; index += 1) {
+        const part = message.parts[index];
+        if (part.type === "tool" || part.text.length === 0) continue;
+        const key = `${message.id}:${index}`;
+        const bubble = this.textBubbles.get(key);
+        if (!bubble) return false;
+        this.updateTextBubble(key, bubble, part.text, true);
+        bubble.classList.toggle(
+          "streaming",
+          Boolean(message.streaming && part === lastText),
+        );
+        bubble.classList.toggle("error", Boolean(message.error));
+      }
+    }
+    return true;
+  }
+
+  private updateTextBubble(
+    key: string,
+    bubble: HTMLElement,
+    text: string,
+    markdown: boolean,
+  ): void {
+    if (this.renderedTexts.get(key) === text) return;
+    if (markdown) {
+      bubble.innerHTML = renderMarkdownPreview(text);
+    } else {
+      bubble.textContent = text;
+    }
+    this.renderedTexts.set(key, text);
+  }
+
+  private isNearBottom(): boolean {
+    return (
+      this.messagesEl.scrollHeight -
+        this.messagesEl.scrollTop -
+        this.messagesEl.clientHeight <
+      48
+    );
+  }
+
+  private pinToBottom(): void {
+    this.messagesEl.scrollTop = this.messagesEl.scrollHeight;
+    const settle = () => {
+      if (!this.messagesEl.isConnected) return;
+      if (!this.isNearBottom()) return;
+      this.messagesEl.scrollTop = this.messagesEl.scrollHeight;
+    };
+    if (typeof window.requestAnimationFrame === "function") {
+      window.requestAnimationFrame(settle);
+    } else {
+      window.setTimeout(settle, 0);
     }
   }
 
@@ -1697,7 +1880,9 @@ export class ChatPanel {
     const pendingPermissions = this.state.permissions.filter(
       (permission) => permission.status === "pending",
     );
-    const forms = this.state.forms;
+    const forms = this.state.forms.filter(
+      (form) => form.status === "pending",
+    );
     const pendingFormIds = new Set(
       forms
         .filter((form) => form.status === "pending")

@@ -43,6 +43,58 @@ function readyState() {
   });
 }
 
+function streamingAssistant(text: string) {
+  return {
+    ...readyState(),
+    streaming: true,
+    messages: [
+      {
+        id: "assistant:msg_stream",
+        role: "assistant" as const,
+        parts: [{ type: "text" as const, ordinal: 0, text }],
+      },
+    ],
+  };
+}
+
+interface ScrollMetrics {
+  scrollHeight: number;
+  clientHeight: number;
+  scrollTop: number;
+}
+
+function mockScrollMetrics(
+  element: HTMLElement,
+  initial: ScrollMetrics,
+  growTo?: number,
+): ScrollMetrics {
+  const metrics = { ...initial };
+  let reads = 0;
+  Object.defineProperty(element, "scrollHeight", {
+    configurable: true,
+    get: () => {
+      reads += 1;
+      if (reads > 1 && growTo !== undefined) metrics.scrollHeight = growTo;
+      return metrics.scrollHeight;
+    },
+  });
+  Object.defineProperty(element, "clientHeight", {
+    configurable: true,
+    get: () => metrics.clientHeight,
+  });
+  Object.defineProperty(element, "scrollTop", {
+    configurable: true,
+    get: () => metrics.scrollTop,
+    set: (value: number) => {
+      metrics.scrollTop = Math.max(
+        0,
+        Math.min(value, metrics.scrollHeight - metrics.clientHeight),
+      );
+    },
+  });
+  return metrics;
+}
+
 describe("chat panel (T-2.1.1)", () => {
   it("shows the empty state, connection status and composer instructions", () => {
     const panel = new ChatPanel(options());
@@ -1108,4 +1160,196 @@ describe("chat panel (T-2.1.1)", () => {
     expect(input.value).toContain("> Texto seleccionado");
   });
 
+  it("moves answered questions into the history before the next message (T-3.10.10)", () => {
+    const panel = new ChatPanel(options());
+    const tool = {
+      id: "tool_q",
+      name: "question",
+      status: "completed" as const,
+      input: {
+        questions: [
+          {
+            question: "¿Color favorito?",
+            header: "Color",
+            options: [{ label: "Rojo" }],
+          },
+        ],
+      },
+      output: "",
+      error: "",
+      executed: true,
+      files: [],
+      answers: [["Rojo"]],
+    };
+    const pendingForm = {
+      id: "frm_1",
+      title: "Questions",
+      kind: "question",
+      toolId: "tool_q",
+      messageId: "msg_q",
+      status: "pending" as const,
+      answer: null,
+      message: null,
+      fields: [
+        {
+          key: "q0",
+          title: "Color favorito",
+          type: "string" as const,
+          required: true,
+          options: [{ value: "Rojo", label: "Rojo" }],
+          custom: true,
+        },
+      ],
+    };
+    const questionState = {
+      ...readyState(),
+      streaming: true,
+      messages: [
+        {
+          id: "assistant:msg_q",
+          role: "assistant" as const,
+          parts: [{ type: "tool" as const, tool }],
+          streaming: true,
+        },
+      ],
+      forms: [pendingForm],
+    };
+    panel.update(questionState);
+
+    const footer = panel.element.querySelector<HTMLElement>(".chat-requests")!;
+    expect(
+      footer.querySelector('[data-testid="form-frm_1"]'),
+    ).not.toBeNull();
+
+    panel.update({
+      ...questionState,
+      forms: [
+        {
+          ...pendingForm,
+          status: "answered",
+          answer: { q0: "Rojo" },
+        },
+      ],
+      messages: [
+        questionState.messages[0],
+        {
+          id: "assistant:msg_next",
+          role: "assistant" as const,
+          parts: [
+            {
+              type: "text" as const,
+              ordinal: 0,
+              text: "Perfecto, sigo con el siguiente paso.",
+            },
+          ],
+        },
+      ],
+    });
+
+    const row = panel.element.querySelector<HTMLElement>(
+      '[data-message-id="assistant:msg_q"]',
+    )!;
+    const children = [...row.children];
+    const toolIndex = children.findIndex((child) =>
+      child.classList.contains("chat-tool"),
+    );
+    const formIndex = children.findIndex(
+      (child) => child.getAttribute("data-testid") === "form-frm_1",
+    );
+    expect(toolIndex).toBeGreaterThan(-1);
+    expect(formIndex).toBe(toolIndex + 1);
+    expect(footer.querySelector('[data-testid="form-frm_1"]')).toBeNull();
+    expect(row.textContent).toContain("Respondida");
+    expect(row.textContent).toContain("Rojo");
+
+    const next = panel.element.querySelector<HTMLElement>(
+      '[data-message-id="assistant:msg_next"]',
+    )!;
+    expect(
+      row.compareDocumentPosition(next) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+    expect(next.textContent).toContain("Perfecto, sigo con el siguiente paso.");
+  });
+
+  it("updates streaming text in place without moving the chat when scrolled up (T-3.10.9)", () => {
+    const panel = new ChatPanel(options());
+    panel.update(streamingAssistant("Hola"));
+    const messages = panel.element.querySelector<HTMLElement>(".chat-messages")!;
+    const metrics = mockScrollMetrics(messages, {
+      scrollHeight: 2000,
+      clientHeight: 400,
+      scrollTop: 200,
+    });
+    const row = messages.querySelector(
+      '[data-message-id="assistant:msg_stream"]',
+    )!;
+    expect(row).not.toBeNull();
+
+    panel.update(streamingAssistant("Hola, ¿en qué trabajamos?"));
+
+    expect(
+      messages.querySelector('[data-message-id="assistant:msg_stream"]'),
+    ).toBe(row);
+    expect(messages.textContent).toContain("Hola, ¿en qué trabajamos?");
+    expect(metrics.scrollTop).toBe(200);
+  });
+
+  it("keeps the chat pinned to the bottom while it was already there (T-3.10.9)", () => {
+    const panel = new ChatPanel(options());
+    panel.update(streamingAssistant("Hola"));
+    const messages = panel.element.querySelector<HTMLElement>(".chat-messages")!;
+    const metrics = mockScrollMetrics(
+      messages,
+      {
+        scrollHeight: 2000,
+        clientHeight: 400,
+        scrollTop: 1600,
+      },
+      2200,
+    );
+
+    panel.update(streamingAssistant("Hola, ¿en qué trabajamos?"));
+
+    expect(metrics.scrollTop).toBe(1800);
+  });
+
+  it("keeps pending questions alive while the answer streams (T-3.10.9)", () => {
+    const form = {
+      id: "frm_1",
+      title: "Questions",
+      kind: "question",
+      toolId: null,
+      messageId: null,
+      status: "pending" as const,
+      answer: null,
+      message: null,
+      fields: [
+        {
+          key: "q0",
+          title: "Color favorito",
+          type: "string" as const,
+          required: true,
+          options: [{ value: "Rojo", label: "Rojo" }],
+          custom: true,
+        },
+      ],
+    };
+    const panel = new ChatPanel(options());
+    panel.update({ ...streamingAssistant("Hola"), forms: [form] });
+    const input = panel.element.querySelector<HTMLInputElement>(
+      '[data-testid="form-input-frm_1-q0-custom"]',
+    )!;
+    expect(input).not.toBeNull();
+
+    panel.update({
+      ...streamingAssistant("Hola, ¿qué color prefieres?"),
+      forms: [form],
+    });
+
+    expect(
+      panel.element.querySelector(
+        '[data-testid="form-input-frm_1-q0-custom"]',
+      ),
+    ).toBe(input);
+  });
 });
