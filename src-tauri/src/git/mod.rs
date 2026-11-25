@@ -1160,6 +1160,19 @@ impl Repository {
         self.fetch_remote(remote, None, options)
     }
 
+    /// Fetch with an in-memory token, for private HTTPS remotes.
+    pub fn fetch_with_token(
+        &self,
+        remote: &str,
+        token: &str,
+        options: OpOptions,
+    ) -> Result<(), GitError> {
+        if token.trim().is_empty() {
+            return Err(GitError::InvalidInput("GitHub token must not be empty"));
+        }
+        self.fetch_remote(remote, Some(token), options)
+    }
+
     /// Fast-forward pull of `branch` from `remote`.
     ///
     /// Deliberately fast-forward only: a pull never creates surprise merge
@@ -1476,6 +1489,9 @@ fn build_diff<'repo>(
 ) -> Result<Diff<'repo>, git2::Error> {
     let tree = head_tree(repo)?;
     let mut opts = DiffOptions::new();
+    opts.include_untracked(true);
+    opts.recurse_untracked_dirs(true);
+    opts.show_untracked_content(true);
     if let Some(path) = path {
         opts.pathspec(path);
     }
@@ -1491,6 +1507,13 @@ fn build_diff<'repo>(
 fn diff_text(diff: &Diff<'_>) -> Result<String, git2::Error> {
     let mut text = String::new();
     diff.print(DiffFormat::Patch, |_delta, _hunk, line| {
+        // libgit2 hands the line body without the unified-diff marker for
+        // additions, deletions and context. Re-add it so the frontend can
+        // parse `git_diff_file` as a regular patch.
+        match line.origin() {
+            '+' | '-' | ' ' => text.push(line.origin()),
+            _ => {}
+        }
         text.push_str(&String::from_utf8_lossy(line.content()));
         true
     })?;

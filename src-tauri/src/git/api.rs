@@ -225,14 +225,7 @@ pub fn save_version(
     author_name: &str,
     author_email: &str,
 ) -> Result<GitStatus, String> {
-    let name = author_name.trim();
-    let email = author_email.trim();
-    if name.is_empty() {
-        return Err("Configure your author name in Settings to save versions".to_string());
-    }
-    if !email.contains('@') || email.starts_with('@') || email.ends_with('@') {
-        return Err("Configure a valid author email in Settings".to_string());
-    }
+    let (name, email) = validated_author(author_name, author_email)?;
     if message.trim().is_empty() {
         return Err("Write a summary for the version".to_string());
     }
@@ -246,7 +239,106 @@ pub fn save_version(
     }
     repo.stage_all(OpOptions::default())
         .map_err(|e| e.to_string())?;
-    repo.commit(message.trim(), name, email, OpOptions::default())
+    repo.commit(message.trim(), &name, &email, OpOptions::default())
+        .map_err(|e| e.to_string())?;
+    status(root)
+}
+
+#[derive(Debug, Clone, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct GitFileChange {
+    pub path: String,
+    pub added: u32,
+    pub removed: u32,
+}
+
+/// Per-file insertion/deletion counts for the versioning sidebar.
+pub fn diff_stats(root: &str, scope: &str) -> Result<Vec<GitFileChange>, String> {
+    let repo =
+        Repository::open(Path::new(root), OpOptions::default()).map_err(|e| e.to_string())?;
+    let scope = match scope {
+        "staged" => DiffScope::Staged,
+        "worktree" => DiffScope::Worktree,
+        _ => DiffScope::WorktreeVsHead,
+    };
+    let changes = repo
+        .diff_stats(scope, OpOptions::default())
+        .map_err(|e| e.to_string())?;
+    Ok(changes
+        .into_iter()
+        .map(|change| GitFileChange {
+            path: change.path,
+            added: change.added,
+            removed: change.removed,
+        })
+        .collect())
+}
+
+/// Stage the given paths. Returns the refreshed status so checkboxes and
+/// counters update atomically with the index.
+pub fn stage(root: &str, paths: &[String]) -> Result<GitStatus, String> {
+    let repo =
+        Repository::open(Path::new(root), OpOptions::default()).map_err(|e| e.to_string())?;
+    let refs: Vec<&str> = paths.iter().map(String::as_str).collect();
+    repo.stage(&refs, OpOptions::default())
+        .map_err(|e| e.to_string())?;
+    status(root)
+}
+
+/// Remove the given paths from the index without touching the working tree.
+pub fn unstage(root: &str, paths: &[String]) -> Result<GitStatus, String> {
+    let repo =
+        Repository::open(Path::new(root), OpOptions::default()).map_err(|e| e.to_string())?;
+    for path in paths {
+        repo.unstage_path(path, OpOptions::default())
+            .map_err(|e| e.to_string())?;
+    }
+    status(root)
+}
+
+pub fn stage_all(root: &str) -> Result<GitStatus, String> {
+    let repo =
+        Repository::open(Path::new(root), OpOptions::default()).map_err(|e| e.to_string())?;
+    repo.stage_all(OpOptions::default())
+        .map_err(|e| e.to_string())?;
+    status(root)
+}
+
+pub fn unstage_all(root: &str) -> Result<GitStatus, String> {
+    let repo =
+        Repository::open(Path::new(root), OpOptions::default()).map_err(|e| e.to_string())?;
+    repo.unstage_all(OpOptions::default())
+        .map_err(|e| e.to_string())?;
+    status(root)
+}
+
+fn validated_author(author_name: &str, author_email: &str) -> Result<(String, String), String> {
+    let name = author_name.trim();
+    let email = author_email.trim();
+    if name.is_empty() {
+        return Err("Configure your author name in Settings to save versions".to_string());
+    }
+    if !email.contains('@') || email.starts_with('@') || email.ends_with('@') {
+        return Err("Configure a valid author email in Settings".to_string());
+    }
+    Ok((name.to_string(), email.to_string()))
+}
+
+/// Commit only the paths the author has staged. Unlike `save_version`, this
+/// never calls `stage_all`, so unchecked working-tree changes stay out.
+pub fn commit_staged(
+    root: &str,
+    message: &str,
+    author_name: &str,
+    author_email: &str,
+) -> Result<GitStatus, String> {
+    if message.trim().is_empty() {
+        return Err("Write a summary for the version".to_string());
+    }
+    let (name, email) = validated_author(author_name, author_email)?;
+    let repo =
+        Repository::open(Path::new(root), OpOptions::default()).map_err(|e| e.to_string())?;
+    repo.commit(message.trim(), &name, &email, OpOptions::default())
         .map_err(|e| e.to_string())?;
     status(root)
 }
@@ -376,11 +468,17 @@ pub fn add_remote(root: &str, name: &str, url: &str) -> Result<Vec<GitRemote>, S
     remotes(root)
 }
 
-pub fn fetch(root: &str, remote: &str) -> Result<GitStatus, String> {
+pub fn fetch(root: &str, remote: &str, token: Option<&str>) -> Result<GitStatus, String> {
     let repo =
         Repository::open(Path::new(root), OpOptions::default()).map_err(|e| e.to_string())?;
-    repo.fetch(remote.trim(), OpOptions::default())
-        .map_err(|e| e.to_string())?;
+    match token.filter(|value| !value.trim().is_empty()) {
+        Some(token) => repo
+            .fetch_with_token(remote.trim(), token, OpOptions::default())
+            .map_err(|e| e.to_string())?,
+        None => repo
+            .fetch(remote.trim(), OpOptions::default())
+            .map_err(|e| e.to_string())?,
+    }
     status(root)
 }
 

@@ -197,6 +197,12 @@ export interface GitDiscardResult {
   status: GitStatus;
 }
 
+export interface GitFileChange {
+  path: string;
+  added: number;
+  removed: number;
+}
+
 export interface GitCommit {
   id: string;
   author: string;

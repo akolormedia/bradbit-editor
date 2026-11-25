@@ -323,6 +323,41 @@ fn git_save_version(
 }
 
 #[tauri::command]
+fn git_diff_stats(root: String, scope: String) -> Result<Vec<git::api::GitFileChange>, String> {
+    git::api::diff_stats(&root, &scope)
+}
+
+#[tauri::command]
+fn git_stage(root: String, paths: Vec<String>) -> Result<git::api::GitStatus, String> {
+    git::api::stage(&root, &paths)
+}
+
+#[tauri::command]
+fn git_unstage(root: String, paths: Vec<String>) -> Result<git::api::GitStatus, String> {
+    git::api::unstage(&root, &paths)
+}
+
+#[tauri::command]
+fn git_stage_all(root: String) -> Result<git::api::GitStatus, String> {
+    git::api::stage_all(&root)
+}
+
+#[tauri::command]
+fn git_unstage_all(root: String) -> Result<git::api::GitStatus, String> {
+    git::api::unstage_all(&root)
+}
+
+#[tauri::command]
+fn git_commit_staged(
+    root: String,
+    message: String,
+    author_name: String,
+    author_email: String,
+) -> Result<git::api::GitStatus, String> {
+    git::api::commit_staged(&root, &message, &author_name, &author_email)
+}
+
+#[tauri::command]
 fn git_history(root: String, limit: usize) -> Result<Vec<git::api::GitCommit>, String> {
     git::api::history(&root, limit)
 }
@@ -384,8 +419,13 @@ fn git_add_remote(
 }
 
 #[tauri::command]
-fn git_fetch(root: String, remote: String) -> Result<git::api::GitStatus, String> {
-    git::api::fetch(&root, &remote)
+fn git_fetch(
+    root: String,
+    remote: String,
+    state: tauri::State<github::secrets::GitHubSecrets>,
+) -> Result<git::api::GitStatus, String> {
+    let token = session_github_token(&state)?;
+    git::api::fetch(&root, &remote, token.as_deref())
 }
 
 #[tauri::command]
@@ -541,6 +581,25 @@ fn byok_status(
 ) -> Result<Vec<byok::ByokProviderStatus>, String> {
     let settings = settings::load_settings()?;
     byok::statuses(&settings, &secrets)
+}
+
+#[tauri::command]
+fn byok_complete(
+    provider_id: String,
+    model: Option<String>,
+    prompt: String,
+    secrets: tauri::State<byok::ByokSecrets>,
+) -> Result<String, String> {
+    let settings = settings::load_settings()?;
+    let provider = settings
+        .byok_providers
+        .iter()
+        .find(|provider| provider.id == provider_id)
+        .ok_or_else(|| "The selected provider is not configured".to_string())?;
+    let key = secrets
+        .get(&provider_id)?
+        .ok_or_else(|| "Connect a model before using AI notes".to_string())?;
+    byok::complete(provider, model.as_deref(), &key, &prompt)
 }
 
 #[tauri::command]
@@ -904,6 +963,12 @@ pub fn run() {
             git_blame_file,
             git_discard_file,
             git_save_version,
+            git_diff_stats,
+            git_stage,
+            git_unstage,
+            git_stage_all,
+            git_unstage_all,
+            git_commit_staged,
             git_history,
             git_commit_files,
             git_restore_from_commit,
@@ -925,6 +990,7 @@ pub fn run() {
             github_list_pull_requests,
             github_create_pull_request,
             byok_status,
+            byok_complete,
             byok_set_key,
             byok_delete_key,
             byok_test_connection,

@@ -197,6 +197,149 @@ fn connection_target(provider: &ByokTestProvider, key: &str) -> Result<Connectio
     Ok(ConnectionTarget { url, headers })
 }
 
+/// Single completion used by small UI helpers (for example the version
+/// composer's "write notes with AI" action). This is deliberately not an
+/// agent loop: one prompt goes out, one short answer comes back, and the
+/// result is returned to the caller for the author to edit.
+pub fn complete(
+    provider: &ByokProvider,
+    model_override: Option<&str>,
+    key: &str,
+    prompt: &str,
+) -> Result<String, String> {
+    validate_provider(provider)?;
+    validate_secret(key)?;
+    let model = model_override
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .or_else(|| {
+            provider
+                .model
+                .as_deref()
+                .map(str::trim)
+                .filter(|value| !value.is_empty())
+        })
+        .ok_or_else(|| "The selected provider has no model configured".to_string())?;
+    if prompt.trim().is_empty() {
+        return Err("The prompt cannot be empty".to_string());
+    }
+
+    let agent: ureq::Agent = ureq::Agent::config_builder()
+        .timeout_global(Some(Duration::from_secs(60)))
+        .http_status_as_error(false)
+        .build()
+        .into();
+
+    let (url, body, headers) = match provider.kind.as_str() {
+        "deepseek" => openai_request(
+            "https://api.deepseek.com/chat/completions",
+            model,
+            prompt,
+            key,
+        ),
+        "openrouter" => openai_request(
+            "https://openrouter.ai/api/v1/chat/completions",
+            model,
+            prompt,
+            key,
+        ),
+        "openai" => openai_request(
+            "https://api.openai.com/v1/chat/completions",
+            model,
+            prompt,
+            key,
+        ),
+        "custom" => {
+            let base = provider
+                .base_url
+                .as_deref()
+                .ok_or_else(|| "Custom provider needs a base URL".to_string())?
+                .trim()
+                .trim_end_matches('/');
+            let url = if base.ends_with("/chat/completions") {
+                base.to_string()
+            } else {
+                format!("{base}/chat/completions")
+            };
+            openai_request(&url, model, prompt, key)
+        }
+        "anthropic" => {
+            let body = json!({
+                "model": model,
+                "max_tokens": 500,
+                "messages": [{ "role": "user", "content": prompt }],
+            });
+            (
+                "https://api.anthropic.com/v1/messages".to_string(),
+                body,
+                vec![
+                    ("x-api-key", key.to_string()),
+                    ("anthropic-version", "2023-06-01".to_string()),
+                ],
+            )
+        }
+        _ => return Err("This provider does not expose a text completion endpoint".to_string()),
+    };
+
+    let mut request = agent.post(&url).header("Content-Type", "application/json");
+    for (name, value) in &headers {
+        request = request.header(*name, value);
+    }
+    match request.send_json(body) {
+        Ok(mut response) => {
+            let status = response.status().as_u16();
+            let raw = response.body_mut().read_to_string().unwrap_or_default();
+            if !(200..300).contains(&status) {
+                let payload: Option<Value> = serde_json::from_str(&raw).ok();
+                let message = error_detail(status, payload.as_ref(), &raw);
+                return Err(message.replace(key, "***"));
+            }
+            let payload: Value = serde_json::from_str(&raw)
+                .map_err(|error| format!("The model returned invalid JSON: {error}"))?;
+            let text = match provider.kind.as_str() {
+                "anthropic" => payload
+                    .get("content")
+                    .and_then(Value::as_array)
+                    .and_then(|items| {
+                        items.iter().find_map(|item| {
+                            (item.get("type").and_then(Value::as_str) == Some("text"))
+                                .then(|| item.get("text").and_then(Value::as_str))
+                                .flatten()
+                        })
+                    })
+                    .map(str::to_string),
+                _ => payload
+                    .pointer("/choices/0/message/content")
+                    .and_then(Value::as_str)
+                    .map(str::to_string),
+            };
+            text.map(|value| value.trim().to_string())
+                .filter(|value| !value.is_empty())
+                .ok_or_else(|| "The model returned an empty answer".to_string())
+        }
+        Err(error) => Err(redact_secrets(&error.to_string())),
+    }
+}
+
+fn openai_request(
+    url: &str,
+    model: &str,
+    prompt: &str,
+    key: &str,
+) -> (String, Value, Vec<(&'static str, String)>) {
+    let body = json!({
+        "model": model,
+        "temperature": 0.2,
+        "max_tokens": 500,
+        "messages": [{ "role": "user", "content": prompt }],
+    });
+    (
+        url.to_string(),
+        body,
+        vec![("Authorization", format!("Bearer {key}"))],
+    )
+}
+
 fn classify_connection_response(status: u16, body: &str) -> ByokTestResult {
     let payload: Option<Value> = serde_json::from_str(body).ok();
     let model_count = payload
@@ -831,6 +974,35 @@ mod tests {
         .unwrap();
         assert!(!result.ok);
         assert!(matches!(result.status, Some(401) | Some(403)), "{result:?}");
+    }
+
+    #[test]
+    fn complete_rejects_missing_models_and_unknown_endpoints() {
+        let mut item = provider("p", "deepseek", "DEEPSEEK_KEY");
+        assert!(complete(&item, None, "sk-bradbit-test-key", "hola")
+            .unwrap_err()
+            .contains("model"));
+
+        item.model = Some("deepseek-chat".to_string());
+        item.kind = "opencode".to_string();
+        assert!(complete(&item, None, "sk-bradbit-test-key", "hola")
+            .unwrap_err()
+            .contains("completion"));
+    }
+
+    #[test]
+    fn openai_request_builds_a_chat_completion_body() {
+        let (url, body, headers) = openai_request(
+            "https://example.test/v1/chat/completions",
+            "modelo",
+            "hola",
+            "secreto",
+        );
+        assert_eq!(url, "https://example.test/v1/chat/completions");
+        assert_eq!(body["model"], "modelo");
+        assert_eq!(body["messages"][0]["content"], "hola");
+        assert_eq!(headers[0].0, "Authorization");
+        assert_eq!(headers[0].1, "Bearer secreto");
     }
 
     #[test]

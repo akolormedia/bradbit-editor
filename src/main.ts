@@ -16,6 +16,7 @@ import {
   GitCommit,
   GitCommitFile,
   GitBlameLine,
+  GitFileChange,
   GitRemote,
   GitStatus,
   GitHubPullRequest,
@@ -38,7 +39,6 @@ import { copyTextToClipboard } from "./workspace/clipboard";
 import { createDocumentHeader } from "./workspace/documentHeader";
 import { badgeClass, buildGitBadgeMap } from "./git/status";
 import {
-  defaultVersionMessage,
   isValidBranchName,
   isValidGitAuthor,
 } from "./git/versions";
@@ -50,7 +50,18 @@ import {
   sanitizeRepoName,
   uniqueRemoteName,
 } from "./git/github";
-import { createVersionsPanel } from "./workspace/versionsPanel";
+import {
+  createVersionSidebar,
+  VersionSidebarView,
+} from "./workspace/versionSidebar";
+import {
+  createVersionChangesView,
+  VersionDiffState,
+} from "./workspace/versionChangesView";
+import {
+  isEntryStaged,
+  VersionFilter,
+} from "./workspace/versionChanges";
 import { ChatPanel } from "./session/chatPanel";
 import {
   appendUserMessage,
@@ -284,6 +295,14 @@ class BradbitApp {
   private gitCommitMessage = "";
   private gitExpandedCommitId: string | null = null;
   private gitCommitFiles: Record<string, GitCommitFile[] | undefined> = {};
+  private versionView: VersionSidebarView = "changes";
+  private versionFilter: VersionFilter = "all";
+  private versionSelectedPath: string | null = null;
+  private versionStats: Record<string, GitFileChange> = {};
+  private versionDiffs: Record<string, VersionDiffState | undefined> = {};
+  private versionExpanded = new Set<string>();
+  private versionOpen = false;
+  private versionGeneratingMessage = false;
   private gitBusy = false;
   private gitHistoryLoading = false;
   private gitPanelError = "";
@@ -464,6 +483,7 @@ class BradbitApp {
     this.gitCommitFiles = {};
     this.gitPanelError = "";
     this.gitRemotes = [];
+    this.resetVersionWorkspace();
     this.inlineDiffOriginals.clear();
     this.inlineDiffLoading.clear();
     this.gitHeadId = null;
@@ -511,6 +531,7 @@ class BradbitApp {
         this.inlineBlameEnabled = false;
       }
       this.tabState = { tabs: [], activeTabPath: null };
+      this.resetVersionWorkspace();
       this.untitledSequence = 0;
       this.collapsedDirs.clear();
       this.fileFilter = "";
@@ -548,6 +569,17 @@ class BradbitApp {
       this.statusNotice = err instanceof Error ? err.message : String(err);
       this.render();
     }
+  }
+
+  private resetVersionWorkspace(): void {
+    this.versionView = "changes";
+    this.versionFilter = "all";
+    this.versionSelectedPath = null;
+    this.versionStats = {};
+    this.versionDiffs = {};
+    this.versionExpanded.clear();
+    this.versionOpen = false;
+    this.versionGeneratingMessage = false;
   }
 
   private async refreshTree(): Promise<void> {
@@ -833,15 +865,496 @@ class BradbitApp {
     this.githubError = "";
     await this.refreshGitStatus();
     await this.refreshGitMeta();
+    await this.refreshVersionStats();
     await this.ensureGitHubAccount();
     await this.refreshGitHubPullRequests();
     this.render();
   }
 
+  private async refreshVersionStats(): Promise<void> {
+    if (!this.folder || !this.gitStatus?.isRepository) {
+      this.versionStats = {};
+      return;
+    }
+    try {
+      const stats = await backend.gitDiffStats(this.folder.rootPath, "all");
+      this.versionStats = Object.fromEntries(
+        stats.map((stat) => [stat.path, stat]),
+      );
+    } catch (err) {
+      console.error("Could not read the Git change stats", err);
+    }
+  }
+
+  private versionScrollPositions(): { sidebar: number; list: number } {
+    return {
+      sidebar:
+        this.rootEl.querySelector<HTMLElement>(".version-sidebar-body")
+          ?.scrollTop ?? 0,
+      list:
+        this.rootEl.querySelector<HTMLElement>(".version-file-list")
+          ?.scrollTop ?? 0,
+    };
+  }
+
+  private restoreVersionScroll(position: { sidebar: number; list: number }): void {
+    const sidebar = this.rootEl.querySelector<HTMLElement>(".version-sidebar-body");
+    if (sidebar) sidebar.scrollTop = position.sidebar;
+    const list = this.rootEl.querySelector<HTMLElement>(".version-file-list");
+    if (list) list.scrollTop = position.list;
+  }
+
+  private renderVersionPreservingScroll(): void {
+    const position = this.versionScrollPositions();
+    this.render();
+    this.restoreVersionScroll(position);
+  }
+
+  private scrollVersionCardIntoView(path: string): void {
+    const list = this.rootEl.querySelector<HTMLElement>(".version-file-list");
+    const card = [...this.rootEl.querySelectorAll<HTMLElement>(".version-file-card")].find(
+      (element) => element.dataset.versionFile === path,
+    );
+    if (!list || !card) return;
+    const listRect = list.getBoundingClientRect();
+    const cardRect = card.getBoundingClientRect();
+    if (cardRect.top < listRect.top) {
+      list.scrollTop -= listRect.top - cardRect.top;
+    } else if (cardRect.bottom > listRect.bottom) {
+      list.scrollTop += cardRect.bottom - listRect.bottom;
+    }
+  }
+
+  private async loadVersionDiff(path: string, render = true): Promise<void> {
+    if (!this.folder) return;
+    const root = this.folder.rootPath;
+    const current = this.versionDiffs[path];
+    if (current && current.status !== "error") return;
+
+    this.versionDiffs = {
+      ...this.versionDiffs,
+      [path]: { status: "loading" },
+    };
+    if (this.versionOpen && render) this.renderVersionPreservingScroll();
+
+    try {
+      const patch = await backend.gitDiffFile(root, path);
+      if (!this.folder || this.folder.rootPath !== root) return;
+      this.versionDiffs = {
+        ...this.versionDiffs,
+        [path]: { status: "ready", patch },
+      };
+    } catch (err) {
+      if (!this.folder || this.folder.rootPath !== root) return;
+      this.versionDiffs = {
+        ...this.versionDiffs,
+        [path]: {
+          status: "error",
+          message: err instanceof Error ? err.message : String(err),
+        },
+      };
+    }
+    if (this.versionOpen && render) this.renderVersionPreservingScroll();
+  }
+
+  private openVersionChanges(path?: string): void {
+    this.versionOpen = true;
+    this.editorVisible = true;
+    this.versionView = "changes";
+    this.sidebarVisible = true;
+    this.sidebarTab = "versions";
+    const entries = this.gitStatus?.entries ?? [];
+    const selection =
+      path ??
+      (this.versionSelectedPath &&
+      entries.some((entry) => entry.path === this.versionSelectedPath)
+        ? this.versionSelectedPath
+        : entries[0]?.path);
+    if (selection) {
+      this.versionSelectedPath = selection;
+      this.versionExpanded.add(selection);
+    }
+    this.renderVersionPreservingScroll();
+    if (selection) {
+      void this.loadVersionDiff(selection);
+      this.scrollVersionCardIntoView(selection);
+    }
+    void this.refreshVersionStats().then(() => {
+      if (this.versionOpen) this.renderVersionPreservingScroll();
+    });
+  }
+
+  private closeVersionChanges(): void {
+    if (!this.versionOpen) return;
+    this.versionOpen = false;
+    this.render();
+  }
+
+  private selectVersionChange(path: string): void {
+    this.versionOpen = true;
+    this.editorVisible = true;
+    this.versionView = "changes";
+    this.sidebarVisible = true;
+    this.sidebarTab = "versions";
+    this.versionSelectedPath = path;
+    this.versionExpanded.add(path);
+    this.renderVersionPreservingScroll();
+    this.scrollVersionCardIntoView(path);
+    void this.loadVersionDiff(path);
+  }
+
+  private toggleVersionChange(path: string): void {
+    const expanded = this.versionExpanded.has(path);
+    if (expanded) this.versionExpanded.delete(path);
+    else this.versionExpanded.add(path);
+    this.versionSelectedPath = path;
+    this.versionOpen = true;
+    this.editorVisible = true;
+    this.renderVersionPreservingScroll();
+    if (!expanded) {
+      void this.loadVersionDiff(path);
+      this.scrollVersionCardIntoView(path);
+    }
+  }
+
+  private async toggleVersionStage(path: string): Promise<void> {
+    const entry = this.gitStatus?.entries.find((item) => item.path === path);
+    if (!entry) return;
+    await this.stageVersionPaths([path], !isEntryStaged(entry));
+  }
+
+  private async stageVersionPaths(
+    paths: string[],
+    stage: boolean,
+  ): Promise<void> {
+    if (!this.folder || this.gitBusy || paths.length === 0) return;
+    this.gitBusy = true;
+    this.gitPanelError = "";
+    try {
+      this.gitStatus = stage
+        ? await backend.gitStage(this.folder.rootPath, paths)
+        : await backend.gitUnstage(this.folder.rootPath, paths);
+      await this.refreshVersionStats();
+    } catch (err) {
+      this.gitPanelError = err instanceof Error ? err.message : String(err);
+    } finally {
+      this.gitBusy = false;
+      this.renderVersionPreservingScroll();
+    }
+  }
+
+  private async stageAllVersions(): Promise<void> {
+    if (!this.folder || this.gitBusy) return;
+    this.gitBusy = true;
+    this.gitPanelError = "";
+    try {
+      this.gitStatus = await backend.gitStageAll(this.folder.rootPath);
+      await this.refreshVersionStats();
+    } catch (err) {
+      this.gitPanelError = err instanceof Error ? err.message : String(err);
+    } finally {
+      this.gitBusy = false;
+      this.renderVersionPreservingScroll();
+    }
+  }
+
+  private async unstageAllVersions(): Promise<void> {
+    if (!this.folder || this.gitBusy) return;
+    this.gitBusy = true;
+    this.gitPanelError = "";
+    try {
+      this.gitStatus = await backend.gitUnstageAll(this.folder.rootPath);
+      await this.refreshVersionStats();
+    } catch (err) {
+      this.gitPanelError = err instanceof Error ? err.message : String(err);
+    } finally {
+      this.gitBusy = false;
+      this.renderVersionPreservingScroll();
+    }
+  }
+
+  private async generateVersionMessage(): Promise<void> {
+    if (!this.folder || this.versionGeneratingMessage) return;
+    const lang = this.settings.language;
+    await this.refreshByokStatus();
+    let provider = this.byokStatus.find((item) => item.hasKey);
+    if (!provider) {
+      this.statusNotice = t(lang, "versionGenerateUnavailable");
+      this.openSettingsModal();
+      return;
+    }
+
+    const chatModel = this.chatState.model ?? "";
+    const slash = chatModel.indexOf("/");
+    const chatProviderId = slash > 0 ? chatModel.slice(0, slash) : "";
+    const chatModelId =
+      slash > 0 ? chatModel.slice(slash + 1).split("#")[0] : "";
+    if (chatProviderId) {
+      const match = this.byokStatus.find(
+        (item) => item.id === chatProviderId && item.hasKey,
+      );
+      if (match) provider = match;
+    }
+    const model =
+      (provider.id === chatProviderId &&
+      chatModelId &&
+      !/\s/.test(chatModelId)
+        ? chatModelId
+        : "") ||
+      this.chatModels.find((item) => item.providerId === provider.id)?.id ||
+      provider.model ||
+      "";
+    if (!model) {
+      this.gitPanelError = t(lang, "versionGenerateNoModel");
+      this.renderVersionPreservingScroll();
+      return;
+    }
+
+    this.versionGeneratingMessage = true;
+    this.gitPanelError = "";
+    this.renderVersionPreservingScroll();
+    try {
+      const prompt = await this.versionNotesPrompt(lang);
+      const message = await backend.byokComplete(provider.id, prompt, model);
+      this.gitCommitMessage = message
+        .trim()
+        .replace(/^```[a-z]*\s*/i, "")
+        .replace(/\s*```$/, "")
+        .trim();
+    } catch (err) {
+      this.gitPanelError = `${t(lang, "versionGenerateError")} ${
+        err instanceof Error ? err.message : String(err)
+      }`;
+    } finally {
+      this.versionGeneratingMessage = false;
+      this.renderVersionPreservingScroll();
+      this.focusVersionComposer();
+    }
+  }
+
+  private async versionNotesPrompt(
+    lang: AppSettings["language"],
+  ): Promise<string> {
+    if (!this.folder) return "";
+    const root = this.folder.rootPath;
+    const allEntries = this.gitStatus?.entries ?? [];
+    const stagedEntries = allEntries.filter(isEntryStaged);
+    const entries = stagedEntries.length > 0 ? stagedEntries : allEntries;
+    const sections: string[] = [];
+    for (const entry of entries.slice(0, 16)) {
+      const stat = this.versionStats[entry.path];
+      const counters = stat ? ` (+${stat.added} -${stat.removed})` : "";
+      sections.push(`- ${entry.path}${counters}`);
+      try {
+        const patch = await backend.gitDiffFile(root, entry.path);
+        if (patch.trim()) sections.push(patch.slice(0, 3000));
+      } catch {
+        // Binary or unreadable files only contribute their name and counters.
+      }
+      if (sections.join("\n").length > 12000) break;
+    }
+    const language = lang === "en" ? "English" : "Spanish";
+    return [
+      `Write a Git version message in ${language} for these changes.`,
+      "Use a writer's voice, not developer jargon.",
+      "Return only the message: a first line of at most 72 characters, then optionally a blank line and 2-3 short bullets with useful context.",
+      "Do not include code fences, quotes, headings or explanations.",
+      "",
+      "Changes:",
+      sections.join("\n").slice(0, 12000),
+    ].join("\n");
+  }
+
+  private focusVersionComposer(): void {
+    const input = this.rootEl.querySelector<HTMLTextAreaElement>(
+      '[data-testid="version-message"]',
+    );
+    input?.focus({ preventScroll: true });
+  }
+
+  private primaryRemoteName(): string | null {
+    return (
+      this.foundGitHubRemote()?.remote.name ??
+      this.gitRemotes[0]?.name ??
+      null
+    );
+  }
+
+  private showVersionBranchMenu(event: MouseEvent): void {
+    const lang = this.settings.language;
+    const remote = this.primaryRemoteName();
+    const branch = this.gitStatus?.branch ?? null;
+    const otherRemotes = this.gitRemotes
+      .map((item) => item.name)
+      .filter((name) => name !== remote);
+    const items: ContextMenuItem[] = [
+      {
+        id: "version-fetch",
+        label: t(lang, "versionFetch"),
+        icon: "arrow-down",
+        shortcut: "git fetch",
+        disabled: !remote,
+        action: () => void this.fetchVersionRemote(),
+      },
+      ...otherRemotes.map(
+        (name): ContextMenuItem => ({
+          id: `version-fetch-${name}`,
+          label: `${t(lang, "versionFetchFrom")} ${name}`,
+          icon: "arrow-down",
+          action: () => void this.fetchVersionRemote(name),
+        }),
+      ),
+      {
+        id: "version-pull",
+        label: t(lang, "versionPull"),
+        icon: "arrow-down",
+        shortcut: "git pull",
+        disabled: !remote || !branch,
+        action: () => void this.pullVersionRemote(),
+      },
+      { id: "version-sync-separator", label: "", separator: true },
+      {
+        id: "version-push",
+        label: t(lang, "versionPush"),
+        icon: "arrow-up",
+        shortcut: "git push",
+        disabled: !remote || !branch,
+        action: () => void this.pushVersionRemote(),
+      },
+      ...otherRemotes.map(
+        (name): ContextMenuItem => ({
+          id: `version-push-${name}`,
+          label: `${t(lang, "versionPushTo")} ${name}`,
+          icon: "arrow-up",
+          disabled: !branch,
+          action: () => void this.pushVersionRemote(name),
+        }),
+      ),
+      {
+        id: "version-publish",
+        label: t(lang, "versionPublish"),
+        icon: "github",
+        disabled: !this.githubTokenPresent,
+        action: () => this.openPublishModal(),
+      },
+      {
+        id: "version-pull-request",
+        label: t(lang, "githubPrAction"),
+        icon: "git-branch",
+        disabled: !this.foundGitHubRemote(),
+        action: () => this.openPullRequestModal(),
+      },
+      {
+        id: "version-github-connect",
+        label: t(lang, "githubConnectAction"),
+        icon: "github",
+        disabled: this.githubTokenPresent,
+        action: () => this.openSettingsModal(),
+      },
+      { id: "version-refresh-separator", label: "", separator: true },
+      {
+        id: "version-refresh",
+        label: t(lang, "versionRefresh"),
+        icon: "refresh-cw",
+        action: () => void this.refreshGitPanelData(),
+      },
+    ];
+    openContextMenu({
+      x: event.clientX,
+      y: event.clientY,
+      items,
+      label: t(lang, "versionBranchMenu"),
+    });
+  }
+
+  private async fetchVersionRemote(remoteName?: string): Promise<void> {
+    if (!this.folder || this.gitBusy) return;
+    const remote = remoteName ?? this.primaryRemoteName();
+    if (!remote) {
+      this.statusNotice = t(this.settings.language, "versionNoRemote");
+      this.render();
+      return;
+    }
+    this.gitBusy = true;
+    this.gitPanelError = "";
+    try {
+      this.gitStatus = await backend.gitFetch(this.folder.rootPath, remote);
+      await this.refreshGitMeta();
+      await this.refreshVersionStats();
+      this.statusNotice = t(this.settings.language, "versionFetchDone");
+    } catch (err) {
+      this.gitPanelError = err instanceof Error ? err.message : String(err);
+    } finally {
+      this.gitBusy = false;
+      this.render();
+    }
+  }
+
+  private async pullVersionRemote(): Promise<void> {
+    if (!this.folder || this.gitBusy) return;
+    const remote = this.primaryRemoteName();
+    const branch = this.gitStatus?.branch;
+    if (!remote || !branch) {
+      this.statusNotice = t(this.settings.language, "versionNoRemote");
+      this.render();
+      return;
+    }
+    this.gitBusy = true;
+    this.gitPanelError = "";
+    try {
+      this.gitStatus = await backend.gitPull(
+        this.folder.rootPath,
+        remote,
+        branch,
+      );
+      this.versionDiffs = {};
+      await this.refreshAfterGitOperation();
+      await this.refreshVersionStats();
+      this.statusNotice = t(this.settings.language, "versionPullDone");
+    } catch (err) {
+      this.gitPanelError = err instanceof Error ? err.message : String(err);
+    } finally {
+      this.gitBusy = false;
+      this.render();
+    }
+  }
+
+  private async pushVersionRemote(remoteName?: string): Promise<void> {
+    if (!this.folder || this.gitBusy) return;
+    const remote = remoteName ?? this.primaryRemoteName();
+    const branch = this.gitStatus?.branch;
+    if (!remote || !branch) {
+      this.statusNotice = t(this.settings.language, "versionNoRemote");
+      this.render();
+      return;
+    }
+    this.gitBusy = true;
+    this.gitPanelError = "";
+    try {
+      this.gitStatus = await backend.gitPush(
+        this.folder.rootPath,
+        remote,
+        branch,
+      );
+      await this.refreshTree();
+      await this.refreshGitMeta();
+      this.statusNotice = t(this.settings.language, "versionPushDone");
+    } catch (err) {
+      this.gitPanelError = err instanceof Error ? err.message : String(err);
+    } finally {
+      this.gitBusy = false;
+      this.render();
+    }
+  }
+
   private openVersionsPanel(): void {
     this.sidebarVisible = true;
     this.sidebarTab = "versions";
-    this.render();
+    if (this.gitStatus?.isRepository) {
+      this.openVersionChanges();
+    } else {
+      this.render();
+    }
     void this.refreshGitPanelData();
   }
 
@@ -862,17 +1375,26 @@ class BradbitApp {
     }
   }
 
-  private async saveVersion(): Promise<void> {
+  private async saveVersion(stageAll = false): Promise<void> {
     if (!this.folder || this.gitBusy) return;
     const { name, email } = effectiveGitAuthor(this.settings);
+    const message = this.gitCommitMessage.trim();
+    if (!message) {
+      this.gitPanelError = t(
+        this.settings.language,
+        "versionMessageRequired",
+      );
+      this.render();
+      return;
+    }
 
-    const message =
-      this.gitCommitMessage.trim() ||
-      defaultVersionMessage(this.settings.language);
     this.gitBusy = true;
     this.gitPanelError = "";
     try {
-      this.gitStatus = await backend.gitSaveVersion(
+      if (stageAll) {
+        this.gitStatus = await backend.gitStageAll(this.folder.rootPath);
+      }
+      this.gitStatus = await backend.gitCommitStaged(
         this.folder.rootPath,
         message,
         name,
@@ -880,8 +1402,12 @@ class BradbitApp {
       );
       this.gitCommitMessage = "";
       this.gitExpandedCommitId = null;
+      this.versionDiffs = {};
+      this.versionExpanded.clear();
+      this.versionSelectedPath = null;
       await this.refreshTree();
       await this.refreshGitMeta();
+      await this.refreshVersionStats();
       this.statusNotice = t(this.settings.language, "versionsSaved");
     } catch (err) {
       this.gitPanelError = err instanceof Error ? err.message : String(err);
@@ -947,6 +1473,9 @@ class BradbitApp {
       }
       await this.refreshTree();
       await this.refreshGitMeta();
+      this.versionDiffs = {};
+      await this.refreshVersionStats();
+      if (this.versionOpen) void this.loadExpandedVersionDiffs();
       this.modal = { kind: "none" };
       if (!tab) {
         await this.openFileFromTree(modal.path, true);
@@ -1027,8 +1556,10 @@ class BradbitApp {
   }
 
   private async refreshAfterGitOperation(): Promise<void> {
+    this.versionDiffs = {};
     await this.refreshTree();
     await this.refreshGitMeta();
+    await this.refreshVersionStats();
     await this.reloadOpenTabsFromDisk();
   }
 
@@ -1462,62 +1993,6 @@ class BradbitApp {
           error: err instanceof Error ? err.message : String(err),
         };
       }
-      this.render();
-    }
-  }
-
-  private async pushToGitHub(): Promise<void> {
-    const found = this.foundGitHubRemote();
-    const branch = this.gitStatus?.branch;
-    if (!this.folder || !found || this.githubBusy) return;
-    if (!branch) {
-      this.githubError = t(this.settings.language, "githubPrNoBranch");
-      this.render();
-      return;
-    }
-    this.githubBusy = true;
-    this.githubError = "";
-    try {
-      this.gitStatus = await backend.gitPush(
-        this.folder.rootPath,
-        found.remote.name,
-        branch,
-      );
-      await this.refreshTree();
-      await this.refreshGitMeta();
-      this.statusNotice = t(this.settings.language, "githubPushDone");
-    } catch (err) {
-      this.githubError = err instanceof Error ? err.message : String(err);
-    } finally {
-      this.githubBusy = false;
-      this.render();
-    }
-  }
-
-  private async pullFromGitHub(): Promise<void> {
-    const found = this.foundGitHubRemote();
-    const branch = this.gitStatus?.branch;
-    if (!this.folder || !found || this.githubBusy) return;
-    if (!branch) {
-      this.githubError = t(this.settings.language, "githubPrNoBranch");
-      this.render();
-      return;
-    }
-    this.githubBusy = true;
-    this.githubError = "";
-    try {
-      this.gitStatus = await backend.gitPull(
-        this.folder.rootPath,
-        found.remote.name,
-        branch,
-      );
-      await this.refreshAfterGitOperation();
-      await this.refreshGitHubPullRequests();
-      this.statusNotice = t(this.settings.language, "githubPullDone");
-    } catch (err) {
-      this.githubError = err instanceof Error ? err.message : String(err);
-    } finally {
-      this.githubBusy = false;
       this.render();
     }
   }
@@ -2363,6 +2838,8 @@ class BradbitApp {
 
   private async openFileFromTree(relPath: string, pin: boolean): Promise<void> {
     if (!this.folder) return;
+    const wasVersionOpen = this.versionOpen;
+    this.versionOpen = false;
     try {
       const existing = this.tabState.tabs.find((t) => t.path === relPath);
       // Re-clicking the already active file should not rebuild the shell or
@@ -2372,6 +2849,7 @@ class BradbitApp {
         !existing.preview &&
         this.tabState.activeTabPath === relPath
       ) {
+        if (wasVersionOpen) this.render();
         return;
       }
       const content = existing
@@ -2760,6 +3238,9 @@ class BradbitApp {
         this.tabState = markTabSaved(this.tabState, modal.path);
         this.tabState = setTabViewMode(this.tabState, modal.path, "edit");
       }
+      this.versionDiffs = {};
+      await this.refreshVersionStats();
+      if (this.versionOpen) void this.loadExpandedVersionDiffs();
 
       this.modal = { kind: "none" };
       this.render();
@@ -2841,6 +3322,12 @@ class BradbitApp {
       await this.refreshTree();
     } catch (err) {
       console.error("Could not update the file tree", err);
+    }
+
+    if (this.versionOpen && this.gitStatus?.isRepository) {
+      this.versionDiffs = {};
+      await this.refreshVersionStats();
+      void this.loadExpandedVersionDiffs();
     }
 
     if (event.paths.includes("bradbit-kit.json")) {
@@ -3543,6 +4030,15 @@ class BradbitApp {
   public render(): void {
     const lang = this.settings.language;
     const activeTab = this.getActiveTab();
+    const versionScroll = this.versionOpen
+      ? this.versionScrollPositions()
+      : null;
+    const focusedComposer =
+      document.activeElement instanceof HTMLTextAreaElement &&
+      document.activeElement.matches('[data-testid="version-message"]');
+    const composerCursor = focusedComposer
+      ? (document.activeElement as HTMLTextAreaElement).selectionStart
+      : 0;
 
     // Preserve CodeMirror and diff hosts across renders so typing/focus never drops
     if (!this.cmHostEl) {
@@ -3571,11 +4067,11 @@ class BradbitApp {
       body.className = "workspace-body";
 
       const layout = computeWorkspaceLayout({
-        chatVisible: this.chatVisible,
+        chatVisible: this.chatVisible && !this.versionOpen,
         editorVisible: this.editorVisible,
         sessionWidth: this.sessionWidth,
       });
-      this.chatVisible = layout.chatVisible;
+      if (!this.versionOpen) this.chatVisible = layout.chatVisible;
 
       if (layout.chatVisible) {
         body.appendChild(this.renderSessionColumn(lang, layout));
@@ -3606,11 +4102,22 @@ class BradbitApp {
     this.rootEl.appendChild(shell);
     this.startOpeningAnimation();
 
+    if (versionScroll) this.restoreVersionScroll(versionScroll);
+    if (focusedComposer) {
+      const input = this.rootEl.querySelector<HTMLTextAreaElement>(
+        '[data-testid="version-message"]',
+      );
+      if (input) {
+        input.focus({ preventScroll: true });
+        input.setSelectionRange(composerCursor, composerCursor);
+      }
+    }
+
     const nextTree = this.rootEl.querySelector<HTMLElement>(".tree-container");
     if (nextTree) nextTree.scrollTop = this.treeScrollTop;
 
     // Sync CodeMirror instance if a tab is active
-    if (this.folder && activeTab && this.cmHostEl) {
+    if (this.folder && activeTab && this.cmHostEl && !this.versionOpen) {
       if (!this.editor) {
         this.editor = new BradbitCodeMirror(this.cmHostEl, this.settings, {
           onContentChange: (path, content) => {
@@ -3644,7 +4151,7 @@ class BradbitApp {
       this.syncInlineBlame(activeTab);
     }
 
-    this.syncDiffView(activeTab);
+    if (!this.versionOpen) this.syncDiffView(activeTab);
 
     // Keep native menu labels, check marks and enabled items aligned with the UI.
     this.syncMenu();
@@ -3932,10 +4439,23 @@ class BradbitApp {
         active,
         onClick: () => {
           const changed = this.sidebarTab !== section.id;
-          if (!changed && this.sidebarVisible) return;
+          if (!changed && this.sidebarVisible) {
+            if (
+              section.id === "versions" &&
+              !this.versionOpen &&
+              this.gitStatus?.isRepository
+            ) {
+              this.openVersionChanges();
+            }
+            return;
+          }
           this.sidebarVisible = true;
           this.sidebarTab = section.id;
-          this.render();
+          if (section.id === "versions" && this.gitStatus?.isRepository) {
+            this.openVersionChanges();
+          } else {
+            this.render();
+          }
           if (changed && section.id === "versions") {
             void this.refreshGitPanelData();
           }
@@ -4429,43 +4949,65 @@ class BradbitApp {
 
   private renderVersions(lang: AppSettings["language"]): HTMLElement {
     const found = this.foundGitHubRemote();
-    return createVersionsPanel(
+    const entries = this.gitStatus?.entries ?? [];
+    return createVersionSidebar(
       {
         language: lang,
+        view: this.versionView,
+        filter: this.versionFilter,
         isRepository: Boolean(this.gitStatus?.isRepository),
         branch: this.gitStatus?.branch ?? null,
-        entries: this.gitStatus?.entries ?? [],
+        ahead: this.gitStatus?.ahead ?? 0,
+        behind: this.gitStatus?.behind ?? 0,
+        entries,
+        stats: this.versionStats,
+        selectedPath: this.versionSelectedPath,
         history: this.gitHistory,
         branches: this.gitBranches,
+        historyLoading: this.gitHistoryLoading,
+        expandedCommitId: this.gitExpandedCommitId,
+        commitFiles: this.gitCommitFiles,
         commitMessage: this.gitCommitMessage,
         authorReady: isValidGitAuthor(
           this.settings.gitAuthorName,
           this.settings.gitAuthorEmail,
         ),
         busy: this.gitBusy,
-        historyLoading: this.gitHistoryLoading,
-        expandedCommitId: this.gitExpandedCommitId,
-        commitFiles: this.gitCommitFiles,
-        error: this.gitPanelError,
+        error: this.gitPanelError || this.githubError,
         githubTokenPresent: this.githubTokenPresent,
         githubAccount: this.githubAccount,
         hasRemote: this.gitRemotes.length > 0,
-        githubRemote: found?.remote ?? null,
-        githubRepo: found?.ref ?? null,
-        githubBusy: this.githubBusy,
-        githubError: this.githubError,
+        githubRepo: found ? `${found.ref.owner}/${found.ref.repo}` : null,
         githubPullRequests: this.githubPullRequests,
         githubPrLoading: this.githubPrLoading,
-        currentBranch: this.gitStatus?.branch ?? null,
+        generatingMessage: this.versionGeneratingMessage,
       },
       {
         onInit: () => void this.enableVersionHistory(),
+        onViewChange: (view) => {
+          this.versionView = view;
+          this.render();
+        },
+        onFilterChange: (filter) => {
+          this.versionFilter = filter;
+          this.render();
+        },
+        onSelectChange: (path) => this.selectVersionChange(path),
+        onOpenChanges: () =>
+          this.openVersionChanges(
+            this.versionSelectedPath ?? entries[0]?.path,
+          ),
+        onToggleStage: (path) => void this.toggleVersionStage(path),
+        onStagePaths: (paths) => void this.stageVersionPaths(paths, true),
+        onUnstagePaths: (paths) => void this.stageVersionPaths(paths, false),
+        onStageAll: () => void this.stageAllVersions(),
+        onUnstageAll: () => void this.unstageAllVersions(),
+        onDiscardChange: (path) => this.requestDiscardPath(path),
         onCommitMessageChange: (value) => {
           this.gitCommitMessage = value;
         },
-        onSaveVersion: () => void this.saveVersion(),
-        onOpenChange: (path) => void this.openChangeDiff(path),
-        onDiscardChange: (path) => this.requestDiscardPath(path),
+        onSaveVersion: (stageAll) => void this.saveVersion(stageAll),
+        onGenerateMessage: () => void this.generateVersionMessage(),
         onToggleCommit: (id) => void this.toggleCommit(id),
         onRestoreFile: (commitId, path) =>
           this.requestRestoreFromCommit(commitId, path),
@@ -4474,17 +5016,74 @@ class BradbitApp {
         onOpenSettings: () => {
           this.openSettingsModal();
         },
+        onBranchMenu: (event) => this.showVersionBranchMenu(event),
+        onPush: () => void this.pushVersionRemote(),
+        onPublish: () => this.openPublishModal(),
         onConnectGitHub: () => this.openSettingsModal(),
-        onPublishGitHub: () => this.openPublishModal(),
-        onPushGitHub: () => void this.pushToGitHub(),
-        onPullGitHub: () => void this.pullFromGitHub(),
-        onCreatePullRequest: () => void this.openPullRequestModal(),
+        onOpenGitHubUrl: (url) => this.openGitHubUrl(url),
         onRefreshPullRequests: () => {
           void this.refreshGitHubPullRequests().then(() => this.render());
         },
-        onOpenGitHubUrl: (url) => this.openGitHubUrl(url),
+        onOpenPullRequest: (url) => this.openGitHubUrl(url),
       },
     );
+  }
+
+  private renderVersionChanges(lang: AppSettings["language"]): HTMLElement {
+    const entries = this.gitStatus?.entries ?? [];
+    return createVersionChangesView(
+      {
+        language: lang,
+        entries,
+        stats: this.versionStats,
+        diffs: this.versionDiffs,
+        expanded: this.versionExpanded,
+        selectedPath: this.versionSelectedPath,
+        busy: this.gitBusy,
+      },
+      {
+        onToggleFile: (path) => this.toggleVersionChange(path),
+        onSelectFile: (path) => this.selectVersionChange(path),
+        onToggleStage: (path) => void this.toggleVersionStage(path),
+        onStageSelected: () => {
+          if (this.versionSelectedPath) {
+            void this.stageVersionPaths([this.versionSelectedPath], true);
+          }
+        },
+        onUnstageSelected: () => {
+          if (this.versionSelectedPath) {
+            void this.stageVersionPaths([this.versionSelectedPath], false);
+          }
+        },
+        onStageAll: () => void this.stageAllVersions(),
+        onOpenFile: (path) => {
+          this.versionOpen = false;
+          this.render();
+          void this.openFileFromTree(path, true);
+        },
+        onExpandAll: () => {
+          for (const entry of entries) this.versionExpanded.add(entry.path);
+          this.renderVersionPreservingScroll();
+          void this.loadExpandedVersionDiffs();
+        },
+        onCollapseAll: () => {
+          this.versionExpanded.clear();
+          this.renderVersionPreservingScroll();
+        },
+        onFocusComposer: () => this.focusVersionComposer(),
+      },
+    );
+  }
+
+  private async loadExpandedVersionDiffs(): Promise<void> {
+    const pending = [...this.versionExpanded].filter(
+      (path) => !this.versionDiffs[path],
+    );
+    if (pending.length === 0) return;
+    await Promise.all(
+      pending.map((path) => this.loadVersionDiff(path, false)),
+    );
+    this.renderVersionPreservingScroll();
   }
 
   private async openChangeDiff(path: string): Promise<void> {
@@ -4637,10 +5236,41 @@ class BradbitApp {
     const col = document.createElement("section");
     col.className = "editor-column";
 
-    if (this.tabState.tabs.length > 0) {
+    if (this.tabState.tabs.length > 0 || this.versionOpen) {
       const tabsBar = document.createElement("div");
       tabsBar.className = "tabs-bar";
       const gitBadges = buildGitBadgeMap(this.gitStatus?.entries ?? []);
+
+      if (this.versionOpen) {
+        const versionTab = document.createElement("div");
+        versionTab.className = "tab-item version-tab active";
+        versionTab.setAttribute("role", "tab");
+        versionTab.tabIndex = 0;
+        versionTab.dataset.tabPath = "__version_changes__";
+        const icon = document.createElement("span");
+        icon.className = "tab-version-icon";
+        icon.appendChild(createIcon("git-branch", 13));
+        const title = document.createElement("span");
+        title.className = "tab-title";
+        title.textContent = t(lang, "versionChangesTitle");
+        title.title = t(lang, "versionChangesTitle");
+        const count = document.createElement("span");
+        count.className = "tab-version-count";
+        count.textContent = String(this.gitStatus?.entries.length ?? 0);
+        const closeBtn = createIconButton({
+          icon: "x",
+          label: t(lang, "close"),
+          className: "tab-close-btn",
+          onClick: (event) => {
+            event.stopPropagation();
+            this.closeVersionChanges();
+          },
+        });
+        versionTab.append(icon, title, count, closeBtn);
+        versionTab.onclick = () =>
+          this.openVersionChanges(this.versionSelectedPath ?? undefined);
+        tabsBar.appendChild(versionTab);
+      }
 
       for (const tab of this.tabState.tabs) {
         const tabEl = document.createElement("div");
@@ -4648,7 +5278,7 @@ class BradbitApp {
         tabEl.setAttribute("role", "tab");
         tabEl.tabIndex = 0;
         tabEl.dataset.tabPath = tab.path;
-        if (tab.path === this.tabState.activeTabPath) {
+        if (!this.versionOpen && tab.path === this.tabState.activeTabPath) {
           tabEl.classList.add("active");
         }
         if (tab.preview) {
@@ -4692,11 +5322,13 @@ class BradbitApp {
         });
 
         tabEl.onclick = () => {
+          this.versionOpen = false;
           this.tabState = { ...this.tabState, activeTabPath: tab.path };
           this.render();
         };
 
         tabEl.ondblclick = () => {
+          this.versionOpen = false;
           this.tabState = openFileInTabs(this.tabState, tab, true);
           this.render();
         };
@@ -4716,6 +5348,14 @@ class BradbitApp {
       }
 
       col.appendChild(tabsBar);
+    }
+
+    if (this.versionOpen) {
+      const surface = document.createElement("div");
+      surface.className = "version-changes-surface";
+      surface.appendChild(this.renderVersionChanges(lang));
+      col.appendChild(surface);
+      return col;
     }
 
     const gitEntry = activeTab
