@@ -283,6 +283,38 @@ describe("settings panel (T-2.4.4)", () => {
     expect(onManageModels).toHaveBeenCalledOnce();
   });
 
+  it("offers developer Git terms only with developer options enabled", () => {
+    const onUpdateSettings = vi.fn();
+    const panel = mount(
+      options({
+        settings: { ...DEFAULT_SETTINGS, showDeveloperOptions: true },
+        initialCategory: "git",
+        onUpdateSettings,
+      }),
+    );
+    const toggle = panel.element.querySelector<HTMLInputElement>(
+      '[data-testid="settings-git-developer-terms"]',
+    )!;
+    expect(toggle).not.toBeNull();
+    toggle.checked = true;
+    toggle.dispatchEvent(new Event("change", { bubbles: true }));
+    expect(onUpdateSettings).toHaveBeenCalledWith({
+      gitDeveloperTerms: true,
+    });
+
+    const hidden = mount(
+      options({
+        settings: { ...DEFAULT_SETTINGS, showDeveloperOptions: false },
+        initialCategory: "git",
+      }),
+    );
+    expect(
+      hidden.element.querySelector(
+        '[data-testid="settings-git-developer-terms"]',
+      ),
+    ).toBeNull();
+  });
+
   it("enables GitHub connect as soon as a token is typed", () => {
     const onGithubTokenDraft = vi.fn();
     const onConnectGithub = vi.fn();

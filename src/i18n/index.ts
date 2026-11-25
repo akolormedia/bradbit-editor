@@ -457,6 +457,12 @@ export const translations = {
     versionDiffEmpty: "Sin cambios de texto.",
     versionDiffTruncated: "Diff truncado a {count} líneas.",
     versionOpenFile: "Abrir archivo",
+    versionUnstageFile: "Quitar de la versión",
+    versionUnstageFileTooltip:
+      "Quitar este archivo de la versión (git restore --staged)",
+    versionDiscardFile: "Descartar cambio",
+    versionDiscardFileTooltip:
+      "Descartar los cambios de este archivo y volver a la última versión (git restore)",
     versionExpandAll: "Expandir todo",
     versionCollapseAll: "Contraer todo",
     versionChangesTitle: "Cambios sin guardar",
@@ -487,6 +493,9 @@ export const translations = {
     gitAuthorEmail: "Correo de autor",
     gitAuthorHint: "Se usa para firmar las versiones que guardes.",
     gitAuthorSaved: "Autor actualizado",
+    gitDeveloperTerms: "Usar lenguaje de Git en Versiones",
+    gitDeveloperTermsHint:
+      "Muestra Stage, Unstage, Commit, Fetch, Pull y Push en el panel de versiones. Solo aparece en modo desarrollador.",
     gitAuthorInvalid: "Escribe un nombre y un correo válido",
     githubSectionTitle: "GitHub",
     githubAccountSection: "Cuenta de GitHub",
@@ -1121,6 +1130,12 @@ export const translations = {
     versionDiffEmpty: "No text changes.",
     versionDiffTruncated: "Diff truncated to {count} lines.",
     versionOpenFile: "Open file",
+    versionUnstageFile: "Unstage file",
+    versionUnstageFileTooltip:
+      "Remove this file from the version (git restore --staged)",
+    versionDiscardFile: "Restore file",
+    versionDiscardFileTooltip:
+      "Discard this file's changes and restore the last version (git restore)",
     versionExpandAll: "Expand all",
     versionCollapseAll: "Collapse all",
     versionChangesTitle: "Uncommitted Changes",
@@ -1151,6 +1166,9 @@ export const translations = {
     gitAuthorEmail: "Author email",
     gitAuthorHint: "Used to sign the versions you save.",
     gitAuthorSaved: "Author updated",
+    gitDeveloperTerms: "Use Git terminology in Versions",
+    gitDeveloperTermsHint:
+      "Show Stage, Unstage, Commit, Fetch, Pull and Push in the versioning panel. Only visible in developer mode.",
     gitAuthorInvalid: "Enter a valid name and email",
     githubSectionTitle: "GitHub",
     githubAccountSection: "GitHub Account",

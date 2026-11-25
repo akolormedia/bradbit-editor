@@ -147,6 +147,12 @@ export const SETTINGS_ENTRIES: SettingsEntry[] = [
     labelKey: "gitAuthorEmail",
   },
   {
+    id: "gitDeveloperTerms",
+    category: "git",
+    labelKey: "gitDeveloperTerms",
+    descriptionKey: "gitDeveloperTermsHint",
+  },
+  {
     id: "githubAccount",
     category: "github",
     labelKey: "githubAccountSection",

@@ -27,6 +27,7 @@ const patch = [
 function state(overrides: Partial<VersionChangesViewState> = {}): VersionChangesViewState {
   return {
     language: "es",
+    developerTerms: false,
     entries,
     stats: {
       "guion/acto-1.fountain": {
@@ -56,6 +57,8 @@ function handlers(): VersionChangesViewHandlers {
     onUnstageSelected: vi.fn(),
     onStageAll: vi.fn(),
     onOpenFile: vi.fn(),
+    onUnstageFile: vi.fn(),
+    onDiscardFile: vi.fn(),
     onExpandAll: vi.fn(),
     onCollapseAll: vi.fn(),
     onFocusComposer: vi.fn(),
@@ -99,6 +102,17 @@ describe("version changes view (T-3.11.3)", () => {
       )!
       .click();
     expect(calls.onOpenFile).toHaveBeenCalledWith("guion/acto-1.fountain");
+  });
+
+  it("shows file actions on changed lines", () => {
+    const calls = handlers();
+    const root = createVersionChangesView(state(), calls);
+    const buttons = root.querySelectorAll<HTMLButtonElement>(
+      ".version-diff-action-btn",
+    );
+    expect(buttons.length).toBeGreaterThan(0);
+    buttons[0].click();
+    expect(calls.onUnstageFile).toHaveBeenCalledWith("guion/acto-1.fountain");
   });
 
   it("stages the selected file and focuses the composer", () => {

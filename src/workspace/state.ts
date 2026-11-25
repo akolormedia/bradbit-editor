@@ -10,6 +10,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   fountainAutocomplete: true,
   showConfigFiles: false,
   showDeveloperOptions: false,
+  gitDeveloperTerms: false,
   gitAuthorName: "",
   gitAuthorEmail: "",
   hiddenModels: [],

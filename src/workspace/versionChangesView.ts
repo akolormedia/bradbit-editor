@@ -1,4 +1,4 @@
-import { changeBadge, changeLabel, entryKind } from "../git/versions";
+import { entryKind } from "../git/versions";
 import { t } from "../i18n";
 import { GitFileChange, GitStatusEntry, Language } from "../types";
 import { createIcon } from "../ui/icons";
@@ -11,6 +11,11 @@ import {
   versionTotals,
 } from "./versionChanges";
 import { parseVersionDiff, VersionDiffLine } from "./versionDiff";
+import {
+  createVersionStatus,
+  versionChangeLabel,
+} from "./versionStatus";
+import { versionTerm } from "./versionTerms";
 
 export type VersionDiffState =
   | { status: "loading" }
@@ -19,6 +24,7 @@ export type VersionDiffState =
 
 export interface VersionChangesViewState {
   language: Language;
+  developerTerms: boolean;
   entries: GitStatusEntry[];
   stats: Record<string, GitFileChange>;
   diffs: Record<string, VersionDiffState | undefined>;
@@ -35,6 +41,8 @@ export interface VersionChangesViewHandlers {
   onUnstageSelected: () => void;
   onStageAll: () => void;
   onOpenFile: (path: string) => void;
+  onUnstageFile: (path: string) => void;
+  onDiscardFile: (path: string) => void;
   onExpandAll: () => void;
   onCollapseAll: () => void;
   onFocusComposer: () => void;
@@ -66,15 +74,15 @@ function renderToolbar(
   layouts.append(
     createIconButton({
       icon: "chevron-down",
-      label: t(state.language, "versionExpandAll"),
-      title: t(state.language, "versionExpandAll"),
+      label: versionTerm(state.language, state.developerTerms, "versionExpandAll"),
+      title: versionTerm(state.language, state.developerTerms, "versionExpandAll"),
       className: "version-tool-btn",
       onClick: () => handlers.onExpandAll(),
     }),
     createIconButton({
       icon: "chevron-up",
-      label: t(state.language, "versionCollapseAll"),
-      title: t(state.language, "versionCollapseAll"),
+      label: versionTerm(state.language, state.developerTerms, "versionCollapseAll"),
+      title: versionTerm(state.language, state.developerTerms, "versionCollapseAll"),
       className: "version-tool-btn",
       onClick: () => handlers.onCollapseAll(),
     }),
@@ -101,8 +109,8 @@ function renderToolbar(
   stage.type = "button";
   stage.className = "version-stage-btn";
   stage.dataset.testid = "version-stage-selected";
-  stage.textContent = t(state.language, "versionStageAction");
-  stage.title = t(state.language, "versionStageTooltip");
+  stage.textContent = versionTerm(state.language, state.developerTerms, "versionStageAction");
+  stage.title = versionTerm(state.language, state.developerTerms, "versionStageTooltip");
   stage.disabled = state.busy || !selectedEntry || selectedStaged;
   stage.onclick = () => handlers.onStageSelected();
 
@@ -110,8 +118,8 @@ function renderToolbar(
   unstage.type = "button";
   unstage.className = "version-stage-btn";
   unstage.dataset.testid = "version-unstage-selected";
-  unstage.textContent = t(state.language, "versionUnstageAction");
-  unstage.title = t(state.language, "versionUnstageTooltip");
+  unstage.textContent = versionTerm(state.language, state.developerTerms, "versionUnstageAction");
+  unstage.title = versionTerm(state.language, state.developerTerms, "versionUnstageTooltip");
   unstage.disabled = state.busy || !selectedEntry || !selectedStaged;
   unstage.onclick = () => handlers.onUnstageSelected();
 
@@ -119,7 +127,7 @@ function renderToolbar(
   stageAll.type = "button";
   stageAll.className = "version-stage-btn";
   stageAll.dataset.testid = "version-stage-all-view";
-  stageAll.textContent = t(state.language, "versionStageAll");
+  stageAll.textContent = versionTerm(state.language, state.developerTerms, "versionStageAll");
   stageAll.disabled = state.busy || state.entries.length === 0;
   stageAll.onclick = () => handlers.onStageAll();
 
@@ -127,7 +135,7 @@ function renderToolbar(
   save.type = "button";
   save.className = "version-save-view-btn";
   save.dataset.testid = "version-focus-composer";
-  save.textContent = t(state.language, "versionsSave");
+  save.textContent = versionTerm(state.language, state.developerTerms, "versionsSave");
   save.disabled = state.busy;
   save.onclick = () => handlers.onFocusComposer();
 
@@ -148,7 +156,7 @@ function renderFiles(
     empty.className = "version-changes-empty";
     empty.appendChild(createIcon("check", 24));
     const text = document.createElement("p");
-    text.textContent = t(state.language, "versionsNoChanges");
+    text.textContent = versionTerm(state.language, state.developerTerms, "versionsNoChanges");
     empty.appendChild(text);
     list.appendChild(empty);
     return list;
@@ -202,21 +210,22 @@ function renderFileCard(
   checkbox.checked = staged;
   checkbox.disabled = state.busy;
   checkbox.title = staged
-    ? t(state.language, "versionUnstageTooltip")
-    : t(state.language, "versionStageTooltip");
+    ? versionTerm(state.language, state.developerTerms, "versionUnstageTooltip")
+    : versionTerm(state.language, state.developerTerms, "versionStageTooltip");
   checkbox.setAttribute(
     "aria-label",
     staged
-      ? t(state.language, "versionUnstageAction")
-      : t(state.language, "versionStageAction"),
+      ? versionTerm(state.language, state.developerTerms, "versionUnstageAction")
+      : versionTerm(state.language, state.developerTerms, "versionStageAction"),
   );
   checkbox.onclick = (event) => event.stopPropagation();
   checkbox.onchange = () => handlers.onToggleStage(entry.path);
 
-  const badge = document.createElement("span");
-  badge.className = `tree-git-badge git-badge-${kind === "copied" ? "renamed" : kind}`;
-  badge.textContent = changeBadge(kind);
-  badge.title = changeLabel(kind, state.language);
+  const badge = createVersionStatus(
+    kind,
+    state.language,
+    state.developerTerms,
+  );
 
   const name = document.createElement("span");
   name.className = "version-file-name";
@@ -228,7 +237,11 @@ function renderFileCard(
 
   const label = document.createElement("span");
   label.className = "version-file-label";
-  label.textContent = changeLabel(kind, state.language);
+  label.textContent = versionChangeLabel(
+    kind,
+    state.language,
+    state.developerTerms,
+  );
 
   const stat = state.stats[entry.path];
   const stats = document.createElement("span");
@@ -247,26 +260,46 @@ function renderFileCard(
   open.type = "button";
   open.className = "version-open-file";
   open.dataset.testid = `version-open-${entry.path}`;
-  open.textContent = t(state.language, "versionOpenFile");
-  open.title = t(state.language, "versionOpenFile");
+  open.textContent = versionTerm(state.language, state.developerTerms, "versionOpenFile");
+  open.title = versionTerm(state.language, state.developerTerms, "versionOpenFile");
   open.onclick = (event) => {
     event.stopPropagation();
     handlers.onOpenFile(entry.path);
   };
 
   header.append(toggle, checkbox, badge, name, dir, label, stats);
-  if (kind !== "deleted") header.appendChild(open);
+  if (kind === "deleted") {
+    open.classList.add("hidden");
+    open.tabIndex = -1;
+    open.setAttribute("aria-hidden", "true");
+  }
+  header.appendChild(open);
   card.appendChild(header);
 
   if (expanded) {
-    card.appendChild(renderDiff(state, entry));
+    const staged = isEntryStaged(entry);
+    const worktreeChanged =
+      entry.worktree !== "unmodified" || entry.index === "untracked";
+    card.appendChild(
+      renderDiff(state, entry, handlers, {
+        unstage: staged,
+        discard: worktreeChanged,
+      }),
+    );
   }
   return card;
+}
+
+interface DiffLineActions {
+  unstage: boolean;
+  discard: boolean;
 }
 
 function renderDiff(
   state: VersionChangesViewState,
   entry: GitStatusEntry,
+  handlers: VersionChangesViewHandlers,
+  actions: DiffLineActions,
 ): HTMLElement {
   const container = document.createElement("div");
   container.className = "version-diff";
@@ -275,7 +308,7 @@ function renderDiff(
   if (!diff || diff.status === "loading") {
     const loading = document.createElement("div");
     loading.className = "version-diff-note";
-    loading.textContent = t(state.language, "versionDiffLoading");
+    loading.textContent = versionTerm(state.language, state.developerTerms, "versionDiffLoading");
     container.appendChild(loading);
     return container;
   }
@@ -292,7 +325,7 @@ function renderDiff(
   if (parsed.binary) {
     const note = document.createElement("div");
     note.className = "version-diff-note";
-    note.textContent = t(state.language, "versionDiffBinary");
+    note.textContent = versionTerm(state.language, state.developerTerms, "versionDiffBinary");
     container.appendChild(note);
     return container;
   }
@@ -300,7 +333,7 @@ function renderDiff(
   if (parsed.empty || parsed.hunks.length === 0) {
     const note = document.createElement("div");
     note.className = "version-diff-note";
-    note.textContent = t(state.language, "versionDiffEmpty");
+    note.textContent = versionTerm(state.language, state.developerTerms, "versionDiffEmpty");
     container.appendChild(note);
     return container;
   }
@@ -317,18 +350,31 @@ function renderDiff(
       if (rendered >= MAX_DIFF_LINES) {
         const note = document.createElement("div");
         note.className = "version-diff-note";
-        note.textContent = `${t(state.language, "versionDiffTruncated")} (${MAX_DIFF_LINES})`;
+        note.textContent = versionTerm(
+          state.language,
+          state.developerTerms,
+          "versionDiffTruncated",
+          { count: String(MAX_DIFF_LINES) },
+        );
         container.appendChild(note);
         return container;
       }
-      container.appendChild(renderDiffLine(line));
+      container.appendChild(
+        renderDiffLine(line, entry, handlers, actions, state.language),
+      );
       rendered += 1;
     }
   }
   return container;
 }
 
-function renderDiffLine(line: VersionDiffLine): HTMLElement {
+function renderDiffLine(
+  line: VersionDiffLine,
+  entry: GitStatusEntry,
+  handlers: VersionChangesViewHandlers,
+  actions: DiffLineActions,
+  language: Language,
+): HTMLElement {
   const row = document.createElement("div");
   row.className = `version-diff-line version-diff-${line.kind}`;
   if (line.kind === "meta") {
@@ -353,8 +399,78 @@ function renderDiffLine(line: VersionDiffLine): HTMLElement {
   text.className = "version-diff-text";
   text.textContent = line.text.length > 0 ? line.text : " ";
 
-  row.append(oldNumber, newNumber, marker, text);
+  row.append(oldNumber, newNumber, marker);
+  if (line.kind === "added" || line.kind === "removed") {
+    row.appendChild(renderLineActions(entry, handlers, actions, language));
+  } else {
+    row.appendChild(emptyLineAction(actions));
+  }
+  row.appendChild(text);
   return row;
+}
+
+function actionWidth(actions: DiffLineActions): number {
+  const count = Number(actions.unstage) + Number(actions.discard);
+  return count === 0 ? 0 : count * 18 + (count - 1) * 2;
+}
+
+function emptyLineAction(actions: DiffLineActions): HTMLElement {
+  const spacer = document.createElement("span");
+  spacer.className = "version-diff-action";
+  spacer.style.width = `${actionWidth(actions)}px`;
+  return spacer;
+}
+
+function renderLineActions(
+  entry: GitStatusEntry,
+  handlers: VersionChangesViewHandlers,
+  actions: DiffLineActions,
+  language: Language,
+): HTMLElement {
+  const holder = document.createElement("span");
+  holder.className = "version-diff-action";
+  holder.style.width = `${actionWidth(actions)}px`;
+
+  if (actions.unstage) {
+    holder.appendChild(
+      lineActionButton(
+        "x",
+        t(language, "versionUnstageFile"),
+        t(language, "versionUnstageFileTooltip"),
+        () => handlers.onUnstageFile(entry.path),
+      ),
+    );
+  }
+  if (actions.discard) {
+    holder.appendChild(
+      lineActionButton(
+        "rotate-ccw",
+        t(language, "versionDiscardFile"),
+        t(language, "versionDiscardFileTooltip"),
+        () => handlers.onDiscardFile(entry.path),
+      ),
+    );
+  }
+  return holder;
+}
+
+function lineActionButton(
+  icon: "x" | "rotate-ccw",
+  label: string,
+  title: string,
+  onClick: () => void,
+): HTMLButtonElement {
+  const button = document.createElement("button");
+  button.type = "button";
+  button.className = "version-diff-action-btn";
+  button.title = title;
+  button.setAttribute("aria-label", label);
+  button.appendChild(createIcon(icon, 11));
+  button.onclick = (event) => {
+    event.stopPropagation();
+    onClick();
+  };
+  return button;
 }
 
 function statSpan(kind: "added" | "removed", text: string): HTMLElement {

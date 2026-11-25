@@ -15,6 +15,7 @@ const entries: GitStatusEntry[] = [
 function state(overrides: Partial<VersionSidebarState> = {}): VersionSidebarState {
   return {
     language: "es",
+    developerTerms: false,
     view: "changes",
     filter: "all",
     isRepository: true,

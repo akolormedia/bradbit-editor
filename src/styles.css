@@ -5540,7 +5540,8 @@ textarea.text-input {
   display: flex;
   align-items: center;
   gap: 6px;
-  padding: 4px;
+  padding: 4px 6px;
+  border: 1px solid transparent;
   color: var(--text-muted);
   font-size: 10px;
   font-weight: 650;
@@ -5614,6 +5615,12 @@ textarea.text-input {
   gap: 4px;
   font-size: 10.5px;
   font-variant-numeric: tabular-nums;
+}
+
+.version-file-stats {
+  min-width: 62px;
+  justify-content: flex-end;
+  text-align: right;
 }
 
 .version-stat-added {
@@ -5702,7 +5709,7 @@ textarea.text-input {
 }
 
 .version-behind {
-  color: var(--warning);
+  color: var(--git-modified);
 }
 
 .version-publish {
@@ -5911,6 +5918,7 @@ textarea.text-input {
   min-height: 0;
   display: flex;
   flex-direction: column;
+  overflow: hidden;
 }
 
 .version-changes-toolbar {
@@ -5967,18 +5975,25 @@ textarea.text-input {
   min-width: 0;
   min-height: 0;
   overflow-y: auto;
-  padding: 8px 10px 24px;
+  padding: 0 10px 24px;
   display: flex;
   flex-direction: column;
   gap: 8px;
 }
 
+.version-file-list > .version-file-card:first-child {
+  margin-top: 8px;
+}
+
 .version-file-card {
   min-width: 0;
+  flex-shrink: 0;
   border: 1px solid var(--border-color);
   border-radius: 7px;
   background: var(--bg-editor);
-  overflow: hidden;
+  /* `clip` keeps the rounded corners without creating a scroll container,
+     so the expanded header can stick to the list while the diff scrolls. */
+  overflow: clip;
 }
 
 .version-file-card.selected {
@@ -5986,8 +6001,12 @@ textarea.text-input {
 }
 
 .version-file-card.expanded .version-file-header {
+  position: sticky;
+  top: 0;
+  z-index: 3;
   border-bottom: 1px solid var(--border-color);
-  background: var(--bg-hover);
+  background: var(--bg-editor);
+  box-shadow: 0 1px 0 var(--border-color);
 }
 
 .version-file-header {
@@ -6066,6 +6085,11 @@ textarea.text-input {
   color: var(--text-primary);
 }
 
+.version-open-file.hidden {
+  visibility: hidden;
+  pointer-events: none;
+}
+
 .version-diff {
   min-width: 0;
   overflow-x: auto;
@@ -6077,7 +6101,7 @@ textarea.text-input {
 .version-diff-hunk-header {
   height: 3px;
   margin: 2px 0;
-  background: color-mix(in srgb, var(--warning) 55%, transparent);
+  background: color-mix(in srgb, var(--git-modified) 55%, transparent);
 }
 
 .version-diff-line {
@@ -6158,4 +6182,77 @@ textarea.text-input {
   display: flex;
   flex-direction: column;
   gap: 8px;
+}
+
+/* Outlined change marks for the versioning workspace. */
+.version-status {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 16px;
+  height: 16px;
+  border: 1px solid currentColor;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--text-muted);
+}
+
+.version-status svg {
+  width: 10px;
+  height: 10px;
+}
+
+.version-status-added {
+  color: var(--git-added);
+}
+
+.version-status-deleted,
+.version-status-conflicted {
+  color: var(--git-deleted);
+}
+
+.version-status-modified {
+  color: var(--git-modified);
+}
+
+.version-status-renamed,
+.version-status-copied {
+  color: var(--accent);
+}
+
+
+/* File-level actions surfaced while hovering a changed diff line. */
+.version-diff-action {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  gap: 2px;
+  padding: 0 2px;
+  opacity: 0;
+}
+
+.version-diff-line:hover .version-diff-action,
+.version-diff-line:focus-within .version-diff-action {
+  opacity: 1;
+}
+
+.version-diff-action-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  padding: 0;
+  border: 1px solid var(--border-color);
+  border-radius: 3px;
+  background: var(--bg-sidebar);
+  color: var(--text-secondary);
+  cursor: pointer;
+}
+
+.version-diff-action-btn:hover {
+  border-color: var(--text-muted);
+  color: var(--text-primary);
+  background: var(--bg-hover);
 }

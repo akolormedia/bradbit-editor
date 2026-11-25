@@ -3,7 +3,7 @@ import { BradbitCodeMirror } from "./editor/codemirror";
 import { BradbitDiffView, DiffViewMode } from "./editor/diff";
 import { renderMarkdownPreview } from "./editor/preview";
 import { renderFountainPreview } from "./editor/fountainPreview";
-import { t } from "./i18n";
+import { t, TranslationKey } from "./i18n";
 import {
   AppSettings,
   ByokProviderKind,
@@ -62,6 +62,7 @@ import {
   isEntryStaged,
   VersionFilter,
 } from "./workspace/versionChanges";
+import { versionTerm } from "./workspace/versionTerms";
 import { ChatPanel } from "./session/chatPanel";
 import {
   appendUserMessage,
@@ -972,6 +973,7 @@ class BradbitApp {
         : entries[0]?.path);
     if (selection) {
       this.versionSelectedPath = selection;
+      this.versionExpanded.clear();
       this.versionExpanded.add(selection);
     }
     this.renderVersionPreservingScroll();
@@ -997,6 +999,7 @@ class BradbitApp {
     this.sidebarVisible = true;
     this.sidebarTab = "versions";
     this.versionSelectedPath = path;
+    this.versionExpanded.clear();
     this.versionExpanded.add(path);
     this.renderVersionPreservingScroll();
     this.scrollVersionCardIntoView(path);
@@ -1005,8 +1008,12 @@ class BradbitApp {
 
   private toggleVersionChange(path: string): void {
     const expanded = this.versionExpanded.has(path);
-    if (expanded) this.versionExpanded.delete(path);
-    else this.versionExpanded.add(path);
+    if (expanded) {
+      this.versionExpanded.delete(path);
+    } else {
+      this.versionExpanded.clear();
+      this.versionExpanded.add(path);
+    }
     this.versionSelectedPath = path;
     this.versionOpen = true;
     this.editorVisible = true;
@@ -1079,7 +1086,7 @@ class BradbitApp {
     await this.refreshByokStatus();
     let provider = this.byokStatus.find((item) => item.hasKey);
     if (!provider) {
-      this.statusNotice = t(lang, "versionGenerateUnavailable");
+      this.statusNotice = this.versionLabel("versionGenerateUnavailable");
       this.openSettingsModal();
       return;
     }
@@ -1105,7 +1112,7 @@ class BradbitApp {
       provider.model ||
       "";
     if (!model) {
-      this.gitPanelError = t(lang, "versionGenerateNoModel");
+      this.gitPanelError = this.versionLabel("versionGenerateNoModel");
       this.renderVersionPreservingScroll();
       return;
     }
@@ -1122,7 +1129,7 @@ class BradbitApp {
         .replace(/\s*```$/, "")
         .trim();
     } catch (err) {
-      this.gitPanelError = `${t(lang, "versionGenerateError")} ${
+      this.gitPanelError = `${this.versionLabel("versionGenerateError")} ${
         err instanceof Error ? err.message : String(err)
       }`;
     } finally {
@@ -1172,6 +1179,18 @@ class BradbitApp {
     input?.focus({ preventScroll: true });
   }
 
+  private versionLabel(
+    key: TranslationKey,
+    vars?: Record<string, string>,
+  ): string {
+    return versionTerm(
+      this.settings.language,
+      this.settings.gitDeveloperTerms && this.settings.showDeveloperOptions,
+      key,
+      vars,
+    );
+  }
+
   private primaryRemoteName(): string | null {
     return (
       this.foundGitHubRemote()?.remote.name ??
@@ -1190,7 +1209,7 @@ class BradbitApp {
     const items: ContextMenuItem[] = [
       {
         id: "version-fetch",
-        label: t(lang, "versionFetch"),
+        label: this.versionLabel("versionFetch"),
         icon: "arrow-down",
         shortcut: "git fetch",
         disabled: !remote,
@@ -1199,14 +1218,14 @@ class BradbitApp {
       ...otherRemotes.map(
         (name): ContextMenuItem => ({
           id: `version-fetch-${name}`,
-          label: `${t(lang, "versionFetchFrom")} ${name}`,
+          label: `${this.versionLabel("versionFetchFrom")} ${name}`,
           icon: "arrow-down",
           action: () => void this.fetchVersionRemote(name),
         }),
       ),
       {
         id: "version-pull",
-        label: t(lang, "versionPull"),
+        label: this.versionLabel("versionPull"),
         icon: "arrow-down",
         shortcut: "git pull",
         disabled: !remote || !branch,
@@ -1215,7 +1234,7 @@ class BradbitApp {
       { id: "version-sync-separator", label: "", separator: true },
       {
         id: "version-push",
-        label: t(lang, "versionPush"),
+        label: this.versionLabel("versionPush"),
         icon: "arrow-up",
         shortcut: "git push",
         disabled: !remote || !branch,
@@ -1224,7 +1243,7 @@ class BradbitApp {
       ...otherRemotes.map(
         (name): ContextMenuItem => ({
           id: `version-push-${name}`,
-          label: `${t(lang, "versionPushTo")} ${name}`,
+          label: `${this.versionLabel("versionPushTo")} ${name}`,
           icon: "arrow-up",
           disabled: !branch,
           action: () => void this.pushVersionRemote(name),
@@ -1232,7 +1251,7 @@ class BradbitApp {
       ),
       {
         id: "version-publish",
-        label: t(lang, "versionPublish"),
+        label: this.versionLabel("versionPublish"),
         icon: "github",
         disabled: !this.githubTokenPresent,
         action: () => this.openPublishModal(),
@@ -1254,7 +1273,7 @@ class BradbitApp {
       { id: "version-refresh-separator", label: "", separator: true },
       {
         id: "version-refresh",
-        label: t(lang, "versionRefresh"),
+        label: this.versionLabel("versionRefresh"),
         icon: "refresh-cw",
         action: () => void this.refreshGitPanelData(),
       },
@@ -1263,7 +1282,7 @@ class BradbitApp {
       x: event.clientX,
       y: event.clientY,
       items,
-      label: t(lang, "versionBranchMenu"),
+      label: this.versionLabel("versionBranchMenu"),
     });
   }
 
@@ -1271,7 +1290,7 @@ class BradbitApp {
     if (!this.folder || this.gitBusy) return;
     const remote = remoteName ?? this.primaryRemoteName();
     if (!remote) {
-      this.statusNotice = t(this.settings.language, "versionNoRemote");
+      this.statusNotice = this.versionLabel("versionNoRemote");
       this.render();
       return;
     }
@@ -1281,7 +1300,7 @@ class BradbitApp {
       this.gitStatus = await backend.gitFetch(this.folder.rootPath, remote);
       await this.refreshGitMeta();
       await this.refreshVersionStats();
-      this.statusNotice = t(this.settings.language, "versionFetchDone");
+      this.statusNotice = this.versionLabel("versionFetchDone");
     } catch (err) {
       this.gitPanelError = err instanceof Error ? err.message : String(err);
     } finally {
@@ -1295,7 +1314,7 @@ class BradbitApp {
     const remote = this.primaryRemoteName();
     const branch = this.gitStatus?.branch;
     if (!remote || !branch) {
-      this.statusNotice = t(this.settings.language, "versionNoRemote");
+      this.statusNotice = this.versionLabel("versionNoRemote");
       this.render();
       return;
     }
@@ -1310,7 +1329,7 @@ class BradbitApp {
       this.versionDiffs = {};
       await this.refreshAfterGitOperation();
       await this.refreshVersionStats();
-      this.statusNotice = t(this.settings.language, "versionPullDone");
+      this.statusNotice = this.versionLabel("versionPullDone");
     } catch (err) {
       this.gitPanelError = err instanceof Error ? err.message : String(err);
     } finally {
@@ -1324,7 +1343,7 @@ class BradbitApp {
     const remote = remoteName ?? this.primaryRemoteName();
     const branch = this.gitStatus?.branch;
     if (!remote || !branch) {
-      this.statusNotice = t(this.settings.language, "versionNoRemote");
+      this.statusNotice = this.versionLabel("versionNoRemote");
       this.render();
       return;
     }
@@ -1338,7 +1357,7 @@ class BradbitApp {
       );
       await this.refreshTree();
       await this.refreshGitMeta();
-      this.statusNotice = t(this.settings.language, "versionPushDone");
+      this.statusNotice = this.versionLabel("versionPushDone");
     } catch (err) {
       this.gitPanelError = err instanceof Error ? err.message : String(err);
     } finally {
@@ -1380,10 +1399,7 @@ class BradbitApp {
     const { name, email } = effectiveGitAuthor(this.settings);
     const message = this.gitCommitMessage.trim();
     if (!message) {
-      this.gitPanelError = t(
-        this.settings.language,
-        "versionMessageRequired",
-      );
+      this.gitPanelError = this.versionLabel("versionMessageRequired");
       this.render();
       return;
     }
@@ -1408,7 +1424,7 @@ class BradbitApp {
       await this.refreshTree();
       await this.refreshGitMeta();
       await this.refreshVersionStats();
-      this.statusNotice = t(this.settings.language, "versionsSaved");
+      this.statusNotice = this.versionLabel("versionsSaved");
     } catch (err) {
       this.gitPanelError = err instanceof Error ? err.message : String(err);
     } finally {
@@ -4953,6 +4969,9 @@ class BradbitApp {
     return createVersionSidebar(
       {
         language: lang,
+        developerTerms:
+          this.settings.gitDeveloperTerms &&
+          this.settings.showDeveloperOptions,
         view: this.versionView,
         filter: this.versionFilter,
         isRepository: Boolean(this.gitStatus?.isRepository),
@@ -5034,6 +5053,9 @@ class BradbitApp {
     return createVersionChangesView(
       {
         language: lang,
+        developerTerms:
+          this.settings.gitDeveloperTerms &&
+          this.settings.showDeveloperOptions,
         entries,
         stats: this.versionStats,
         diffs: this.versionDiffs,
@@ -5061,6 +5083,8 @@ class BradbitApp {
           this.render();
           void this.openFileFromTree(path, true);
         },
+        onUnstageFile: (path) => void this.stageVersionPaths([path], false),
+        onDiscardFile: (path) => this.requestDiscardPath(path),
         onExpandAll: () => {
           for (const entry of entries) this.versionExpanded.add(entry.path);
           this.renderVersionPreservingScroll();
@@ -5252,8 +5276,8 @@ class BradbitApp {
         icon.appendChild(createIcon("git-branch", 13));
         const title = document.createElement("span");
         title.className = "tab-title";
-        title.textContent = t(lang, "versionChangesTitle");
-        title.title = t(lang, "versionChangesTitle");
+        title.textContent = this.versionLabel("versionChangesTitle");
+        title.title = this.versionLabel("versionChangesTitle");
         const count = document.createElement("span");
         count.className = "tab-version-count";
         count.textContent = String(this.gitStatus?.entries.length ?? 0);

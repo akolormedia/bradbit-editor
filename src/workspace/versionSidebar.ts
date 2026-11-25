@@ -1,8 +1,4 @@
-import {
-  changeBadge,
-  changeLabel,
-  entryKind,
-} from "../git/versions";
+import { entryKind } from "../git/versions";
 import { t } from "../i18n";
 import {
   GitBranch,
@@ -18,6 +14,11 @@ import { createIcon } from "../ui/icons";
 import { createIconButton } from "../ui/iconButton";
 import { createVersionHistoryPanel } from "./versionHistoryPanel";
 import {
+  createVersionStatus,
+  versionChangeLabel,
+} from "./versionStatus";
+import { versionTerm } from "./versionTerms";
+import {
   filterVersionEntries,
   formatVersionCount,
   groupVersionEntries,
@@ -32,6 +33,7 @@ export type VersionSidebarView = "changes" | "history";
 
 export interface VersionSidebarState {
   language: Language;
+  developerTerms: boolean;
   view: VersionSidebarView;
   filter: VersionFilter;
   isRepository: boolean;
@@ -88,10 +90,6 @@ export interface VersionSidebarHandlers {
   onOpenPullRequest: (url: string) => void;
 }
 
-function changeClass(kind: ReturnType<typeof entryKind>): string {
-  return kind === "copied" ? "renamed" : kind;
-}
-
 /**
  * Left rail of the versioning workspace: Changes/History, file staging with
  * line counts, branch sync and the pinned version composer.
@@ -124,13 +122,13 @@ function renderEnableState(
   const section = document.createElement("section");
   section.className = "versions-enable";
   const title = document.createElement("h4");
-  title.textContent = t(state.language, "versionsEnableTitle");
+  title.textContent = versionTerm(state.language, state.developerTerms, "versionsEnableTitle");
   const hint = document.createElement("p");
-  hint.textContent = t(state.language, "versionsEnableHint");
+  hint.textContent = versionTerm(state.language, state.developerTerms, "versionsEnableHint");
   const button = document.createElement("button");
   button.className = "toolbar-btn primary";
   button.dataset.testid = "enable-versions-btn";
-  button.textContent = t(state.language, "versionsEnableAction");
+  button.textContent = versionTerm(state.language, state.developerTerms, "versionsEnableAction");
   button.disabled = state.busy;
   button.onclick = () => handlers.onInit();
   section.append(title, hint, button);
@@ -149,9 +147,9 @@ function renderViewTabs(
   const items: Array<{ id: VersionSidebarView; label: string }> = [
     {
       id: "changes",
-      label: `${t(state.language, "versionChangesTab")} (${counts})`,
+      label: `${versionTerm(state.language, state.developerTerms, "versionChangesTab")} (${counts})`,
     },
-    { id: "history", label: t(state.language, "versionHistoryTab") },
+    { id: "history", label: versionTerm(state.language, state.developerTerms, "versionHistoryTab") },
   ];
 
   for (const item of items) {
@@ -205,11 +203,11 @@ function renderChangesHeader(
   const filter = document.createElement("select");
   filter.className = "version-filter";
   filter.dataset.testid = "version-filter";
-  filter.setAttribute("aria-label", t(state.language, "versionFilterLabel"));
+  filter.setAttribute("aria-label", versionTerm(state.language, state.developerTerms, "versionFilterLabel"));
   const options: Array<{ value: VersionFilter; label: string }> = [
-    { value: "all", label: t(state.language, "versionFilterAll") },
-    { value: "staged", label: t(state.language, "versionFilterStaged") },
-    { value: "unstaged", label: t(state.language, "versionFilterUnstaged") },
+    { value: "all", label: versionTerm(state.language, state.developerTerms, "versionFilterAll") },
+    { value: "staged", label: versionTerm(state.language, state.developerTerms, "versionFilterStaged") },
+    { value: "unstaged", label: versionTerm(state.language, state.developerTerms, "versionFilterUnstaged") },
   ];
   for (const option of options) {
     const element = document.createElement("option");
@@ -226,9 +224,9 @@ function renderChangesHeader(
   view.type = "button";
   view.className = "version-link-btn";
   view.dataset.testid = "version-view-diff";
-  view.textContent = t(state.language, "versionViewDiff");
+  view.textContent = versionTerm(state.language, state.developerTerms, "versionViewDiff");
   view.onclick = () => handlers.onOpenChanges();
-  view.title = t(state.language, "versionViewDiff");
+  view.title = versionTerm(state.language, state.developerTerms, "versionViewDiff");
 
   const stats = document.createElement("span");
   stats.className = "version-total-stats";
@@ -248,8 +246,8 @@ function renderChangesHeader(
   stageAll.type = "button";
   stageAll.className = "version-stage-btn";
   stageAll.dataset.testid = "version-stage-all";
-  stageAll.textContent = t(state.language, "versionStageAll");
-  stageAll.title = t(state.language, "versionStageTooltip");
+  stageAll.textContent = versionTerm(state.language, state.developerTerms, "versionStageAll");
+  stageAll.title = versionTerm(state.language, state.developerTerms, "versionStageTooltip");
   stageAll.disabled = state.busy || state.entries.length === 0;
   stageAll.onclick = () => handlers.onStageAll();
 
@@ -258,8 +256,8 @@ function renderChangesHeader(
   unstageAll.type = "button";
   unstageAll.className = "version-stage-btn";
   unstageAll.dataset.testid = "version-unstage-all";
-  unstageAll.textContent = t(state.language, "versionUnstageAll");
-  unstageAll.title = t(state.language, "versionUnstageTooltip");
+  unstageAll.textContent = versionTerm(state.language, state.developerTerms, "versionUnstageAll");
+  unstageAll.title = versionTerm(state.language, state.developerTerms, "versionUnstageTooltip");
   unstageAll.disabled = state.busy || stagedCount === 0;
   unstageAll.onclick = () => handlers.onUnstageAll();
 
@@ -279,7 +277,7 @@ function renderChangeGroups(
   if (filtered.length === 0) {
     const empty = document.createElement("p");
     empty.className = "versions-muted version-empty";
-    empty.textContent = t(state.language, "versionsNoChanges");
+    empty.textContent = versionTerm(state.language, state.developerTerms, "versionsNoChanges");
     fragment.appendChild(empty);
     return fragment;
   }
@@ -289,7 +287,7 @@ function renderChangeGroups(
       renderGroup(
         state,
         handlers,
-        t(state.language, "versionTrackedGroup"),
+        versionTerm(state.language, state.developerTerms, "versionTrackedGroup"),
         groups.tracked,
         "tracked",
       ),
@@ -300,7 +298,7 @@ function renderChangeGroups(
       renderGroup(
         state,
         handlers,
-        t(state.language, "versionUntrackedGroup"),
+        versionTerm(state.language, state.developerTerms, "versionUntrackedGroup"),
         groups.untracked,
         "untracked",
       ),
@@ -339,8 +337,8 @@ function renderGroup(
   checkbox.setAttribute(
     "aria-label",
     staged.length === entries.length
-      ? t(state.language, "versionUnstageAll")
-      : t(state.language, "versionStageAll"),
+      ? versionTerm(state.language, state.developerTerms, "versionUnstageAll")
+      : versionTerm(state.language, state.developerTerms, "versionStageAll"),
   );
   checkbox.onclick = (event) => event.stopPropagation();
   checkbox.onchange = () => {
@@ -372,10 +370,11 @@ function renderChangeRow(
   row.tabIndex = 0;
   row.title = entry.path;
 
-  const badge = document.createElement("span");
-  badge.className = `tree-git-badge git-badge-${changeClass(kind)}`;
-  badge.textContent = changeBadge(kind);
-  badge.title = changeLabel(kind, state.language);
+  const badge = createVersionStatus(
+    kind,
+    state.language,
+    state.developerTerms,
+  );
 
   const name = document.createElement("span");
   name.className = "version-change-name";
@@ -387,7 +386,11 @@ function renderChangeRow(
 
   const label = document.createElement("span");
   label.className = "version-change-label";
-  label.textContent = changeLabel(kind, state.language);
+  label.textContent = versionChangeLabel(
+    kind,
+    state.language,
+    state.developerTerms,
+  );
 
   const stat = state.stats[entry.path];
   const stats = document.createElement("span");
@@ -410,13 +413,13 @@ function renderChangeRow(
   checkbox.disabled = state.busy;
   checkbox.dataset.stagePath = entry.path;
   checkbox.title = staged
-    ? t(state.language, "versionUnstageTooltip")
-    : t(state.language, "versionStageTooltip");
+    ? versionTerm(state.language, state.developerTerms, "versionUnstageTooltip")
+    : versionTerm(state.language, state.developerTerms, "versionStageTooltip");
   checkbox.setAttribute(
     "aria-label",
     staged
-      ? t(state.language, "versionUnstageAction")
-      : t(state.language, "versionStageAction"),
+      ? versionTerm(state.language, state.developerTerms, "versionUnstageAction")
+      : versionTerm(state.language, state.developerTerms, "versionStageAction"),
   );
   checkbox.onclick = (event) => event.stopPropagation();
   checkbox.onchange = () => handlers.onToggleStage(entry.path);
@@ -431,7 +434,7 @@ function renderChangeRow(
     },
   });
 
-  row.append(badge, name, dir, label, stats, checkbox, discard);
+  row.append(badge, name, dir, label, stats, discard, checkbox);
   row.onclick = () => handlers.onSelectChange(entry.path);
   row.onkeydown = (event) => {
     if (event.key === "Enter" || event.key === " ") {
@@ -470,7 +473,7 @@ function renderBranchRow(
     counters.appendChild(
       spanWith(
         "version-ahead",
-        t(state.language, "versionAhead", { count: String(state.ahead) }),
+        versionTerm(state.language, state.developerTerms, "versionAhead", { count: String(state.ahead) }),
       ),
     );
   }
@@ -478,7 +481,7 @@ function renderBranchRow(
     counters.appendChild(
       spanWith(
         "version-behind",
-        t(state.language, "versionBehind", { count: String(state.behind) }),
+        versionTerm(state.language, state.developerTerms, "versionBehind", { count: String(state.behind) }),
       ),
     );
   }
@@ -490,9 +493,9 @@ function renderBranchRow(
   primary.className = "version-publish-primary";
   primary.dataset.testid = "version-publish";
   primary.textContent = state.hasRemote
-    ? t(state.language, "versionPush")
-    : t(state.language, "versionPublish");
-  primary.title = state.hasRemote ? "git push" : t(state.language, "versionPublish");
+    ? versionTerm(state.language, state.developerTerms, "versionPush")
+    : versionTerm(state.language, state.developerTerms, "versionPublish");
+  primary.title = state.hasRemote ? "git push" : versionTerm(state.language, state.developerTerms, "versionPublish");
   primary.disabled = state.busy;
   primary.onclick = () => {
     if (state.hasRemote) handlers.onPush();
@@ -504,8 +507,8 @@ function renderBranchRow(
   more.type = "button";
   more.className = "version-publish-more";
   more.dataset.testid = "version-branch-menu";
-  more.setAttribute("aria-label", t(state.language, "versionBranchMenu"));
-  more.title = t(state.language, "versionBranchMenu");
+  more.setAttribute("aria-label", versionTerm(state.language, state.developerTerms, "versionBranchMenu"));
+  more.title = versionTerm(state.language, state.developerTerms, "versionBranchMenu");
   more.disabled = state.busy;
   more.appendChild(createIcon("chevron-down", 12));
   more.onclick = (event) => handlers.onBranchMenu(event);
@@ -526,18 +529,18 @@ function renderComposer(
   header.className = "version-composer-header";
   const label = document.createElement("span");
   label.className = "version-composer-label";
-  label.textContent = t(state.language, "versionComposerTitle");
+  label.textContent = versionTerm(state.language, state.developerTerms, "versionComposerTitle");
 
   const expand = createIconButton({
     icon: "maximize-2",
-    label: t(state.language, "versionExpandAll"),
+    label: versionTerm(state.language, state.developerTerms, "versionExpandAll"),
     className: "tree-mini-btn",
     onClick: () => composer.classList.toggle("expanded"),
   });
 
   const sparkles = createIconButton({
     icon: "sparkles",
-    label: t(state.language, "versionGenerateMessage"),
+    label: versionTerm(state.language, state.developerTerms, "versionGenerateMessage"),
     className: "tree-mini-btn version-ai-btn",
     testId: "version-generate-message",
     disabled: state.busy || state.generatingMessage,
@@ -562,7 +565,7 @@ function renderComposer(
   input.dataset.testid = "version-message";
   input.rows = 3;
   input.value = state.commitMessage;
-  input.placeholder = t(state.language, "versionComposerPlaceholder");
+  input.placeholder = versionTerm(state.language, state.developerTerms, "versionComposerPlaceholder");
   input.disabled = state.busy || state.generatingMessage;
   input.oninput = () => {
     handlers.onCommitMessageChange(input.value);
@@ -573,12 +576,12 @@ function renderComposer(
   if (!state.authorReady) {
     const author = document.createElement("p");
     author.className = "versions-author-hint";
-    author.textContent = t(state.language, "versionsAuthorMissing");
+    author.textContent = versionTerm(state.language, state.developerTerms, "versionsAuthorMissing");
     const settings = document.createElement("button");
     settings.type = "button";
     settings.className = "versions-link-btn";
     settings.dataset.testid = "versions-open-settings";
-    settings.textContent = t(state.language, "versionsOpenSettings");
+    settings.textContent = versionTerm(state.language, state.developerTerms, "versionsOpenSettings");
     settings.onclick = () => handlers.onOpenSettings();
     author.appendChild(settings);
     composer.appendChild(author);
@@ -590,13 +593,13 @@ function renderComposer(
   const summary = document.createElement("span");
   summary.className = stagedCount > 0 ? "version-staged-count" : "versions-muted";
   summary.textContent = state.generatingMessage
-    ? t(state.language, "versionGeneratingMessage")
+    ? versionTerm(state.language, state.developerTerms, "versionGeneratingMessage")
     : stagedCount > 0
-      ? t(state.language, "versionStagedSummary", {
+      ? versionTerm(state.language, state.developerTerms, "versionStagedSummary", {
           count: String(stagedCount),
           total: String(state.entries.length),
         })
-      : t(state.language, "versionNothingStaged");
+      : versionTerm(state.language, state.developerTerms, "versionNothingStaged");
   meta.appendChild(summary);
 
   const actions = document.createElement("div");
@@ -605,7 +608,7 @@ function renderComposer(
   save.type = "button";
   save.className = "version-commit-btn";
   save.dataset.testid = "save-version-btn";
-  save.title = t(state.language, "versionCommitTooltip");
+  save.title = versionTerm(state.language, state.developerTerms, "versionCommitTooltip");
   save.disabled =
     state.busy ||
     state.generatingMessage ||
@@ -613,15 +616,15 @@ function renderComposer(
     !state.commitMessage.trim() ||
     !state.authorReady;
   save.textContent = state.busy
-    ? t(state.language, "versionsSaving")
-    : t(state.language, "versionsSave");
+    ? versionTerm(state.language, state.developerTerms, "versionsSaving")
+    : versionTerm(state.language, state.developerTerms, "versionsSave");
   save.onclick = () => handlers.onSaveVersion(false);
 
   const more = document.createElement("button");
   more.type = "button";
   more.className = "version-commit-more";
   more.dataset.testid = "save-version-more";
-  more.setAttribute("aria-label", t(state.language, "versionCommitAll"));
+  more.setAttribute("aria-label", versionTerm(state.language, state.developerTerms, "versionCommitAll"));
   more.disabled = state.busy || state.generatingMessage;
   more.appendChild(createIcon("chevron-up", 12));
   more.onclick = () => {
@@ -629,18 +632,18 @@ function renderComposer(
     openContextMenu({
       x: rect.left,
       y: rect.top - 4,
-      label: t(state.language, "versionComposerTitle"),
+      label: versionTerm(state.language, state.developerTerms, "versionComposerTitle"),
       items: [
         {
           id: "commit-staged",
-          label: t(state.language, "versionsSave"),
+          label: versionTerm(state.language, state.developerTerms, "versionsSave"),
           icon: "check",
           disabled: stagedCount === 0 || !state.commitMessage.trim(),
           action: () => handlers.onSaveVersion(false),
         },
         {
           id: "commit-all",
-          label: t(state.language, "versionCommitAll"),
+          label: versionTerm(state.language, state.developerTerms, "versionCommitAll"),
           icon: "git-commit",
           disabled: !state.commitMessage.trim(),
           action: () => handlers.onSaveVersion(true),

@@ -47,6 +47,7 @@ export interface AppSettings {
   fountainAutocomplete: boolean;
   showConfigFiles: boolean;
   showDeveloperOptions: boolean;
+  gitDeveloperTerms: boolean;
   gitAuthorName: string;
   gitAuthorEmail: string;
   hiddenModels: string[];

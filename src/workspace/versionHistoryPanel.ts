@@ -1,8 +1,4 @@
-import {
-  changeBadge,
-  commitFileKind,
-  formatVersionDate,
-} from "../git/versions";
+import { commitFileKind, formatVersionDate } from "../git/versions";
 import { t } from "../i18n";
 import {
   GitBranch,
@@ -12,9 +8,12 @@ import {
   Language,
 } from "../types";
 import { createIconButton } from "../ui/iconButton";
+import { createVersionStatus } from "./versionStatus";
+import { versionTerm } from "./versionTerms";
 
 export interface VersionHistoryState {
   language: Language;
+  developerTerms: boolean;
   history: GitCommit[];
   branches: GitBranch[];
   historyLoading: boolean;
@@ -38,10 +37,6 @@ export interface VersionHistoryHandlers {
   onOpenGitHubUrl: (url: string) => void;
   onRefreshPullRequests: () => void;
   onOpenPullRequest: (url: string) => void;
-}
-
-function changeClass(kind: ReturnType<typeof commitFileKind>): string {
-  return kind === "copied" ? "renamed" : kind;
 }
 
 /**
@@ -69,15 +64,15 @@ function renderCommitList(
   section.className = "version-history";
   const title = document.createElement("div");
   title.className = "version-section-label";
-  title.textContent = t(state.language, "versionsHistory");
+  title.textContent = versionTerm(state.language, state.developerTerms, "versionsHistory");
   section.appendChild(title);
 
   if (state.history.length === 0) {
     const empty = document.createElement("p");
     empty.className = "versions-muted";
     empty.textContent = state.historyLoading
-      ? t(state.language, "versionsHistoryLoading")
-      : t(state.language, "versionsNoHistory");
+      ? versionTerm(state.language, state.developerTerms, "versionsHistoryLoading")
+      : versionTerm(state.language, state.developerTerms, "versionsNoHistory");
     section.appendChild(empty);
     return section;
   }
@@ -111,12 +106,12 @@ function renderCommitList(
       if (!files) {
         const loading = document.createElement("p");
         loading.className = "versions-muted version-files-loading";
-        loading.textContent = t(state.language, "versionsHistoryLoading");
+        loading.textContent = versionTerm(state.language, state.developerTerms, "versionsHistoryLoading");
         item.appendChild(loading);
       } else if (files.length === 0) {
         const empty = document.createElement("p");
         empty.className = "versions-muted version-files-loading";
-        empty.textContent = t(state.language, "versionsNoCommitFiles");
+        empty.textContent = versionTerm(state.language, state.developerTerms, "versionsNoCommitFiles");
         item.appendChild(empty);
       } else {
         for (const file of files) {
@@ -140,9 +135,11 @@ function renderCommitFile(
   const row = document.createElement("div");
   row.className = "version-file-row";
 
-  const badge = document.createElement("span");
-  badge.className = `tree-git-badge git-badge-${changeClass(kind)}`;
-  badge.textContent = changeBadge(kind);
+  const badge = createVersionStatus(
+    kind,
+    state.language,
+    state.developerTerms,
+  );
 
   const name = document.createElement("span");
   name.className = "version-file-path";
@@ -151,8 +148,8 @@ function renderCommitFile(
 
   const restore = createIconButton({
     icon: "rotate-ccw",
-    label: t(state.language, "versionsRestore"),
-    title: `${t(state.language, "versionsRestore")} · ${commit.subject}`,
+    label: versionTerm(state.language, state.developerTerms, "versionsRestore"),
+    title: `${versionTerm(state.language, state.developerTerms, "versionsRestore")} · ${commit.subject}`,
     className: "tree-mini-btn version-row-btn",
     onClick: (event) => {
       event.stopPropagation();
@@ -175,10 +172,10 @@ function renderBranches(
   header.className = "version-section-header";
   const title = document.createElement("div");
   title.className = "version-section-label";
-  title.textContent = t(state.language, "versionsBranches");
+  title.textContent = versionTerm(state.language, state.developerTerms, "versionsBranches");
   const add = createIconButton({
     icon: "plus",
-    label: t(state.language, "versionsNewBranch"),
+    label: versionTerm(state.language, state.developerTerms, "versionsNewBranch"),
     className: "tree-mini-btn",
     testId: "new-branch-btn",
     disabled: state.busy,
@@ -191,8 +188,8 @@ function renderBranches(
     const empty = document.createElement("p");
     empty.className = "versions-muted";
     empty.textContent = state.historyLoading
-      ? t(state.language, "versionsHistoryLoading")
-      : t(state.language, "versionsNoBranches");
+      ? versionTerm(state.language, state.developerTerms, "versionsHistoryLoading")
+      : versionTerm(state.language, state.developerTerms, "versionsNoBranches");
     section.appendChild(empty);
     return section;
   }
@@ -208,14 +205,14 @@ function renderBranches(
     if (branch.current) {
       const current = document.createElement("span");
       current.className = "version-branch-current";
-      current.textContent = t(state.language, "versionsCurrentDraft");
+      current.textContent = versionTerm(state.language, state.developerTerms, "versionsCurrentDraft");
       row.appendChild(current);
     } else {
       const switchBtn = document.createElement("button");
       switchBtn.type = "button";
       switchBtn.className = "versions-link-btn";
       switchBtn.dataset.branchName = branch.name;
-      switchBtn.textContent = t(state.language, "versionsSwitch");
+      switchBtn.textContent = versionTerm(state.language, state.developerTerms, "versionsSwitch");
       switchBtn.disabled = state.busy;
       switchBtn.onclick = () => handlers.onCheckoutBranch(branch.name);
       row.appendChild(switchBtn);
