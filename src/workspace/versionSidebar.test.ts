@@ -58,13 +58,13 @@ function handlers(): VersionSidebarHandlers {
     onViewChange: vi.fn(),
     onFilterChange: vi.fn(),
     onSelectChange: vi.fn(),
+    onFileContextMenu: vi.fn(),
     onOpenChanges: vi.fn(),
     onToggleStage: vi.fn(),
     onStagePaths: vi.fn(),
     onUnstagePaths: vi.fn(),
     onStageAll: vi.fn(),
     onUnstageAll: vi.fn(),
-    onDiscardChange: vi.fn(),
     onCommitMessageChange: vi.fn(),
     onSaveVersion: vi.fn(),
     onGenerateMessage: vi.fn(),
@@ -115,6 +115,14 @@ describe("version sidebar (T-3.11.2)", () => {
     )!;
     row.click();
     expect(calls.onSelectChange).toHaveBeenCalledWith("notas/nueva.md");
+
+    row.dispatchEvent(
+      new MouseEvent("contextmenu", { bubbles: true, cancelable: true }),
+    );
+    expect(calls.onFileContextMenu).toHaveBeenCalledWith(
+      "notas/nueva.md",
+      expect.any(MouseEvent),
+    );
 
     root.querySelector<HTMLButtonElement>('[data-testid="version-view-diff"]')!.click();
     expect(calls.onOpenChanges).toHaveBeenCalledOnce();

@@ -52,6 +52,7 @@ function handlers(): VersionChangesViewHandlers {
   return {
     onToggleFile: vi.fn(),
     onSelectFile: vi.fn(),
+    onFileContextMenu: vi.fn(),
     onToggleStage: vi.fn(),
     onStageSelected: vi.fn(),
     onUnstageSelected: vi.fn(),
@@ -97,6 +98,18 @@ describe("version changes view (T-3.11.3)", () => {
     expect(calls.onSelectFile).toHaveBeenCalledWith("guion/acto-1.fountain");
 
     root
+      .querySelector<HTMLElement>(
+        '[data-version-file="guion/acto-1.fountain"] .version-file-header',
+      )!
+      .dispatchEvent(
+        new MouseEvent("contextmenu", { bubbles: true, cancelable: true }),
+      );
+    expect(calls.onFileContextMenu).toHaveBeenCalledWith(
+      "guion/acto-1.fountain",
+      expect.any(MouseEvent),
+    );
+
+    root
       .querySelector<HTMLButtonElement>(
         '[data-testid="version-open-guion/acto-1.fountain"]',
       )!
@@ -104,9 +117,11 @@ describe("version changes view (T-3.11.3)", () => {
     expect(calls.onOpenFile).toHaveBeenCalledWith("guion/acto-1.fountain");
   });
 
-  it("shows file actions on changed lines", () => {
+  it("shows file actions for the whole diff block", () => {
     const calls = handlers();
     const root = createVersionChangesView(state(), calls);
+    const bar = root.querySelector(".version-diff-actions-bar");
+    expect(bar).not.toBeNull();
     const buttons = root.querySelectorAll<HTMLButtonElement>(
       ".version-diff-action-btn",
     );

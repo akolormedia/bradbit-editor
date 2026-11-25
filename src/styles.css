@@ -5435,6 +5435,7 @@ textarea.text-input {
   display: flex;
   flex-direction: column;
   overflow: hidden;
+  container-type: inline-size;
 }
 
 .version-view-tabs {
@@ -5585,8 +5586,9 @@ textarea.text-input {
 }
 
 .version-change-name {
-  flex-shrink: 0;
-  max-width: 55%;
+  flex: 1 1 auto;
+  min-width: 0;
+  max-width: 62%;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -5595,8 +5597,9 @@ textarea.text-input {
 }
 
 .version-change-dir {
-  flex: 1;
+  flex: 0 1 auto;
   min-width: 0;
+  max-width: 40%;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -5619,6 +5622,7 @@ textarea.text-input {
 
 .version-file-stats {
   min-width: 62px;
+  margin-left: auto;
   justify-content: flex-end;
   text-align: right;
 }
@@ -5810,6 +5814,10 @@ textarea.text-input {
 }
 
 .version-staged-count {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
   color: var(--text-secondary);
   font-size: 10px;
 }
@@ -5833,6 +5841,8 @@ textarea.text-input {
 .version-commit-btn {
   padding: 4px 9px;
   border-radius: 5px 0 0 5px;
+  white-space: nowrap;
+  flex-shrink: 0;
 }
 
 .version-commit-more {
@@ -5982,12 +5992,13 @@ textarea.text-input {
 }
 
 .version-file-list > .version-file-card:first-child {
-  margin-top: 8px;
+  margin-top: 6px;
 }
 
 .version-file-card {
   min-width: 0;
   flex-shrink: 0;
+  container-type: inline-size;
   border: 1px solid var(--border-color);
   border-radius: 7px;
   background: var(--bg-editor);
@@ -6002,17 +6013,30 @@ textarea.text-input {
 
 .version-file-card.expanded .version-file-header {
   position: sticky;
-  top: 0;
+  top: 6px;
   z-index: 3;
   border-bottom: 1px solid var(--border-color);
   background: var(--bg-editor);
   box-shadow: 0 1px 0 var(--border-color);
 }
 
+/* Cover the breathing room above the sticky header so diff lines never
+   scroll through the small gap. */
+.version-file-card.expanded .version-file-header::before {
+  content: "";
+  position: absolute;
+  left: -1px;
+  right: -1px;
+  top: -6px;
+  height: 6px;
+  background: var(--bg-editor);
+}
+
 .version-file-header {
   display: flex;
   align-items: center;
   gap: 6px;
+  min-height: 35px;
   padding: 6px 8px;
   cursor: pointer;
 }
@@ -6037,7 +6061,8 @@ textarea.text-input {
 }
 
 .version-file-name {
-  flex-shrink: 0;
+  flex: 1 1 auto;
+  min-width: 0;
   max-width: 55%;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -6047,7 +6072,7 @@ textarea.text-input {
 }
 
 .version-file-dir {
-  flex: 1;
+  flex: 1 1 auto;
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -6063,6 +6088,9 @@ textarea.text-input {
 }
 
 .version-open-file {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
   flex-shrink: 0;
   padding: 2px 6px;
   border: 1px solid var(--border-color);
@@ -6222,32 +6250,40 @@ textarea.text-input {
 }
 
 
-/* File-level actions surfaced while hovering a changed diff line. */
-.version-diff-action {
+/* File-level actions for the whole diff block, revealed while hovering the
+   changes. They stick under the file header so they stay reachable. */
+.version-diff-actions-bar {
+  position: sticky;
+  top: 41px;
+  z-index: 2;
   display: flex;
-  flex-shrink: 0;
-  align-items: center;
-  gap: 2px;
-  padding: 0 2px;
+  justify-content: flex-end;
+  gap: 4px;
+  min-height: 26px;
+  padding: 2px 8px;
+  border-bottom: 1px solid var(--border-color);
+  background: var(--bg-sidebar);
   opacity: 0;
+  pointer-events: none;
 }
 
-.version-diff-line:hover .version-diff-action,
-.version-diff-line:focus-within .version-diff-action {
+.version-file-card.expanded:hover .version-diff-actions-bar,
+.version-diff-actions-bar:focus-within {
   opacity: 1;
+  pointer-events: auto;
 }
 
 .version-diff-action-btn {
   display: inline-flex;
   align-items: center;
-  justify-content: center;
-  width: 16px;
-  height: 16px;
-  padding: 0;
+  gap: 4px;
+  padding: 2px 6px;
   border: 1px solid var(--border-color);
-  border-radius: 3px;
-  background: var(--bg-sidebar);
+  border-radius: 4px;
+  background: var(--bg-editor);
   color: var(--text-secondary);
+  font-family: var(--font-ui);
+  font-size: 10px;
   cursor: pointer;
 }
 
@@ -6255,4 +6291,52 @@ textarea.text-input {
   border-color: var(--text-muted);
   color: var(--text-primary);
   background: var(--bg-hover);
+}
+
+
+/* Keep the filename readable when the versioning panel is narrow: drop the
+   secondary folder/label text first, never the filename. */
+@container (max-width: 245px) {
+  .version-change-dir {
+    display: none;
+  }
+
+  .version-change-name {
+    max-width: none;
+  }
+}
+
+@container (max-width: 620px) {
+  .version-file-dir,
+  .version-file-label {
+    display: none;
+  }
+
+  .version-file-name {
+    max-width: none;
+  }
+
+  .version-open-label {
+    display: none;
+  }
+
+  .version-open-file {
+    padding: 2px 4px;
+  }
+}
+
+
+@container (max-width: 245px) {
+  .version-branch-counters {
+    display: none;
+  }
+
+  .version-composer-meta {
+    gap: 4px;
+  }
+
+  .version-staged-count,
+  .version-composer-meta .versions-muted {
+    max-width: 78px;
+  }
 }

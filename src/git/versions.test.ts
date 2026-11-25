@@ -6,6 +6,7 @@ import {
   defaultVersionMessage,
   entryKind,
   formatVersionDate,
+  gitignorePattern,
   isValidBranchName,
   isValidGitAuthor,
 } from "./versions";
@@ -62,5 +63,19 @@ describe("version helpers (T-1.4.4)", () => {
     expect(isValidBranchName("con espacios")).toBe(false);
     expect(isValidBranchName("a..b")).toBe(false);
     expect(isValidBranchName("rama/")).toBe(false);
+  });
+});
+
+describe("gitignore patterns", () => {
+  it("anchors exact project paths and escapes glob characters", () => {
+    expect(gitignorePattern("exports/guion/acto-1.pdf")).toBe(
+      "/exports/guion/acto-1.pdf",
+    );
+    expect(gitignorePattern("notas/[borrador].md")).toBe(
+      "/notas/\\[borrador\\].md",
+    );
+    expect(gitignorePattern("mi archivo.md")).toBe("/mi\\ archivo.md");
+    expect(gitignorePattern("a*b?.md")).toBe("/a\\*b\\?.md");
+    expect(gitignorePattern("/notas/idea.md")).toBe("/notas/idea.md");
   });
 });

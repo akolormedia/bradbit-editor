@@ -80,6 +80,12 @@ export const translations = {
     copyPath: "Copiar ruta",
     pathCopied: "Ruta copiada",
     revealInFinder: "Mostrar en Finder",
+    ignoreFile: "Ignorar archivo",
+    fileIgnored: "«{path}» se añadió a .gitignore",
+    fileAlreadyIgnored: "«{path}» ya estaba en .gitignore",
+    fileIgnoreTracked:
+      "El archivo ya está en la versión; quítalo antes de ignorarlo.",
+    ignoreFileError: "No se pudo actualizar .gitignore.",
     revealError: "No se pudo mostrar en Finder",
     importDocxNoFolder:
       "Abre una carpeta antes de importar un documento de Word.",
@@ -755,6 +761,12 @@ export const translations = {
     copyPath: "Copy Path",
     pathCopied: "Path copied",
     revealInFinder: "Show in Finder",
+    ignoreFile: "Ignore file",
+    fileIgnored: "“{path}” was added to .gitignore",
+    fileAlreadyIgnored: "“{path}” was already in .gitignore",
+    fileIgnoreTracked:
+      "The file is already in the version; unstage it before ignoring it.",
+    ignoreFileError: "Could not update .gitignore.",
     revealError: "Could not show in Finder",
     importDocxNoFolder: "Open a folder before importing a Word document.",
     importMenu: "Import",

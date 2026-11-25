@@ -66,13 +66,13 @@ export interface VersionSidebarHandlers {
   onViewChange: (view: VersionSidebarView) => void;
   onFilterChange: (filter: VersionFilter) => void;
   onSelectChange: (path: string) => void;
+  onFileContextMenu: (path: string, event: MouseEvent) => void;
   onOpenChanges: () => void;
   onToggleStage: (path: string) => void;
   onStagePaths: (paths: string[]) => void;
   onUnstagePaths: (paths: string[]) => void;
   onStageAll: () => void;
   onUnstageAll: () => void;
-  onDiscardChange: (path: string) => void;
   onCommitMessageChange: (value: string) => void;
   onSaveVersion: (stageAll: boolean) => void;
   onGenerateMessage: () => void;
@@ -379,6 +379,7 @@ function renderChangeRow(
   const name = document.createElement("span");
   name.className = "version-change-name";
   name.textContent = versionFileName(entry.path);
+  name.title = entry.path;
 
   const dir = document.createElement("span");
   dir.className = "version-change-dir";
@@ -424,18 +425,12 @@ function renderChangeRow(
   checkbox.onclick = (event) => event.stopPropagation();
   checkbox.onchange = () => handlers.onToggleStage(entry.path);
 
-  const discard = createIconButton({
-    icon: "rotate-ccw",
-    label: t(state.language, "discardChangesTitle"),
-    className: "tree-mini-btn version-row-btn",
-    onClick: (event) => {
-      event.stopPropagation();
-      handlers.onDiscardChange(entry.path);
-    },
-  });
-
-  row.append(badge, name, dir, label, stats, discard, checkbox);
+  row.append(badge, name, dir, label, stats, checkbox);
   row.onclick = () => handlers.onSelectChange(entry.path);
+  row.oncontextmenu = (event) => {
+    event.preventDefault();
+    handlers.onFileContextMenu(entry.path, event);
+  };
   row.onkeydown = (event) => {
     if (event.key === "Enter" || event.key === " ") {
       event.preventDefault();

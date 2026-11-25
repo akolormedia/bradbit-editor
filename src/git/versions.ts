@@ -170,3 +170,18 @@ export function isValidBranchName(name: string): boolean {
   }
   return !/[\s~^:?*[\\\x00-\x1f\x7f]/.test(candidate);
 }
+
+/**
+ * Exact, root-anchored `.gitignore` pattern for a project-relative path.
+ * Glob characters and spaces are escaped so a file is ignored literally.
+ */
+export function gitignorePattern(path: string): string {
+  const normalized = path.replace(/^\/+/, "");
+  const escaped = normalized
+    .replace(/\\/g, "\\\\")
+    .replace(/([*?])/g, "\\$1")
+    .replace(/\[/g, "\\[")
+    .replace(/\]/g, "\\]")
+    .replace(/ /g, "\\ ");
+  return `/${escaped}`;
+}

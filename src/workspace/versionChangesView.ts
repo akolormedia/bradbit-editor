@@ -1,5 +1,4 @@
 import { entryKind } from "../git/versions";
-import { t } from "../i18n";
 import { GitFileChange, GitStatusEntry, Language } from "../types";
 import { createIcon } from "../ui/icons";
 import { createIconButton } from "../ui/iconButton";
@@ -36,6 +35,7 @@ export interface VersionChangesViewState {
 export interface VersionChangesViewHandlers {
   onToggleFile: (path: string) => void;
   onSelectFile: (path: string) => void;
+  onFileContextMenu: (path: string, event: MouseEvent) => void;
   onToggleStage: (path: string) => void;
   onStageSelected: () => void;
   onUnstageSelected: () => void;
@@ -192,6 +192,10 @@ function renderFileCard(
       handlers.onSelectFile(entry.path);
     }
   };
+  header.oncontextmenu = (event) => {
+    event.preventDefault();
+    handlers.onFileContextMenu(entry.path, event);
+  };
 
   const toggle = document.createElement("button");
   toggle.type = "button";
@@ -230,6 +234,7 @@ function renderFileCard(
   const name = document.createElement("span");
   name.className = "version-file-name";
   name.textContent = versionFileName(entry.path);
+  name.title = entry.path;
 
   const dir = document.createElement("span");
   dir.className = "version-file-dir";
@@ -260,32 +265,42 @@ function renderFileCard(
   open.type = "button";
   open.className = "version-open-file";
   open.dataset.testid = `version-open-${entry.path}`;
-  open.textContent = versionTerm(state.language, state.developerTerms, "versionOpenFile");
   open.title = versionTerm(state.language, state.developerTerms, "versionOpenFile");
+  const openLabel = document.createElement("span");
+  openLabel.className = "version-open-label";
+  openLabel.textContent = versionTerm(
+    state.language,
+    state.developerTerms,
+    "versionOpenFile",
+  );
+  open.append(createIcon("external-link", 11), openLabel);
   open.onclick = (event) => {
     event.stopPropagation();
     handlers.onOpenFile(entry.path);
   };
 
-  header.append(toggle, checkbox, badge, name, dir, label, stats);
+  header.append(toggle, badge, name, dir, label, stats, checkbox, open);
   if (kind === "deleted") {
     open.classList.add("hidden");
     open.tabIndex = -1;
     open.setAttribute("aria-hidden", "true");
   }
-  header.appendChild(open);
   card.appendChild(header);
 
   if (expanded) {
     const staged = isEntryStaged(entry);
     const worktreeChanged =
       entry.worktree !== "unmodified" || entry.index === "untracked";
-    card.appendChild(
-      renderDiff(state, entry, handlers, {
-        unstage: staged,
-        discard: worktreeChanged,
-      }),
+    const actions = { unstage: staged, discard: worktreeChanged };
+    const actionsBar = renderDiffActions(
+      entry,
+      handlers,
+      actions,
+      state.language,
+      state.developerTerms,
     );
+    if (actionsBar) card.appendChild(actionsBar);
+    card.appendChild(renderDiff(state, entry));
   }
   return card;
 }
@@ -298,8 +313,6 @@ interface DiffLineActions {
 function renderDiff(
   state: VersionChangesViewState,
   entry: GitStatusEntry,
-  handlers: VersionChangesViewHandlers,
-  actions: DiffLineActions,
 ): HTMLElement {
   const container = document.createElement("div");
   container.className = "version-diff";
@@ -359,22 +372,14 @@ function renderDiff(
         container.appendChild(note);
         return container;
       }
-      container.appendChild(
-        renderDiffLine(line, entry, handlers, actions, state.language),
-      );
+      container.appendChild(renderDiffLine(line));
       rendered += 1;
     }
   }
   return container;
 }
 
-function renderDiffLine(
-  line: VersionDiffLine,
-  entry: GitStatusEntry,
-  handlers: VersionChangesViewHandlers,
-  actions: DiffLineActions,
-  language: Language,
-): HTMLElement {
+function renderDiffLine(line: VersionDiffLine): HTMLElement {
   const row = document.createElement("div");
   row.className = `version-diff-line version-diff-${line.kind}`;
   if (line.kind === "meta") {
@@ -399,62 +404,45 @@ function renderDiffLine(
   text.className = "version-diff-text";
   text.textContent = line.text.length > 0 ? line.text : " ";
 
-  row.append(oldNumber, newNumber, marker);
-  if (line.kind === "added" || line.kind === "removed") {
-    row.appendChild(renderLineActions(entry, handlers, actions, language));
-  } else {
-    row.appendChild(emptyLineAction(actions));
-  }
-  row.appendChild(text);
+  row.append(oldNumber, newNumber, marker, text);
   return row;
 }
 
-function actionWidth(actions: DiffLineActions): number {
-  const count = Number(actions.unstage) + Number(actions.discard);
-  return count === 0 ? 0 : count * 18 + (count - 1) * 2;
-}
-
-function emptyLineAction(actions: DiffLineActions): HTMLElement {
-  const spacer = document.createElement("span");
-  spacer.className = "version-diff-action";
-  spacer.style.width = `${actionWidth(actions)}px`;
-  return spacer;
-}
-
-function renderLineActions(
+function renderDiffActions(
   entry: GitStatusEntry,
   handlers: VersionChangesViewHandlers,
   actions: DiffLineActions,
   language: Language,
-): HTMLElement {
-  const holder = document.createElement("span");
-  holder.className = "version-diff-action";
-  holder.style.width = `${actionWidth(actions)}px`;
+  developerTerms: boolean,
+): HTMLElement | null {
+  if (!actions.unstage && !actions.discard) return null;
+  const bar = document.createElement("div");
+  bar.className = "version-diff-actions-bar";
 
   if (actions.unstage) {
-    holder.appendChild(
-      lineActionButton(
+    bar.appendChild(
+      diffActionButton(
         "x",
-        t(language, "versionUnstageFile"),
-        t(language, "versionUnstageFileTooltip"),
+        versionTerm(language, developerTerms, "versionUnstageAction"),
+        versionTerm(language, developerTerms, "versionUnstageFileTooltip"),
         () => handlers.onUnstageFile(entry.path),
       ),
     );
   }
   if (actions.discard) {
-    holder.appendChild(
-      lineActionButton(
+    bar.appendChild(
+      diffActionButton(
         "rotate-ccw",
-        t(language, "versionDiscardFile"),
-        t(language, "versionDiscardFileTooltip"),
+        versionTerm(language, developerTerms, "versionDiscardFile"),
+        versionTerm(language, developerTerms, "versionDiscardFileTooltip"),
         () => handlers.onDiscardFile(entry.path),
       ),
     );
   }
-  return holder;
+  return bar;
 }
 
-function lineActionButton(
+function diffActionButton(
   icon: "x" | "rotate-ccw",
   label: string,
   title: string,
@@ -464,8 +452,8 @@ function lineActionButton(
   button.type = "button";
   button.className = "version-diff-action-btn";
   button.title = title;
-  button.setAttribute("aria-label", label);
-  button.appendChild(createIcon(icon, 11));
+  button.setAttribute("aria-label", title);
+  button.append(createIcon(icon, 11), document.createTextNode(label));
   button.onclick = (event) => {
     event.stopPropagation();
     onClick();

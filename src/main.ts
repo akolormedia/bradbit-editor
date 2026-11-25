@@ -39,6 +39,7 @@ import { copyTextToClipboard } from "./workspace/clipboard";
 import { createDocumentHeader } from "./workspace/documentHeader";
 import { badgeClass, buildGitBadgeMap } from "./git/status";
 import {
+  gitignorePattern,
   isValidBranchName,
   isValidGitAuthor,
 } from "./git/versions";
@@ -1197,6 +1198,104 @@ class BradbitApp {
       this.gitRemotes[0]?.name ??
       null
     );
+  }
+
+  private showVersionFileMenu(path: string, event: MouseEvent): void {
+    const lang = this.settings.language;
+    const items: ContextMenuItem[] = [
+      {
+        id: "version-discard-file",
+        label: t(lang, "discardChangesTitle"),
+        icon: "rotate-ccw",
+        danger: true,
+        action: () => this.requestDiscardPath(path),
+      },
+      {
+        id: "version-ignore-file",
+        label: t(lang, "ignoreFile"),
+        icon: "slash",
+        action: () => void this.ignoreVersionFile(path),
+      },
+      { id: "version-file-separator", label: "", separator: true },
+      {
+        id: "version-reveal-file",
+        label: t(lang, "revealInFinder"),
+        icon: "external-link",
+        action: () => {
+          if (!this.folder) return;
+          void backend
+            .revealInFinder(this.folder.rootPath, path)
+            .catch((error) => {
+              console.error("Could not reveal the file", error);
+              this.showStatusNotice(t(lang, "revealError"));
+            });
+        },
+      },
+      {
+        id: "version-copy-path",
+        label: t(lang, "copyPath"),
+        icon: "copy",
+        action: () => {
+          void copyTextToClipboard(path).then((copied) => {
+            this.showStatusNotice(t(lang, copied ? "pathCopied" : "copyError"));
+          });
+        },
+      },
+    ];
+    openContextMenu({
+      x: event.clientX,
+      y: event.clientY,
+      items,
+      label: path,
+    });
+  }
+
+  private async ignoreVersionFile(path: string): Promise<void> {
+    if (!this.folder) return;
+    const root = this.folder.rootPath;
+    const lang = this.settings.language;
+    try {
+      let content = "";
+      try {
+        content = await backend.readTextFile(root, ".gitignore");
+      } catch {
+        content = "";
+      }
+      const normalized = content.replace(/\r\n/g, "\n");
+      const pattern = gitignorePattern(path);
+      const lines = normalized.split("\n").map((line) => line.trim());
+      if (lines.includes(pattern) || lines.includes(pattern.slice(1))) {
+        this.statusNotice = t(lang, "fileAlreadyIgnored", { path });
+      } else {
+        const prefix =
+          normalized.length > 0 && !normalized.endsWith("\n") ? "\n" : "";
+        await backend.writeTextFile(
+          root,
+          ".gitignore",
+          `${normalized}${prefix}${pattern}\n`,
+        );
+        this.statusNotice = t(lang, "fileIgnored", { path });
+      }
+      await this.refreshTree();
+      await this.refreshGitStatus();
+      await this.refreshVersionStats();
+      const stillListed = this.gitStatus?.entries.some(
+        (entry) => entry.path === path,
+      );
+      if (stillListed) {
+        this.statusNotice = t(lang, "fileIgnoreTracked");
+      } else {
+        this.versionExpanded.delete(path);
+        if (this.versionSelectedPath === path) {
+          this.versionSelectedPath = null;
+        }
+      }
+      this.render();
+    } catch (err) {
+      this.statusNotice = t(lang, "ignoreFileError");
+      this.gitPanelError = err instanceof Error ? err.message : String(err);
+      this.render();
+    }
   }
 
   private showVersionBranchMenu(event: MouseEvent): void {
@@ -5012,6 +5111,8 @@ class BradbitApp {
           this.render();
         },
         onSelectChange: (path) => this.selectVersionChange(path),
+        onFileContextMenu: (path, event) =>
+          this.showVersionFileMenu(path, event),
         onOpenChanges: () =>
           this.openVersionChanges(
             this.versionSelectedPath ?? entries[0]?.path,
@@ -5021,7 +5122,6 @@ class BradbitApp {
         onUnstagePaths: (paths) => void this.stageVersionPaths(paths, false),
         onStageAll: () => void this.stageAllVersions(),
         onUnstageAll: () => void this.unstageAllVersions(),
-        onDiscardChange: (path) => this.requestDiscardPath(path),
         onCommitMessageChange: (value) => {
           this.gitCommitMessage = value;
         },
@@ -5066,6 +5166,8 @@ class BradbitApp {
       {
         onToggleFile: (path) => this.toggleVersionChange(path),
         onSelectFile: (path) => this.selectVersionChange(path),
+        onFileContextMenu: (path, event) =>
+          this.showVersionFileMenu(path, event),
         onToggleStage: (path) => void this.toggleVersionStage(path),
         onStageSelected: () => {
           if (this.versionSelectedPath) {
