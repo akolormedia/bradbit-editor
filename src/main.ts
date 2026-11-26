@@ -1,5 +1,6 @@
 import { backend, isTauriEnvironment } from "./backend";
 import { BradbitCodeMirror } from "./editor/codemirror";
+import { SearchBar, SearchBarQuery } from "./editor/searchBar";
 import { BradbitDiffView, DiffViewMode } from "./editor/diff";
 import { renderMarkdownPreview } from "./editor/preview";
 import { renderFountainPreview } from "./editor/fountainPreview";
@@ -372,6 +373,10 @@ class BradbitApp {
   private treeScrollTop = 0;
   private openingSurface: "chat" | "editor" | null = null;
   private layoutAnimating = false;
+  private bufferSearchOpen = false;
+  private bufferSearchBar: SearchBar | null = null;
+  private bufferSearchPath: string | null = null;
+  private bufferSearchPending = false;
 
   constructor(rootEl: HTMLElement) {
     this.rootEl = rootEl;
@@ -1081,16 +1086,12 @@ class BradbitApp {
     }
   }
 
-  private async generateVersionMessage(): Promise<void> {
-    if (!this.folder || this.versionGeneratingMessage) return;
-    const lang = this.settings.language;
+  private async resolveAiTarget(): Promise<
+    { providerId: string; model: string } | { error: "key" | "model" }
+  > {
     await this.refreshByokStatus();
     let provider = this.byokStatus.find((item) => item.hasKey);
-    if (!provider) {
-      this.statusNotice = this.versionLabel("versionGenerateUnavailable");
-      this.openSettingsModal();
-      return;
-    }
+    if (!provider) return { error: "key" };
 
     const chatModel = this.chatState.model ?? "";
     const slash = chatModel.indexOf("/");
@@ -1112,9 +1113,22 @@ class BradbitApp {
       this.chatModels.find((item) => item.providerId === provider.id)?.id ||
       provider.model ||
       "";
-    if (!model) {
-      this.gitPanelError = this.versionLabel("versionGenerateNoModel");
-      this.renderVersionPreservingScroll();
+    if (!model) return { error: "model" };
+    return { providerId: provider.id, model };
+  }
+
+  private async generateVersionMessage(): Promise<void> {
+    if (!this.folder || this.versionGeneratingMessage) return;
+    const lang = this.settings.language;
+    const target = await this.resolveAiTarget();
+    if ("error" in target) {
+      if (target.error === "key") {
+        this.statusNotice = this.versionLabel("versionGenerateUnavailable");
+        this.openSettingsModal();
+      } else {
+        this.gitPanelError = this.versionLabel("versionGenerateNoModel");
+        this.renderVersionPreservingScroll();
+      }
       return;
     }
 
@@ -1123,7 +1137,11 @@ class BradbitApp {
     this.renderVersionPreservingScroll();
     try {
       const prompt = await this.versionNotesPrompt(lang);
-      const message = await backend.byokComplete(provider.id, prompt, model);
+      const message = await backend.byokComplete(
+        target.providerId,
+        prompt,
+        target.model,
+      );
       this.gitCommitMessage = message
         .trim()
         .replace(/^```[a-z]*\s*/i, "")
@@ -3385,6 +3403,139 @@ class BradbitApp {
     this.render();
   }
 
+  private ensureBufferSearchBar(): SearchBar {
+    if (!this.bufferSearchBar) {
+      this.bufferSearchBar = new SearchBar(this.settings.language, {
+        onSearchChange: (query) => this.applyBufferSearch(query),
+        onFindNext: () => {
+          this.editor?.searchNext();
+          this.updateBufferSearchInfo();
+        },
+        onFindPrevious: () => {
+          this.editor?.searchPrevious();
+          this.updateBufferSearchInfo();
+        },
+        onReplace: (replace) => {
+          this.editor?.replaceSearch(replace);
+          this.updateBufferSearchInfo();
+        },
+        onReplaceAll: (replace) => {
+          this.editor?.replaceAllSearch(replace);
+          this.updateBufferSearchInfo();
+        },
+        onClose: () => this.closeBufferSearch(),
+        onGenerateRegex: (description) =>
+          this.generateSearchRegex(description),
+      });
+    }
+    return this.bufferSearchBar;
+  }
+
+  private openBufferSearch(replace = false): void {
+    if (!this.folder) return;
+    this.editorVisible = true;
+    if (this.versionOpen) {
+      this.versionOpen = false;
+      this.render();
+    }
+    let active = this.getActiveTab();
+    if (!active) {
+      this.showStatusNotice(t(this.settings.language, "searchUnavailable"));
+      return;
+    }
+    if (active.viewMode === "diff") this.toggleDiff();
+    else if (active.viewMode === "preview") this.ensureEditMode();
+    active = this.getActiveTab();
+    if (!active || active.viewMode !== "edit") {
+      this.showStatusNotice(t(this.settings.language, "searchUnavailable"));
+      return;
+    }
+    if (!this.editor) this.render();
+
+    const existing = this.bufferSearchBar;
+    if (this.bufferSearchOpen && existing && this.bufferSearchPath === active.path) {
+      if (!existing.element().isConnected) this.render();
+      existing.setReplaceOpen(replace);
+      window.setTimeout(
+        () => (replace ? existing.focusReplace() : existing.focus()),
+        0,
+      );
+      return;
+    }
+
+    const bar = this.ensureBufferSearchBar();
+    this.bufferSearchOpen = true;
+    this.bufferSearchPath = active.path;
+    const selected = this.editor
+      ?.getSelectedText()
+      .split("\n")[0]
+      .trim();
+    if (selected) bar.setQuery(selected, undefined, false);
+    this.render();
+    this.applyBufferSearch(bar.getQuery());
+    bar.setReplaceOpen(replace);
+    window.setTimeout(() => (replace ? bar.focusReplace() : bar.focus()), 0);
+  }
+
+  private applyBufferSearch(query?: SearchBarQuery): void {
+    const bar = this.bufferSearchBar;
+    const editor = this.editor;
+    if (!bar || !editor) return;
+    const activeQuery = query ?? bar.getQuery();
+    const valid = editor.setSearchQuery(activeQuery);
+    bar.setError(
+      activeQuery.search.length > 0 && !valid
+        ? t(this.settings.language, "searchInvalidRegex")
+        : "",
+    );
+    this.updateBufferSearchInfo();
+  }
+
+  private updateBufferSearchInfo(): void {
+    const info = this.editor?.searchMatchInfo() ?? { current: 0, total: 0 };
+    this.bufferSearchBar?.setMatchInfo(info.current, info.total);
+  }
+
+  private closeBufferSearch(render = true): void {
+    if (!this.bufferSearchOpen) return;
+    this.bufferSearchOpen = false;
+    this.bufferSearchPath = null;
+    this.bufferSearchPending = false;
+    this.editor?.clearSearch();
+    this.bufferSearchBar = null;
+    if (render) {
+      this.render();
+      this.editor?.focusEditor();
+    }
+  }
+
+  private async generateSearchRegex(description: string): Promise<string> {
+    const lang = this.settings.language;
+    const target = await this.resolveAiTarget();
+    if ("error" in target) {
+      throw new Error(t(lang, "searchAiNoModel"));
+    }
+    const prompt = [
+      "Convert this search request into a single JavaScript-compatible regular expression.",
+      "Return only the regular expression source: no slashes around it, no flags, no quotes, no code fences and no explanation.",
+      "The user can still toggle case sensitivity and whole-word matching separately, so do not add flags.",
+      `Request: ${description}`,
+    ].join("\n");
+    try {
+      return await backend.byokComplete(
+        target.providerId,
+        prompt,
+        target.model,
+      );
+    } catch (err) {
+      throw new Error(
+        `${t(lang, "searchAiError")} ${
+          err instanceof Error ? err.message : String(err)
+        }`,
+      );
+    }
+  }
+
   private openGlobalSearch(): void {
     if (!this.folder) return;
     this.modal = { kind: "global-search" };
@@ -4062,12 +4213,10 @@ class BradbitApp {
         this.editor?.toggleItalic();
         break;
       case "edit.find":
-        this.ensureEditMode();
-        this.editor?.openFindPanel();
+        this.openBufferSearch(false);
         break;
       case "edit.findReplace":
-        this.ensureEditMode();
-        this.editor?.openReplacePanel();
+        this.openBufferSearch(true);
         break;
       case "edit.findInProject":
         this.openGlobalSearch();
@@ -4138,8 +4287,7 @@ class BradbitApp {
         this.openGlobalSearch();
       } else if (letter === "f" && this.getActiveTab()) {
         e.preventDefault();
-        this.ensureEditMode();
-        this.editor?.openFindPanel();
+        this.openBufferSearch(false);
       } else if (letter === "p" && e.altKey && this.getActiveTab()) {
         e.preventDefault();
         this.togglePreview();
@@ -4156,6 +4304,23 @@ class BradbitApp {
   public render(): void {
     const lang = this.settings.language;
     const activeTab = this.getActiveTab();
+    if (
+      this.bufferSearchOpen &&
+      (this.versionOpen || !activeTab || activeTab.viewMode !== "edit")
+    ) {
+      this.bufferSearchOpen = false;
+      this.bufferSearchBar = null;
+      this.bufferSearchPath = null;
+      this.bufferSearchPending = false;
+      this.editor?.clearSearch();
+    } else if (
+      this.bufferSearchOpen &&
+      activeTab &&
+      activeTab.path !== this.bufferSearchPath
+    ) {
+      this.bufferSearchPath = activeTab.path;
+      this.bufferSearchPending = true;
+    }
     const versionScroll = this.versionOpen
       ? this.versionScrollPositions()
       : null;
@@ -4275,6 +4440,10 @@ class BradbitApp {
       }
       this.syncInlineDiff(activeTab);
       this.syncInlineBlame(activeTab);
+      if (this.bufferSearchPending && this.bufferSearchBar) {
+        this.bufferSearchPending = false;
+        this.applyBufferSearch(this.bufferSearchBar.getQuery());
+      }
     }
 
     if (!this.versionOpen) this.syncDiffView(activeTab);
@@ -5522,6 +5691,10 @@ class BradbitApp {
           onFileMenu: (event) => this.showTabContextMenu(event, activeTab),
         }),
       );
+    }
+
+    if (this.bufferSearchOpen && this.bufferSearchBar) {
+      col.appendChild(this.bufferSearchBar.element());
     }
 
     if (

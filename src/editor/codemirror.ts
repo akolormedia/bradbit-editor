@@ -19,7 +19,22 @@ import {
   ViewUpdate,
 } from "@codemirror/view";
 import { defaultKeymap, history, historyKeymap, indentWithTab, redo as cmRedo, undo as cmUndo } from "@codemirror/commands";
-import { openSearchPanel, search, searchKeymap } from "@codemirror/search";
+import {
+  findNext,
+  findPrevious,
+  getSearchQuery,
+  replaceAll,
+  replaceNext,
+  search,
+  SearchQuery,
+  setSearchQuery,
+} from "@codemirror/search";
+import {
+  buildEditorSearchQuery,
+  EditorSearchQuery,
+  searchMatchInfo,
+} from "./searchQuery";
+import { searchHighlightExtension } from "./searchHighlight";
 import { markdown } from "@codemirror/lang-markdown";
 import {
   bracketMatching,
@@ -664,21 +679,84 @@ export class BradbitCodeMirror {
     });
   }
 
-  public openFindPanel(): void {
-    if (!this.view) return;
-    this.view.focus();
-    openSearchPanel(this.view);
+  public setSearchQuery(config: EditorSearchQuery): boolean {
+    if (!this.view) return false;
+    const query = buildEditorSearchQuery(config);
+    this.view.dispatch({ effects: setSearchQuery.of(query) });
+    return query.valid;
   }
 
-  public openReplacePanel(): void {
+  public searchNext(): void {
     if (!this.view) return;
-    this.view.focus();
-    openSearchPanel(this.view);
-    const replaceInput = this.view.dom.querySelector<HTMLInputElement>(
-      '.cm-search input[name="replace"]',
+    const query = getSearchQuery(this.view.state);
+    if (!query.valid || !query.search) return;
+    findNext(this.view);
+  }
+
+  public searchPrevious(): void {
+    if (!this.view) return;
+    const query = getSearchQuery(this.view.state);
+    if (!query.valid || !query.search) return;
+    findPrevious(this.view);
+  }
+
+  public replaceSearch(replace: string): boolean {
+    if (!this.view) return false;
+    const current = getSearchQuery(this.view.state);
+    if (!current.valid || !current.search) return false;
+    const query = buildEditorSearchQuery(
+      {
+        search: current.search,
+        caseSensitive: current.caseSensitive,
+        wholeWord: current.wholeWord,
+        regexp: current.regexp,
+      },
+      replace,
     );
-    replaceInput?.focus();
-    replaceInput?.select();
+    this.view.dispatch({ effects: setSearchQuery.of(query) });
+    return replaceNext(this.view);
+  }
+
+  public replaceAllSearch(replace: string): boolean {
+    if (!this.view) return false;
+    const current = getSearchQuery(this.view.state);
+    if (!current.valid || !current.search) return false;
+    const query = buildEditorSearchQuery(
+      {
+        search: current.search,
+        caseSensitive: current.caseSensitive,
+        wholeWord: current.wholeWord,
+        regexp: current.regexp,
+      },
+      replace,
+    );
+    this.view.dispatch({ effects: setSearchQuery.of(query) });
+    return replaceAll(this.view);
+  }
+
+  public clearSearch(): void {
+    if (!this.view) return;
+    this.view.dispatch({
+      effects: setSearchQuery.of(new SearchQuery({ search: "" })),
+    });
+  }
+
+  public searchMatchInfo(): { current: number; total: number } {
+    if (!this.view) return { current: 0, total: 0 };
+    return searchMatchInfo(
+      this.view.state,
+      getSearchQuery(this.view.state),
+    );
+  }
+
+  public getSelectedText(): string {
+    if (!this.view) return "";
+    const selection = this.view.state.selection.main;
+    return this.view.state.sliceDoc(selection.from, selection.to);
+  }
+
+  public focusEditor(): void {
+    this.view?.focus();
   }
 
   public undo(): void {
@@ -834,6 +912,7 @@ export class BradbitCodeMirror {
         bracketMatching(),
         highlightActiveLine(),
         search({ top: true }),
+        searchHighlightExtension,
         syntaxHighlighting(writerHighlightStyle, { fallback: true }),
         EditorView.contentAttributes.of({
           spellcheck: "true",
@@ -895,7 +974,6 @@ export class BradbitCodeMirror {
               }))
             : []),
           indentWithTab,
-          ...searchKeymap,
           ...historyKeymap,
           ...defaultKeymap,
         ]),
