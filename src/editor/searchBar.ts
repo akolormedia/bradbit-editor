@@ -10,6 +10,11 @@ export interface SearchBarQuery {
   regexp: boolean;
 }
 
+export interface SearchBarOptions {
+  /** Project search hides replacement until cross-file replace is defined. */
+  showReplace?: boolean;
+}
+
 export interface SearchBarHandlers {
   onSearchChange: (query: SearchBarQuery) => void;
   onFindNext: () => void;
@@ -31,7 +36,7 @@ export class SearchBar {
   private readonly queryInput: HTMLInputElement;
   private readonly replaceRow: HTMLElement;
   private readonly replaceInput: HTMLInputElement;
-  private readonly replaceToggle: HTMLButtonElement;
+  private readonly replaceToggle: HTMLButtonElement | null;
   private readonly countEl: HTMLElement;
   private readonly errorEl: HTMLElement;
   private readonly aiPopover: HTMLElement;
@@ -55,7 +60,9 @@ export class SearchBar {
   constructor(
     private readonly language: Language,
     private readonly handlers: SearchBarHandlers,
+    options: SearchBarOptions = {},
   ) {
+    const showReplace = options.showReplace !== false;
     this.root = document.createElement("div");
     this.root.className = "editor-search-bar";
     this.root.dataset.testid = "editor-search-bar";
@@ -122,14 +129,16 @@ export class SearchBar {
     );
     field.append(this.queryInput, toggles);
 
-    this.replaceToggle = this.iconButton(
-      "replace",
-      t(language, "searchReplaceToggle"),
-      () => this.setReplaceOpen(!this.replaceOpen),
-      "search-icon-btn",
-      "search-replace-toggle",
-    );
-    this.replaceToggle.setAttribute("aria-pressed", "false");
+    this.replaceToggle = showReplace
+      ? this.iconButton(
+          "replace",
+          t(language, "searchReplaceToggle"),
+          () => this.setReplaceOpen(!this.replaceOpen),
+          "search-icon-btn",
+          "search-replace-toggle",
+        )
+      : null;
+    this.replaceToggle?.setAttribute("aria-pressed", "false");
 
     const nav = document.createElement("div");
     nav.className = "search-nav";
@@ -163,7 +172,12 @@ export class SearchBar {
       "search-close",
     );
 
-    queryRow.append(field, this.replaceToggle, nav, close);
+    queryRow.append(
+      field,
+      ...(this.replaceToggle ? [this.replaceToggle] : []),
+      nav,
+      close,
+    );
     this.root.appendChild(queryRow);
 
     this.errorEl = document.createElement("div");
@@ -207,7 +221,7 @@ export class SearchBar {
     replaceAll.onclick = () =>
       this.handlers.onReplaceAll(this.replaceInput.value);
     this.replaceRow.append(this.replaceInput, replace, replaceAll);
-    this.root.appendChild(this.replaceRow);
+    if (showReplace) this.root.appendChild(this.replaceRow);
 
     this.aiPopover = document.createElement("div");
     this.aiPopover.className = "search-ai-popover";
@@ -309,6 +323,7 @@ export class SearchBar {
   }
 
   public setReplaceOpen(open: boolean): void {
+    if (!this.replaceToggle) return;
     this.replaceOpen = open;
     this.replaceRow.hidden = !open;
     this.replaceToggle.setAttribute("aria-pressed", String(open));
@@ -325,6 +340,10 @@ export class SearchBar {
   }
 
   public focusReplace(): void {
+    if (!this.replaceToggle) {
+      this.focus();
+      return;
+    }
     if (!this.replaceOpen) this.setReplaceOpen(true);
     this.replaceInput.focus();
     this.replaceInput.select();

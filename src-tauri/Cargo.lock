@@ -352,6 +352,7 @@ dependencies = [
  "pdf-writer",
  "portable-pty",
  "pulldown-cmark",
+ "regex",
  "serde",
  "serde_json",
  "serde_yaml",

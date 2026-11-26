@@ -1,3 +1,4 @@
+use regex::{Regex, RegexBuilder};
 use serde::Serialize;
 use std::fs;
 use std::path::Path;
@@ -20,6 +21,15 @@ const CONFIG_FILES: &[&str] = &["AGENTS.md", "CLAUDE.md", ".gitignore"];
 
 #[derive(Debug, Clone, Serialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
+pub struct SearchContextLine {
+    /// 1-based line number.
+    pub line: usize,
+    pub text: String,
+    pub is_match: bool,
+}
+
+#[derive(Debug, Clone, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
 pub struct SearchMatch {
     pub path: String,
     /// 1-based line number.
@@ -27,15 +37,20 @@ pub struct SearchMatch {
     /// 1-based column of the first match in the line.
     pub column: usize,
     pub snippet: String,
+    /// Two lines above and below the match, merged by the UI when close.
+    pub context: Vec<SearchContextLine>,
 }
 
-/// Searches UTF-8 text files under `root` for a case-insensitive literal term.
+/// Searches UTF-8 text files under `root` with the same options as the editor.
 /// Results are deterministic (path, then line) and capped at `max_results`.
 pub fn search_in_folder(
     root: &str,
     query: &str,
     max_results: usize,
     include_config: bool,
+    case_sensitive: bool,
+    whole_word: bool,
+    regex_mode: bool,
 ) -> Result<Vec<SearchMatch>, String> {
     let needle = query.trim();
     if needle.is_empty() {
@@ -47,13 +62,27 @@ pub fn search_in_folder(
         return Err(format!("The path '{}' is not a folder", root.display()));
     }
 
-    let needle = needle.to_lowercase();
+    let pattern = if regex_mode {
+        needle.to_string()
+    } else {
+        regex::escape(needle)
+    };
+    let pattern = if whole_word {
+        format!(r"\b(?:{pattern})\b")
+    } else {
+        pattern
+    };
+    let matcher = RegexBuilder::new(&pattern)
+        .case_insensitive(!case_sensitive)
+        .build()
+        .map_err(|error| format!("Invalid regular expression: {error}"))?;
+
     let limit = max_results.clamp(1, MAX_RESULTS_CAP);
     let mut matches = Vec::new();
     walk(
         &root,
         &root,
-        &needle,
+        &matcher,
         limit,
         include_config,
         0,
@@ -66,7 +95,7 @@ pub fn search_in_folder(
 fn walk(
     root: &Path,
     directory: &Path,
-    needle: &str,
+    matcher: &Regex,
     limit: usize,
     include_config: bool,
     depth: usize,
@@ -102,7 +131,7 @@ fn walk(
             walk(
                 root,
                 &entry.path(),
-                needle,
+                matcher,
                 limit,
                 include_config,
                 depth + 1,
@@ -131,19 +160,24 @@ fn walk(
             Err(_) => continue,
         };
 
-        for (index, line) in content.lines().enumerate() {
+        let lines: Vec<&str> = content.lines().collect();
+        for (index, line) in lines.iter().enumerate() {
             if matches.len() >= limit {
                 break;
             }
-            let lower = line.to_lowercase();
-            let Some(byte_index) = lower.find(needle) else {
+            let Some(found) = matcher.find(line) else {
                 continue;
             };
-            let column = line
-                .char_indices()
-                .take_while(|(offset, _)| *offset < byte_index)
-                .count()
-                + 1;
+            let column = line[..found.start()].chars().count() + 1;
+            let context_start = index.saturating_sub(2);
+            let context_end = (index + 2).min(lines.len().saturating_sub(1));
+            let context = (context_start..=context_end)
+                .map(|line_index| SearchContextLine {
+                    line: line_index + 1,
+                    text: lines[line_index].to_string(),
+                    is_match: line_index == index,
+                })
+                .collect();
             let entry_path = entry.path();
             let relative = entry_path
                 .strip_prefix(root)
@@ -155,6 +189,7 @@ fn walk(
                 line: index + 1,
                 column,
                 snippet: snippet(line),
+                context,
             });
         }
     }
@@ -193,11 +228,24 @@ mod tests {
         )
         .unwrap();
 
-        let results = search_in_folder(dir.path().to_str().unwrap(), "ana", 50, false).unwrap();
+        let results = search_in_folder(
+            dir.path().to_str().unwrap(),
+            "ana",
+            50,
+            false,
+            false,
+            false,
+            false,
+        )
+        .unwrap();
         assert_eq!(results.len(), 3);
         assert_eq!(results[0].path, "biblia/premisa.md");
         assert_eq!(results[0].line, 3);
         assert_eq!(results[0].snippet, "Una idea sobre Ana.");
+        assert_eq!(results[0].context.len(), 3);
+        assert_eq!(results[0].context[0].line, 1);
+        assert_eq!(results[0].context[2].line, 3);
+        assert!(results[0].context[2].is_match);
         assert_eq!(results[1].path, "guion/acto-1.fountain");
         assert_eq!(results[1].line, 3);
         assert_eq!(results[2].line, 4);
@@ -212,7 +260,16 @@ mod tests {
         let mut binary = fs::File::create(dir.path().join("imagen.png")).unwrap();
         binary.write_all(&[0xFF, 0xFE, 0x00, 0x01]).unwrap();
 
-        let results = search_in_folder(dir.path().to_str().unwrap(), "buscado", 50, false).unwrap();
+        let results = search_in_folder(
+            dir.path().to_str().unwrap(),
+            "buscado",
+            50,
+            false,
+            false,
+            false,
+            false,
+        )
+        .unwrap();
         assert_eq!(results.len(), 1);
         assert_eq!(results[0].path, "notas.md");
     }
@@ -229,11 +286,29 @@ mod tests {
         .unwrap();
         fs::write(dir.path().join("biblia/premisa.md"), "# Premisa").unwrap();
 
-        let without = search_in_folder(dir.path().to_str().unwrap(), "premisa", 50, false).unwrap();
+        let without = search_in_folder(
+            dir.path().to_str().unwrap(),
+            "premisa",
+            50,
+            false,
+            false,
+            false,
+            false,
+        )
+        .unwrap();
         assert_eq!(without.len(), 1);
         assert_eq!(without[0].path, "biblia/premisa.md");
 
-        let with = search_in_folder(dir.path().to_str().unwrap(), "premisa", 50, true).unwrap();
+        let with = search_in_folder(
+            dir.path().to_str().unwrap(),
+            "premisa",
+            50,
+            true,
+            false,
+            false,
+            false,
+        )
+        .unwrap();
         assert_eq!(with.len(), 2);
         assert!(with
             .iter()
@@ -249,11 +324,28 @@ mod tests {
             .join("\n");
         fs::write(dir.path().join("notas.md"), lines).unwrap();
 
-        let results =
-            search_in_folder(dir.path().to_str().unwrap(), "coincidencia", 3, false).unwrap();
+        let results = search_in_folder(
+            dir.path().to_str().unwrap(),
+            "coincidencia",
+            3,
+            false,
+            false,
+            false,
+            false,
+        )
+        .unwrap();
         assert_eq!(results.len(), 3);
         assert_eq!(
-            search_in_folder(dir.path().to_str().unwrap(), "   ", 10, false).unwrap(),
+            search_in_folder(
+                dir.path().to_str().unwrap(),
+                "   ",
+                10,
+                false,
+                false,
+                false,
+                false
+            )
+            .unwrap(),
             Vec::new()
         );
     }
@@ -264,15 +356,91 @@ mod tests {
         let long = format!("inicio {}", "x".repeat(300));
         fs::write(dir.path().join("notas.md"), long).unwrap();
 
-        let results = search_in_folder(dir.path().to_str().unwrap(), "inicio", 10, false).unwrap();
+        let results = search_in_folder(
+            dir.path().to_str().unwrap(),
+            "inicio",
+            10,
+            false,
+            false,
+            false,
+            false,
+        )
+        .unwrap();
         assert_eq!(results.len(), 1);
         assert!(results[0].snippet.ends_with('…'));
         assert!(results[0].snippet.chars().count() <= MAX_SNIPPET_CHARS + 1);
     }
 
     #[test]
+    fn honors_case_whole_word_and_regex_options() {
+        let dir = tempdir().unwrap();
+        fs::write(dir.path().join("notas.md"), "Ana\nana\nanana\nAna María\n").unwrap();
+
+        let sensitive = search_in_folder(
+            dir.path().to_str().unwrap(),
+            "Ana",
+            50,
+            false,
+            true,
+            false,
+            false,
+        )
+        .unwrap();
+        assert_eq!(sensitive.len(), 2);
+        assert_eq!(sensitive[0].line, 1);
+        assert_eq!(sensitive[1].line, 4);
+
+        let whole = search_in_folder(
+            dir.path().to_str().unwrap(),
+            "ana",
+            50,
+            false,
+            false,
+            true,
+            false,
+        )
+        .unwrap();
+        assert_eq!(whole.len(), 3);
+        assert!(!whole.iter().any(|item| item.line == 3));
+
+        let regex = search_in_folder(
+            dir.path().to_str().unwrap(),
+            "^ana$",
+            50,
+            false,
+            true,
+            false,
+            true,
+        )
+        .unwrap();
+        assert_eq!(regex.len(), 1);
+        assert_eq!(regex[0].line, 2);
+
+        let invalid = search_in_folder(
+            dir.path().to_str().unwrap(),
+            "[",
+            50,
+            false,
+            false,
+            false,
+            true,
+        )
+        .unwrap_err();
+        assert!(invalid.contains("Invalid regular expression"));
+    }
+
+    #[test]
     fn reports_a_clear_error_for_an_invalid_root() {
-        let error = search_in_folder("/ruta/que/no/existe", "texto", 10, false).unwrap_err();
+        let error = search_in_folder(
+            "/ruta/que/no/existe",
+            "texto",
+            10,
+            false,
+            false,
+            false,
+            false,
+        )
+        .unwrap_err();
         assert!(error.contains("Could not open folder"));
     }
 }

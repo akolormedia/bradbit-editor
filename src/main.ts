@@ -72,6 +72,15 @@ import {
   VersionFilter,
 } from "./workspace/versionChanges";
 import { versionTerm } from "./workspace/versionTerms";
+import {
+  isProjectSearchPath,
+  openProjectSearchInTabs,
+  PROJECT_SEARCH_PATH,
+  projectSearchSummary,
+  replaceSearchInText,
+  replaceSearchInTextAtLine,
+} from "./workspace/projectSearch";
+import { ProjectSearchView } from "./workspace/projectSearchView";
 import { ChatPanel } from "./session/chatPanel";
 import {
   appendUserMessage,
@@ -247,7 +256,8 @@ type ModalState =
       path: string;
       error?: string;
     }
-  | { kind: "confirm-unsaved"; tabPath: string; tabName: string };
+  | { kind: "confirm-unsaved"; tabPath: string; tabName: string }
+  | { kind: "confirm-project-replace"; replacement: string };
 
 /** Shortcuts owned by the native menu when running inside Tauri. */
 const NATIVE_MENU_KEYS = new Set(["b", "i", "s", "o", "n", "w", ",", "f"]);
@@ -384,6 +394,19 @@ class BradbitApp {
   private bufferSearchBar: SearchBar | null = null;
   private bufferSearchPath: string | null = null;
   private bufferSearchPending = false;
+  private projectSearchBar: SearchBar | null = null;
+  private projectSearchView: ProjectSearchView | null = null;
+  private projectSearchQuery: SearchBarQuery = {
+    search: "",
+    caseSensitive: false,
+    wholeWord: false,
+    regexp: false,
+  };
+  private projectSearchResults: SearchMatch[] = [];
+  private projectSearchLoading = false;
+  private projectSearchError = "";
+  private projectSearchGeneration = 0;
+  private projectSearchTimer: number | null = null;
 
   constructor(rootEl: HTMLElement) {
     this.rootEl = rootEl;
@@ -498,6 +521,7 @@ class BradbitApp {
     this.gitPanelError = "";
     this.gitRemotes = [];
     this.resetVersionWorkspace();
+    this.resetProjectSearch();
     this.inlineDiffOriginals.clear();
     this.inlineDiffLoading.clear();
     this.gitHeadId = null;
@@ -3060,6 +3084,7 @@ class BradbitApp {
   private async saveActiveTab(): Promise<boolean> {
     const active = this.getActiveTab();
     if (!active || !this.folder) return false;
+    if (isProjectSearchPath(active.path)) return false;
     if (isUntitledTab(active)) {
       return this.saveUntitledTab(active);
     }
@@ -3141,6 +3166,7 @@ class BradbitApp {
   }
 
   private performCloseTab(path: string): void {
+    if (isProjectSearchPath(path)) this.resetProjectSearch();
     this.editor?.closeDocumentState(path);
     this.tabState = closeTabInState(this.tabState, path);
     this.modal = { kind: "none" };
@@ -3335,7 +3361,14 @@ class BradbitApp {
 
   private toggleDiff(): void {
     const active = this.getActiveTab();
-    if (!active || !this.folder || isUntitledTab(active)) return;
+    if (
+      !active ||
+      !this.folder ||
+      isUntitledTab(active) ||
+      isProjectSearchPath(active.path)
+    ) {
+      return;
+    }
 
     const entering = active.viewMode !== "diff";
     this.tabState = setTabViewMode(
@@ -3408,7 +3441,14 @@ class BradbitApp {
 
   private requestDiscard(): void {
     const active = this.getActiveTab();
-    if (!active || !this.folder || isUntitledTab(active)) return;
+    if (
+      !active ||
+      !this.folder ||
+      isUntitledTab(active) ||
+      isProjectSearchPath(active.path)
+    ) {
+      return;
+    }
     this.requestDiscardPath(active.path);
   }
 
@@ -3483,6 +3523,10 @@ class BradbitApp {
 
   private openBufferSearch(replace = false): void {
     if (!this.folder) return;
+    if (isProjectSearchPath(this.getActiveTab()?.path)) {
+      this.ensureProjectSearchBar().focus();
+      return;
+    }
     this.editorVisible = true;
     if (this.versionOpen) {
       this.versionOpen = false;
@@ -3597,10 +3641,358 @@ class BradbitApp {
     }
   }
 
-  private openGlobalSearch(): void {
+  private ensureProjectSearchBar(): SearchBar {
+    if (!this.projectSearchBar) {
+      this.projectSearchBar = new SearchBar(
+        this.settings.language,
+        {
+          onSearchChange: (query) => this.scheduleProjectSearch(query),
+          onFindNext: () => this.navigateProjectSearch(1),
+          onFindPrevious: () => this.navigateProjectSearch(-1),
+          onReplace: (replacement) =>
+            void this.replaceProjectSelection(replacement),
+          onReplaceAll: (replacement) =>
+            this.requestProjectReplaceAll(replacement),
+          onClose: () => this.requestCloseTab(PROJECT_SEARCH_PATH),
+          onGenerateRegex: (description) =>
+            this.generateSearchRegex(description),
+          onOpenSettings: () => this.openSettingsAt("models"),
+        },
+      );
+    }
+    return this.projectSearchBar;
+  }
+
+  private ensureProjectSearchView(): ProjectSearchView {
+    if (!this.projectSearchView) {
+      this.projectSearchView = new ProjectSearchView({
+        language: this.settings.language,
+        onOpenMatch: (match) => this.openSearchMatch(match),
+      });
+    }
+    return this.projectSearchView;
+  }
+
+  private openProjectSearch(): void {
     if (!this.folder) return;
-    this.modal = { kind: "global-search" };
+    this.modal = { kind: "none" };
+    this.versionOpen = false;
+    this.editorVisible = true;
+    if (this.bufferSearchOpen) this.closeBufferSearch(false);
+    this.tabState = openProjectSearchInTabs(
+      this.tabState,
+      this.settings.language,
+    );
     this.render();
+    const bar = this.ensureProjectSearchBar();
+    window.setTimeout(() => bar.focus(), 0);
+  }
+
+  private scheduleProjectSearch(query: SearchBarQuery): void {
+    this.projectSearchQuery = query;
+    this.projectSearchGeneration += 1;
+    if (this.projectSearchTimer !== null) {
+      window.clearTimeout(this.projectSearchTimer);
+      this.projectSearchTimer = null;
+    }
+    this.projectSearchBar?.setError("");
+    const text = query.search.trim();
+    if (text.length < 2) {
+      this.projectSearchResults = [];
+      this.projectSearchLoading = false;
+      this.projectSearchError = "";
+      this.syncProjectSearchView();
+      return;
+    }
+    if (query.regexp) {
+      try {
+        new RegExp(query.search);
+      } catch {
+        const message = t(this.settings.language, "searchInvalidRegex");
+        this.projectSearchResults = [];
+        this.projectSearchLoading = false;
+        this.projectSearchError = message;
+        this.projectSearchBar?.setError(message);
+        this.syncProjectSearchView();
+        return;
+      }
+    }
+    this.projectSearchResults = [];
+    this.projectSearchLoading = true;
+    this.projectSearchError = "";
+    this.syncProjectSearchView();
+    const generation = this.projectSearchGeneration;
+    this.projectSearchTimer = window.setTimeout(() => {
+      this.projectSearchTimer = null;
+      void this.runProjectSearch(query, generation);
+    }, 180);
+  }
+
+  private async runProjectSearch(
+    query: SearchBarQuery,
+    generation: number,
+  ): Promise<void> {
+    if (!this.folder) return;
+    try {
+      const matches = await backend.searchInFolder(
+        this.folder.rootPath,
+        query.search,
+        1000,
+        true,
+        {
+          caseSensitive: query.caseSensitive,
+          wholeWord: query.wholeWord,
+          regex: query.regexp,
+        },
+      );
+      if (generation !== this.projectSearchGeneration) return;
+      this.projectSearchResults = matches;
+      this.projectSearchLoading = false;
+      this.projectSearchError = "";
+      this.syncProjectSearchView();
+    } catch (error) {
+      if (generation !== this.projectSearchGeneration) return;
+      const message = error instanceof Error ? error.message : String(error);
+      this.projectSearchResults = [];
+      this.projectSearchLoading = false;
+      this.projectSearchError = message;
+      if (/invalid regular expression/i.test(message)) {
+        this.projectSearchBar?.setError(
+          t(this.settings.language, "searchInvalidRegex"),
+        );
+      }
+      this.syncProjectSearchView();
+    }
+  }
+
+  private syncProjectSearchView(): void {
+    const view = this.projectSearchView;
+    if (!view) return;
+    view.update({
+      language: this.settings.language,
+      query: this.projectSearchQuery,
+      results: this.projectSearchResults,
+      loading: this.projectSearchLoading,
+      error: this.projectSearchError,
+    });
+    const info = view.selectionInfo();
+    this.projectSearchBar?.setMatchInfo(info.current, info.total);
+    this.refreshProjectSearchStatusbar();
+  }
+
+  private refreshProjectSearchStatusbar(): void {
+    const active = this.getActiveTab();
+    if (!active || !isProjectSearchPath(active.path)) return;
+    const statusBar = this.rootEl.querySelector(".statusbar");
+    if (statusBar) {
+      statusBar.replaceWith(
+        this.renderStatusbar(this.settings.language, active),
+      );
+    }
+  }
+
+  private navigateProjectSearch(delta: number): void {
+    const view = this.projectSearchView;
+    if (!view) return;
+    if (delta > 0) view.selectNext();
+    else view.selectPrevious();
+    const info = view.selectionInfo();
+    this.projectSearchBar?.setMatchInfo(info.current, info.total);
+  }
+
+  private projectSearchPaths(): string[] {
+    return [...new Set(this.projectSearchResults.map((match) => match.path))];
+  }
+
+  private hasDirtyProjectSearchTabs(paths: readonly string[]): boolean {
+    return this.tabState.tabs.some(
+      (tab) => paths.includes(tab.path) && isTabDirty(tab),
+    );
+  }
+
+  private async reloadProjectSearchTabs(paths: readonly string[]): Promise<void> {
+    if (!this.folder) return;
+    const root = this.folder.rootPath;
+    const changed = new Set(paths);
+    for (const path of changed) {
+      const tab = this.tabState.tabs.find((item) => item.path === path);
+      if (!tab) continue;
+      try {
+        const content = await backend.readTextFile(root, path);
+        this.tabState = updateTabContent(this.tabState, path, content);
+        this.tabState = markTabSaved(this.tabState, path);
+      } catch {
+        // The search will surface a read error on the next pass.
+      }
+    }
+    const active = this.getActiveTab();
+    if (active && changed.has(active.path)) {
+      const tab = this.tabState.tabs.find((item) => item.path === active.path);
+      if (tab) {
+        this.editor?.openDocument(active.path, tab.content, this.settings);
+      }
+    }
+  }
+
+  private async refreshAfterProjectReplace(paths: readonly string[]): Promise<void> {
+    await this.reloadProjectSearchTabs(paths);
+    await this.refreshTree();
+    await this.refreshGitStatus();
+    if (this.projectSearchQuery.search.trim().length >= 2) {
+      this.projectSearchGeneration += 1;
+      await this.runProjectSearch(
+        this.projectSearchQuery,
+        this.projectSearchGeneration,
+      );
+    }
+    this.render();
+  }
+
+  private async replaceProjectSelection(replacement: string): Promise<void> {
+    const match = this.projectSearchView?.selectedMatch();
+    if (!match) {
+      this.showStatusNotice(
+        t(this.settings.language, "projectReplaceNoSelection"),
+      );
+      return;
+    }
+    if (!this.folder) return;
+    if (this.hasDirtyProjectSearchTabs([match.path])) {
+      this.showStatusNotice(
+        t(this.settings.language, "projectReplaceDirty"),
+      );
+      return;
+    }
+    const lang = this.settings.language;
+    const query = this.projectSearchQuery;
+    try {
+      const content = await backend.readTextFile(
+        this.folder.rootPath,
+        match.path,
+      );
+      const result = replaceSearchInTextAtLine(
+        content,
+        match.line,
+        query,
+        replacement,
+      );
+      if (result.replacements === 0) {
+        this.showStatusNotice(
+          t(lang, "projectReplaceNoChange", { path: match.path }),
+        );
+        return;
+      }
+      await backend.writeTextFile(
+        this.folder.rootPath,
+        match.path,
+        result.content,
+      );
+      await this.refreshAfterProjectReplace([match.path]);
+      this.statusNotice =
+        result.replacements === 1
+          ? t(lang, "projectReplaceSelectionDoneOne", { path: match.path })
+          : t(lang, "projectReplaceSelectionDone", {
+              count: String(result.replacements),
+              path: match.path,
+            });
+      this.render();
+    } catch (error) {
+      this.showStatusNotice(
+        t(lang, "projectReplaceFailed", {
+          error: error instanceof Error ? error.message : String(error),
+        }),
+      );
+    }
+  }
+
+  private requestProjectReplaceAll(replacement: string): void {
+    if (this.projectSearchResults.length === 0) {
+      this.showStatusNotice(
+        t(this.settings.language, "projectReplaceNoResults"),
+      );
+      return;
+    }
+    const paths = this.projectSearchPaths();
+    if (this.hasDirtyProjectSearchTabs(paths)) {
+      this.showStatusNotice(
+        t(this.settings.language, "projectReplaceDirty"),
+      );
+      return;
+    }
+    this.modal = { kind: "confirm-project-replace", replacement };
+    this.render();
+  }
+
+  private async performProjectReplaceAll(replacement: string): Promise<void> {
+    if (!this.folder) return;
+    const lang = this.settings.language;
+    const query = this.projectSearchQuery;
+    const paths = this.projectSearchPaths();
+    let replacements = 0;
+    let filesChanged = 0;
+    let firstError = "";
+    for (const path of paths) {
+      try {
+        const content = await backend.readTextFile(
+          this.folder.rootPath,
+          path,
+        );
+        const result = replaceSearchInText(content, query, replacement);
+        if (result.replacements === 0) continue;
+        await backend.writeTextFile(
+          this.folder.rootPath,
+          path,
+          result.content,
+        );
+        replacements += result.replacements;
+        filesChanged += 1;
+      } catch (error) {
+        if (!firstError) {
+          firstError = error instanceof Error ? error.message : String(error);
+        }
+      }
+    }
+    await this.refreshAfterProjectReplace(paths);
+    if (firstError) {
+      this.statusNotice = t(lang, "projectReplaceFailed", {
+        error: firstError,
+      });
+    } else if (replacements === 1 && filesChanged === 1) {
+      this.statusNotice = t(lang, "projectReplaceDoneOneOne");
+    } else if (replacements === 1) {
+      this.statusNotice = t(lang, "projectReplaceDoneOne", {
+        files: String(filesChanged),
+      });
+    } else if (filesChanged === 1) {
+      this.statusNotice = t(lang, "projectReplaceDoneOneFile", {
+        count: String(replacements),
+      });
+    } else {
+      this.statusNotice = t(lang, "projectReplaceDone", {
+        count: String(replacements),
+        files: String(filesChanged),
+      });
+    }
+    this.render();
+  }
+
+  private resetProjectSearch(): void {
+    this.projectSearchGeneration += 1;
+    if (this.projectSearchTimer !== null) {
+      window.clearTimeout(this.projectSearchTimer);
+      this.projectSearchTimer = null;
+    }
+    this.projectSearchBar = null;
+    this.projectSearchView = null;
+    this.projectSearchQuery = {
+      search: "",
+      caseSensitive: false,
+      wholeWord: false,
+      regexp: false,
+    };
+    this.projectSearchResults = [];
+    this.projectSearchLoading = false;
+    this.projectSearchError = "";
   }
 
   private closeModal(): void {
@@ -3617,12 +4009,33 @@ class BradbitApp {
 
   private openSearchMatch(match: SearchMatch): void {
     this.modal = { kind: "none" };
-    void this.openFileAtLine(match.path, match.line);
+    void this.openFileAtLine(match.path, match.line, true);
   }
 
-  private async openFileAtLine(path: string, line: number): Promise<void> {
+  private async openFileAtLine(
+    path: string,
+    line: number,
+    withBufferSearch = false,
+  ): Promise<void> {
     await this.openFileFromTree(path, true);
+    this.tabState = setTabViewMode(this.tabState, path, "edit");
+    this.render();
     this.editor?.gotoLine(line);
+    if (withBufferSearch) {
+      this.openBufferSearchWithQuery(this.projectSearchQuery);
+    }
+  }
+
+  private openBufferSearchWithQuery(query: SearchBarQuery): void {
+    this.openBufferSearch(false);
+    const bar = this.bufferSearchBar;
+    if (!bar) return;
+    bar.setQuery(query.search, {
+      caseSensitive: query.caseSensitive,
+      wholeWord: query.wholeWord,
+      regexp: query.regexp,
+    });
+    bar.focus();
   }
 
   private async refreshKitCatalog(): Promise<void> {
@@ -3837,7 +4250,7 @@ class BradbitApp {
 
   private async copyActiveDocument(): Promise<boolean> {
     const active = this.getActiveTab();
-    if (!active) return false;
+    if (!active || isProjectSearchPath(active.path)) return false;
     const copied = await copyTextToClipboard(active.content);
     if (!copied) {
       this.showStatusNotice(t(this.settings.language, "copyError"));
@@ -4280,7 +4693,7 @@ class BradbitApp {
         this.openBufferSearch(true);
         break;
       case "edit.findInProject":
-        this.openGlobalSearch();
+        this.openProjectSearch();
         break;
       case "view.toggleSidebar":
         this.toggleSidebar();
@@ -4345,7 +4758,7 @@ class BradbitApp {
         this.openSettingsModal();
       } else if (letter === "f" && e.shiftKey) {
         e.preventDefault();
-        this.openGlobalSearch();
+        this.openProjectSearch();
       } else if (letter === "f" && this.getActiveTab()) {
         e.preventDefault();
         this.openBufferSearch(false);
@@ -4469,7 +4882,13 @@ class BradbitApp {
     if (nextTree) nextTree.scrollTop = this.treeScrollTop;
 
     // Sync CodeMirror instance if a tab is active
-    if (this.folder && activeTab && this.cmHostEl && !this.versionOpen) {
+    if (
+      this.folder &&
+      activeTab &&
+      this.cmHostEl &&
+      !this.versionOpen &&
+      !isProjectSearchPath(activeTab.path)
+    ) {
       if (!this.editor) {
         this.editor = new BradbitCodeMirror(this.cmHostEl, this.settings, {
           onContentChange: (path, content) => {
@@ -5139,7 +5558,7 @@ class BradbitApp {
       },
     ];
 
-    if (!tab.untitled) {
+    if (!tab.untitled && !isProjectSearchPath(tab.path)) {
       items.push(
         { id: "tab-separator", label: "", separator: true },
         {
@@ -5719,6 +6138,18 @@ class BradbitApp {
       return col;
     }
 
+    if (activeTab && isProjectSearchPath(activeTab.path)) {
+      const bar = this.ensureProjectSearchBar();
+      const view = this.ensureProjectSearchView();
+      this.syncProjectSearchView();
+      col.appendChild(bar.element());
+      const surface = document.createElement("div");
+      surface.className = "editor-surface project-search-surface";
+      surface.appendChild(view.element());
+      col.appendChild(surface);
+      return col;
+    }
+
     const gitEntry = activeTab
       ? this.gitStatus?.entries.find((entry) => entry.path === activeTab.path)
       : undefined;
@@ -5875,7 +6306,7 @@ class BradbitApp {
 
   private sendSelectionToChat(): void {
     const active = this.getActiveTab();
-    if (!active) return;
+    if (!active || isProjectSearchPath(active.path)) return;
     const selection = this.editor?.getSelection() ?? "";
     if (!selection.trim()) {
       this.statusNotice = t(this.settings.language, "chatSelectionEmpty");
@@ -5979,20 +6410,28 @@ class BradbitApp {
     }
 
     if (activeTab) {
-      const pathSpan = document.createElement("span");
-      pathSpan.textContent = activeTab.untitled
-        ? t(lang, "untitledFileHint")
-        : activeTab.path;
-      left.appendChild(pathSpan);
+      if (isProjectSearchPath(activeTab.path)) {
+        const label = document.createElement("span");
+        label.textContent = t(lang, "globalSearchTitle");
+        left.appendChild(label);
+      } else {
+        const pathSpan = document.createElement("span");
+        pathSpan.textContent = activeTab.untitled
+          ? t(lang, "untitledFileHint")
+          : activeTab.path;
+        left.appendChild(pathSpan);
 
-      const dirtySpan = document.createElement("span");
-      const dirty = activeTab.untitled || isTabDirty(activeTab);
-      dirtySpan.className = `status-pill ${dirty ? "dirty" : "saved"}`;
-      dirtySpan.append(
-        createIcon(dirty ? "circle" : "check", 11),
-        document.createTextNode(dirty ? ` ${t(lang, "unsaved")}` : ` ${t(lang, "saved")}`),
-      );
-      left.appendChild(dirtySpan);
+        const dirtySpan = document.createElement("span");
+        const dirty = activeTab.untitled || isTabDirty(activeTab);
+        dirtySpan.className = `status-pill ${dirty ? "dirty" : "saved"}`;
+        dirtySpan.append(
+          createIcon(dirty ? "circle" : "check", 11),
+          document.createTextNode(
+            dirty ? ` ${t(lang, "unsaved")}` : ` ${t(lang, "saved")}`,
+          ),
+        );
+        left.appendChild(dirtySpan);
+      }
 
       if (this.statusNotice) {
         const noticeSpan = document.createElement("span");
@@ -6010,14 +6449,29 @@ class BradbitApp {
     right.className = "statusbar-right";
 
     if (activeTab) {
-      const counts = countWordsAndChars(activeTab.content);
-      const countSpan = document.createElement("span");
-      countSpan.textContent = `${counts.words} ${t(lang, "words")} · ${counts.chars} ${t(lang, "chars")}`;
+      if (isProjectSearchPath(activeTab.path)) {
+        if (this.projectSearchResults.length > 0) {
+          const files = new Set(
+            this.projectSearchResults.map((match) => match.path),
+          ).size;
+          const countSpan = document.createElement("span");
+          countSpan.textContent = projectSearchSummary(
+            lang,
+            this.projectSearchResults.length,
+            files,
+          );
+          right.appendChild(countSpan);
+        }
+      } else {
+        const counts = countWordsAndChars(activeTab.content);
+        const countSpan = document.createElement("span");
+        countSpan.textContent = `${counts.words} ${t(lang, "words")} · ${counts.chars} ${t(lang, "chars")}`;
 
-      const posSpan = document.createElement("span");
-      posSpan.textContent = `${t(lang, "lineShort")} ${activeTab.cursorLine}, ${t(lang, "colShort")} ${activeTab.cursorCol}`;
+        const posSpan = document.createElement("span");
+        posSpan.textContent = `${t(lang, "lineShort")} ${activeTab.cursorLine}, ${t(lang, "colShort")} ${activeTab.cursorCol}`;
 
-      right.append(countSpan, posSpan);
+        right.append(countSpan, posSpan);
+      }
     }
 
     bar.append(left, right);
@@ -7019,6 +7473,53 @@ class BradbitApp {
       footer.append(cancelBtn, discardBtn);
       dialog.appendChild(footer);
       setTimeout(() => cancelBtn.focus(), 10);
+    } else if (this.modal.kind === "confirm-project-replace") {
+      const replacement = this.modal.replacement;
+      const files = new Set(
+        this.projectSearchResults.map((match) => match.path),
+      ).size;
+      const h3 = document.createElement("h3");
+      h3.textContent = t(lang, "projectReplaceTitle");
+      const p = document.createElement("p");
+      p.textContent =
+        files === 1
+          ? t(lang, "projectReplacePromptOneFile", {
+              query: this.projectSearchQuery.search,
+              replacement,
+            })
+          : t(lang, "projectReplacePrompt", {
+              query: this.projectSearchQuery.search,
+              replacement,
+              files: String(files),
+            });
+      const warning = document.createElement("p");
+      warning.className = "modal-hint";
+      warning.textContent = t(lang, "projectReplaceWarning");
+      dialog.append(h3, p, warning);
+
+      const footer = document.createElement("div");
+      footer.className = "modal-footer";
+      const cancel = document.createElement("button");
+      cancel.type = "button";
+      cancel.className = "toolbar-btn";
+      cancel.textContent = t(lang, "cancel");
+      cancel.onclick = () => {
+        this.modal = { kind: "none" };
+        this.render();
+      };
+      const confirm = document.createElement("button");
+      confirm.type = "button";
+      confirm.className = "toolbar-btn danger";
+      confirm.dataset.testid = "confirm-project-replace-btn";
+      confirm.textContent = t(lang, "projectReplaceConfirm");
+      confirm.onclick = () => {
+        this.modal = { kind: "none" };
+        this.render();
+        void this.performProjectReplaceAll(replacement);
+      };
+      footer.append(cancel, confirm);
+      dialog.appendChild(footer);
+      setTimeout(() => cancel.focus(), 10);
     } else if (this.modal.kind === "branch-input") {
       const modalState = this.modal;
       const h3 = document.createElement("h3");

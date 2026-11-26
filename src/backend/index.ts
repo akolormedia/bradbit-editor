@@ -170,6 +170,16 @@ function buildVirtualTree(vfs: VirtualFs, showConfig: boolean): FileTreeNode[] {
   return rootNodes;
 }
 
+export interface SearchInFolderOptions {
+  caseSensitive?: boolean;
+  wholeWord?: boolean;
+  regex?: boolean;
+}
+
+function escapeSearchLiteral(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
 export const backend = {
   async loadSettings(): Promise<AppSettings> {
     if (isTauriEnvironment()) {
@@ -539,6 +549,7 @@ export const backend = {
     query: string,
     maxResults = 200,
     includeConfig = false,
+    options: SearchInFolderOptions = {},
   ): Promise<SearchMatch[]> {
     if (isTauriEnvironment()) {
       return tauriInvoke<SearchMatch[]>("search_in_folder", {
@@ -546,23 +557,36 @@ export const backend = {
         query,
         maxResults,
         includeConfig,
+        caseSensitive: options.caseSensitive ?? false,
+        wholeWord: options.wholeWord ?? false,
+        regex: options.regex ?? false,
       });
     }
 
-    const needle = query.trim().toLowerCase();
+    const needle = query.trim();
     if (needle.length === 0) return [];
+    let matcher: RegExp;
+    try {
+      const pattern = options.regex ? needle : escapeSearchLiteral(needle);
+      matcher = new RegExp(
+        options.wholeWord ? `\\b(?:${pattern})\\b` : pattern,
+        options.caseSensitive ? "" : "i",
+      );
+    } catch {
+      throw new Error("Invalid regular expression");
+    }
     const results: SearchMatch[] = [];
     for (const [path, content] of Object.entries(activeVirtualFs.files)) {
       if (!includeConfig && isConfigSearchPath(path)) continue;
       const lines = content.split(/\r?\n/);
       for (let index = 0; index < lines.length; index += 1) {
         const line = lines[index];
-        const matchIndex = line.toLowerCase().indexOf(needle);
-        if (matchIndex < 0) continue;
+        const found = matcher.exec(line);
+        if (!found || found.index === undefined) continue;
         results.push({
           path,
           line: index + 1,
-          column: line.slice(0, matchIndex).length + 1,
+          column: line.slice(0, found.index).length + 1,
           snippet: line.trim().slice(0, 240),
         });
         if (results.length >= maxResults) break;

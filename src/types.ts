@@ -132,11 +132,18 @@ export interface MenuCommand {
   path?: string;
 }
 
+export interface SearchContextLine {
+  line: number;
+  text: string;
+  isMatch: boolean;
+}
+
 export interface SearchMatch {
   path: string;
   line: number;
   column: number;
   snippet: string;
+  context?: SearchContextLine[];
 }
 
 export interface TemplateInfo {

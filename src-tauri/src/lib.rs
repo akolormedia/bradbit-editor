@@ -136,13 +136,25 @@ fn export_folder_pdf(
 }
 
 #[tauri::command]
+#[allow(clippy::too_many_arguments)]
 fn search_in_folder(
     root: String,
     query: String,
     max_results: usize,
     include_config: bool,
+    case_sensitive: bool,
+    whole_word: bool,
+    regex: bool,
 ) -> Result<Vec<search::SearchMatch>, String> {
-    search::search_in_folder(&root, &query, max_results, include_config)
+    search::search_in_folder(
+        &root,
+        &query,
+        max_results,
+        include_config,
+        case_sensitive,
+        whole_word,
+        regex,
+    )
 }
 
 #[tauri::command]
