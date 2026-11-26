@@ -1,6 +1,13 @@
 import { backend, isTauriEnvironment } from "./backend";
 import { BradbitCodeMirror } from "./editor/codemirror";
 import { SearchBar, SearchBarQuery } from "./editor/searchBar";
+import {
+  buildSearchAiModelOptions,
+  configuredSearchAiTarget,
+  parseSearchAiModel,
+  searchAiErrorKind,
+  supportsSearchAi,
+} from "./settings/searchAi";
 import { BradbitDiffView, DiffViewMode } from "./editor/diff";
 import { renderMarkdownPreview } from "./editor/preview";
 import { renderFountainPreview } from "./editor/fountainPreview";
@@ -1086,35 +1093,77 @@ class BradbitApp {
     }
   }
 
+  private pickAiTarget(
+    chatModel: string,
+  ): { providerId: string; model: string } | { error: "key" | "model" } {
+    let provider = this.byokStatus.find(
+      (item) => item.hasKey && supportsSearchAi(item.kind),
+    );
+    if (!provider) return { error: "key" };
+
+    const chat = parseSearchAiModel(chatModel);
+    if (chat) {
+      const match = this.byokStatus.find(
+        (item) =>
+          item.id === chat.providerId &&
+          item.hasKey &&
+          supportsSearchAi(item.kind),
+      );
+      if (match) provider = match;
+    }
+    const selectedModel =
+      chat && provider.id === chat.providerId && !/\s/.test(chat.model)
+        ? chat.model
+        : "";
+    const model =
+      selectedModel ||
+      provider.model ||
+      this.chatModels.find((item) => item.providerId === provider.id)?.id ||
+      "";
+    if (!model) return { error: "model" };
+    return { providerId: provider.id, model };
+  }
+
+  private defaultAiTarget():
+    | { providerId: string; model: string }
+    | { error: "key" | "model" } {
+    return this.pickAiTarget(
+      this.chatState.model ?? this.settings.recentModels[0] ?? "",
+    );
+  }
+
+  private defaultSearchAiModelLabel(): string {
+    const target = this.defaultAiTarget();
+    if ("error" in target) return "";
+    const provider = this.byokStatus.find(
+      (item) => item.id === target.providerId,
+    );
+    const model = this.chatModels.find(
+      (item) =>
+        item.providerId === target.providerId && item.id === target.model,
+    );
+    return `${provider?.name ?? target.providerId} · ${
+      model?.name ?? target.model
+    }`;
+  }
+
   private async resolveAiTarget(): Promise<
     { providerId: string; model: string } | { error: "key" | "model" }
   > {
     await this.refreshByokStatus();
-    let provider = this.byokStatus.find((item) => item.hasKey);
-    if (!provider) return { error: "key" };
+    return this.defaultAiTarget();
+  }
 
-    const chatModel = this.chatState.model ?? "";
-    const slash = chatModel.indexOf("/");
-    const chatProviderId = slash > 0 ? chatModel.slice(0, slash) : "";
-    const chatModelId =
-      slash > 0 ? chatModel.slice(slash + 1).split("#")[0] : "";
-    if (chatProviderId) {
-      const match = this.byokStatus.find(
-        (item) => item.id === chatProviderId && item.hasKey,
-      );
-      if (match) provider = match;
-    }
-    const model =
-      (provider.id === chatProviderId &&
-      chatModelId &&
-      !/\s/.test(chatModelId)
-        ? chatModelId
-        : "") ||
-      this.chatModels.find((item) => item.providerId === provider.id)?.id ||
-      provider.model ||
-      "";
-    if (!model) return { error: "model" };
-    return { providerId: provider.id, model };
+  private async resolveSearchAiTarget(): Promise<
+    { providerId: string; model: string } | { error: "key" | "model" }
+  > {
+    await this.refreshByokStatus();
+    return (
+      configuredSearchAiTarget(
+        this.settings.searchAiModel,
+        this.byokStatus,
+      ) ?? this.defaultAiTarget()
+    );
   }
 
   private async generateVersionMessage(): Promise<void> {
@@ -3426,6 +3475,7 @@ class BradbitApp {
         onClose: () => this.closeBufferSearch(),
         onGenerateRegex: (description) =>
           this.generateSearchRegex(description),
+        onOpenSettings: () => this.openSettingsAt("models"),
       });
     }
     return this.bufferSearchBar;
@@ -3511,7 +3561,7 @@ class BradbitApp {
 
   private async generateSearchRegex(description: string): Promise<string> {
     const lang = this.settings.language;
-    const target = await this.resolveAiTarget();
+    const target = await this.resolveSearchAiTarget();
     if ("error" in target) {
       throw new Error(t(lang, "searchAiNoModel"));
     }
@@ -3522,17 +3572,23 @@ class BradbitApp {
       `Request: ${description}`,
     ].join("\n");
     try {
-      return await backend.byokComplete(
+      const raw = await backend.byokComplete(
         target.providerId,
         prompt,
         target.model,
       );
+      if (!raw.trim()) throw new Error(t(lang, "searchAiEmptyAnswer"));
+      return raw;
     } catch (err) {
-      throw new Error(
-        `${t(lang, "searchAiError")} ${
-          err instanceof Error ? err.message : String(err)
-        }`,
-      );
+      const message = err instanceof Error ? err.message : String(err);
+      const kind = searchAiErrorKind(message);
+      if (kind === "empty") {
+        throw new Error(t(lang, "searchAiEmptyAnswer"));
+      }
+      if (kind === "truncated") {
+        throw new Error(t(lang, "searchAiTruncated"));
+      }
+      throw new Error(`${t(lang, "searchAiError")} ${message}`);
     }
   }
 
@@ -6662,6 +6718,12 @@ class BradbitApp {
           busyId: this.byokBusyId,
           error: this.byokError,
         },
+        searchAiModels: buildSearchAiModelOptions(
+          this.byokStatus,
+          this.chatModels,
+          this.settings.recentModels,
+        ),
+        searchAiDefaultModel: this.defaultSearchAiModelLabel(),
         initialCategory: this.settingsCategory,
         initialQuery: this.settingsQuery,
         modalError: this.modal.error,

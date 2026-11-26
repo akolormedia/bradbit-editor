@@ -18,6 +18,7 @@ export interface SearchBarHandlers {
   onReplaceAll: (replace: string) => void;
   onClose: () => void;
   onGenerateRegex: (description: string) => Promise<string>;
+  onOpenSettings: () => void;
 }
 
 /**
@@ -36,6 +37,7 @@ export class SearchBar {
   private readonly aiPopover: HTMLElement;
   private readonly aiPrompt: HTMLTextAreaElement;
   private readonly aiError: HTMLElement;
+  private readonly aiStatus: HTMLElement;
   private readonly aiGenerate: HTMLButtonElement;
   private readonly optionButtons = new Map<keyof SearchBarQuery, HTMLButtonElement>();
   private query: SearchBarQuery = {
@@ -47,6 +49,7 @@ export class SearchBar {
   private replaceOpen = false;
   private aiOpen = false;
   private generating = false;
+  private generation = 0;
 
   constructor(
     private readonly language: Language,
@@ -226,6 +229,35 @@ export class SearchBar {
     this.aiError = document.createElement("div");
     this.aiError.className = "search-ai-error";
     this.aiError.hidden = true;
+    this.aiStatus = document.createElement("div");
+    this.aiStatus.className = "search-ai-status";
+    this.aiStatus.dataset.testid = "search-ai-status";
+    this.aiStatus.hidden = true;
+    this.aiStatus.setAttribute("aria-live", "polite");
+    const spinner = document.createElement("span");
+    spinner.className = "search-ai-spinner";
+    spinner.appendChild(createIcon("refresh-cw", 12));
+    const statusText = document.createElement("span");
+    statusText.textContent = t(language, "searchAiThinking");
+    this.aiStatus.append(spinner, statusText);
+
+    const aiSettings = document.createElement("button");
+    aiSettings.type = "button";
+    aiSettings.className = "search-ai-settings";
+    aiSettings.dataset.testid = "search-ai-settings";
+    aiSettings.title = t(language, "searchAiSettingsTitle");
+    aiSettings.setAttribute("aria-label", aiSettings.title);
+    aiSettings.append(createIcon("settings", 13));
+    const settingsText = document.createElement("span");
+    settingsText.textContent = t(language, "searchAiSettings");
+    aiSettings.appendChild(settingsText);
+    aiSettings.onclick = () => {
+      this.closeAi();
+      this.handlers.onOpenSettings();
+    };
+
+    const aiButtons = document.createElement("div");
+    aiButtons.className = "search-ai-buttons";
     const aiActions = document.createElement("div");
     aiActions.className = "search-ai-actions";
     this.aiGenerate = document.createElement("button");
@@ -239,8 +271,15 @@ export class SearchBar {
     cancel.className = "search-action-btn";
     cancel.textContent = t(language, "cancel");
     cancel.onclick = () => this.closeAi();
-    aiActions.append(this.aiGenerate, cancel);
-    this.aiPopover.append(aiTitle, this.aiPrompt, this.aiError, aiActions);
+    aiButtons.append(this.aiGenerate, cancel);
+    aiActions.append(aiSettings, aiButtons);
+    this.aiPopover.append(
+      aiTitle,
+      this.aiPrompt,
+      this.aiError,
+      this.aiStatus,
+      aiActions,
+    );
     this.root.appendChild(this.aiPopover);
   }
 
@@ -351,6 +390,8 @@ export class SearchBar {
     this.aiOpen = true;
     this.aiPopover.hidden = false;
     this.aiError.hidden = true;
+    this.aiStatus.hidden = true;
+    this.aiPrompt.disabled = false;
     this.aiPrompt.focus();
   }
 
@@ -358,6 +399,14 @@ export class SearchBar {
     this.aiOpen = false;
     this.aiPopover.hidden = true;
     this.aiError.hidden = true;
+    this.aiStatus.hidden = true;
+    if (this.generating) {
+      this.generation += 1;
+      this.generating = false;
+      this.aiGenerate.disabled = false;
+      this.aiGenerate.textContent = t(this.language, "searchAiGenerate");
+      this.aiPrompt.disabled = false;
+    }
     this.focus();
   }
 
@@ -370,29 +419,39 @@ export class SearchBar {
       return;
     }
     this.generating = true;
+    const generation = ++this.generation;
     this.aiGenerate.disabled = true;
     this.aiGenerate.textContent = t(this.language, "searchAiGenerating");
+    this.aiPrompt.disabled = true;
     this.aiError.hidden = true;
+    this.aiStatus.hidden = false;
     try {
       const raw = await this.handlers.onGenerateRegex(description);
+      if (generation !== this.generation) return;
       const regex = normalizeGeneratedRegex(raw);
       if (!regex) {
-        throw new Error(t(this.language, "searchAiEmpty"));
+        throw new Error(t(this.language, "searchAiEmptyAnswer"));
       }
       this.aiOpen = false;
       this.aiPopover.hidden = true;
       this.setQuery(regex, { regexp: true });
       this.focus();
     } catch (err) {
+      if (generation !== this.generation) return;
+      this.aiStatus.hidden = true;
       this.aiError.textContent =
         err instanceof Error
           ? err.message
           : t(this.language, "searchAiError");
       this.aiError.hidden = false;
     } finally {
-      this.generating = false;
-      this.aiGenerate.disabled = false;
-      this.aiGenerate.textContent = t(this.language, "searchAiGenerate");
+      if (generation === this.generation) {
+        this.generating = false;
+        this.aiGenerate.disabled = false;
+        this.aiGenerate.textContent = t(this.language, "searchAiGenerate");
+        this.aiPrompt.disabled = false;
+        this.aiStatus.hidden = true;
+      }
     }
   }
 }

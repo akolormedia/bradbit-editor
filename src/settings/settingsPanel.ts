@@ -14,6 +14,7 @@ import {
   SettingsCategoryId,
   visibleEntriesForCategory,
 } from "./catalog";
+import { SearchAiModelOption } from "./searchAi";
 import { isSettingsCategoryVisible } from "./developer";
 
 const TERMINAL_PRESETS = ["shell", "opencode", "claude"] as const;
@@ -42,6 +43,8 @@ export interface SettingsPanelOptions {
   settings: AppSettings;
   github: SettingsGithubState;
   byok: SettingsByokState;
+  searchAiModels: SearchAiModelOption[];
+  searchAiDefaultModel: string;
   initialCategory: SettingsCategoryId;
   initialQuery: string;
   modalError?: string;
@@ -738,29 +741,77 @@ export class SettingsPanel {
   }
 
   private renderModels(has: (id: string) => boolean): void {
-    if (has("byok")) this.renderByok();
-    if (!has("models")) return;
-    const group = document.createElement("div");
-    group.className = "settings-control-stack";
-    const summary = document.createElement("p");
-    summary.className = "settings-hint";
-    summary.textContent = t(this.options.language, "settingsModelsSummary", {
-      hidden: String(this.options.settings.hiddenModels.length),
-      recent: String(this.options.settings.recentModels.length),
-    });
-    const manage = document.createElement("button");
-    manage.type = "button";
-    manage.className = "toolbar-btn";
-    manage.dataset.testid = "settings-manage-models";
-    manage.textContent = t(this.options.language, "chatManageModels");
-    manage.onclick = () => this.options.onManageModels();
-    group.append(summary, manage);
+    if (has("searchAiModel")) {
+      this.renderSearchAiModel();
+    }
+    if (has("models")) {
+      const group = document.createElement("div");
+      group.className = "settings-control-stack";
+      const summary = document.createElement("p");
+      summary.className = "settings-hint";
+      summary.textContent = t(this.options.language, "settingsModelsSummary", {
+        hidden: String(this.options.settings.hiddenModels.length),
+        recent: String(this.options.settings.recentModels.length),
+      });
+      const manage = document.createElement("button");
+      manage.type = "button";
+      manage.className = "toolbar-btn";
+      manage.dataset.testid = "settings-manage-models";
+      manage.textContent = t(this.options.language, "chatManageModels");
+      manage.onclick = () => this.options.onManageModels();
+      group.append(summary, manage);
 
+      this.contentEl.appendChild(
+        this.row(
+          t(this.options.language, "chatModelsTitle"),
+          t(this.options.language, "chatModelsHint"),
+          group,
+        ),
+      );
+    }
+    if (has("byok")) this.renderByok();
+  }
+
+  private renderSearchAiModel(): void {
+    const value = this.options.settings.searchAiModel;
+    const options = [
+      {
+        value: "",
+        label: t(this.options.language, "searchAiModelDefault"),
+      },
+      ...this.options.searchAiModels,
+    ];
+    if (value && !options.some((option) => option.value === value)) {
+      options.push({
+        value,
+        label: t(this.options.language, "searchAiModelUnavailable"),
+      });
+    }
+    const select = this.selectControl(
+      "settings-search-ai-model",
+      options,
+      value,
+      (next) => this.options.onUpdateSettings({ searchAiModel: next }),
+    );
+    const stack = document.createElement("div");
+    stack.className = "settings-control-stack";
+    const effective = value
+      ? options.find((option) => option.value === value)?.label
+      : this.options.searchAiDefaultModel;
+    const current = document.createElement("p");
+    current.className = "settings-hint";
+    current.dataset.testid = "settings-search-ai-current";
+    current.textContent = effective
+      ? t(this.options.language, "searchAiModelEffective", {
+          model: effective,
+        })
+      : t(this.options.language, "searchAiModelNoModel");
+    stack.append(select, current);
     this.contentEl.appendChild(
       this.row(
-        t(this.options.language, "chatModelsTitle"),
-        t(this.options.language, "chatModelsHint"),
-        group,
+        t(this.options.language, "searchAiModelTitle"),
+        t(this.options.language, "searchAiModelHint"),
+        stack,
       ),
     );
   }

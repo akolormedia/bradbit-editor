@@ -52,6 +52,7 @@ export interface AppSettings {
   gitAuthorEmail: string;
   hiddenModels: string[];
   recentModels: string[];
+  searchAiModel: string;
   terminalCommand: string;
   byokProviders: ByokProvider[];
 }

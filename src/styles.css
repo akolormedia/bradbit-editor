@@ -6551,3 +6551,59 @@ textarea.text-input {
   background: var(--accent);
   color: var(--accent-text, #fff);
 }
+
+.search-ai-status {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--text-secondary);
+  font: 11px var(--font-ui);
+}
+
+.search-ai-status[hidden] {
+  display: none !important;
+}
+
+.search-ai-spinner {
+  display: inline-flex;
+  color: var(--accent);
+  animation: search-ai-spin 0.9s linear infinite;
+}
+
+@keyframes search-ai-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.search-ai-actions {
+  align-items: center;
+}
+
+.search-ai-buttons {
+  display: flex;
+  gap: 6px;
+  margin-left: auto;
+}
+
+.search-ai-settings {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 6px;
+  border: none;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--text-muted);
+  font: 10.5px var(--font-ui);
+  cursor: pointer;
+}
+
+.search-ai-settings:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+
+.search-ai-settings svg {
+  flex-shrink: 0;
+}

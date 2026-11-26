@@ -11,6 +11,7 @@ function handlers(): SearchBarHandlers {
     onReplaceAll: vi.fn(),
     onClose: vi.fn(),
     onGenerateRegex: vi.fn().mockResolvedValue("\\d{3}"),
+    onOpenSettings: vi.fn(),
   };
 }
 
@@ -114,6 +115,85 @@ describe("editor search bar", () => {
     ).toBe("2/8");
   });
 
+  it("shows a thinking state while generating", async () => {
+    const { bar, calls } = mount();
+    let resolve: (value: string) => void = () => {};
+    calls.onGenerateRegex = vi.fn(
+      () =>
+        new Promise<string>((done) => {
+          resolve = done;
+        }),
+    );
+    bar
+      .element()
+      .querySelector<HTMLButtonElement>('[data-testid="search-ai-btn"]')!
+      .click();
+    bar.element().querySelector<HTMLTextAreaElement>(
+      '[data-testid="search-ai-input"]',
+    )!.value = "números";
+    bar
+      .element()
+      .querySelector<HTMLButtonElement>('[data-testid="search-ai-generate"]')!
+      .click();
+
+    const status = bar.element().querySelector<HTMLElement>(
+      '[data-testid="search-ai-status"]',
+    )!;
+    await vi.waitFor(() => expect(status.hidden).toBe(false));
+    resolve("\\d{3}");
+    await vi.waitFor(() => expect(status.hidden).toBe(true));
+  });
+
+  it("ignores a generation that the user canceled", async () => {
+    const { bar, calls } = mount();
+    let resolve: (value: string) => void = () => {};
+    calls.onGenerateRegex = vi.fn(
+      () =>
+        new Promise<string>((done) => {
+          resolve = done;
+        }),
+    );
+    bar
+      .element()
+      .querySelector<HTMLButtonElement>('[data-testid="search-ai-btn"]')!
+      .click();
+    bar.element().querySelector<HTMLTextAreaElement>(
+      '[data-testid="search-ai-input"]',
+    )!.value = "números";
+    bar
+      .element()
+      .querySelector<HTMLButtonElement>('[data-testid="search-ai-generate"]')!
+      .click();
+    bar
+      .element()
+      .querySelector<HTMLButtonElement>(".search-ai-actions .search-action-btn:last-child")!
+      .click();
+    resolve("\\d{3}");
+    await Promise.resolve();
+    expect(bar.getQuery().search).toBe("");
+    expect(
+      bar.element().querySelector<HTMLInputElement>(
+        '[data-testid="search-query-input"]',
+      )!.value,
+    ).toBe("");
+  });
+
+  it("opens the AI settings from the popover", () => {
+    const { bar, calls } = mount();
+    bar
+      .element()
+      .querySelector<HTMLButtonElement>('[data-testid="search-ai-btn"]')!
+      .click();
+    bar
+      .element()
+      .querySelector<HTMLButtonElement>('[data-testid="search-ai-settings"]')!
+      .click();
+    expect(calls.onOpenSettings).toHaveBeenCalledOnce();
+    expect(
+      bar.element().querySelector<HTMLElement>(".search-ai-popover")!.hidden,
+    ).toBe(true);
+  });
+
   it("keeps the AI panel open when generation returns nothing", async () => {
     const { bar, calls } = mount();
     calls.onGenerateRegex = vi.fn().mockResolvedValue("```\n```");
@@ -135,7 +215,9 @@ describe("editor search bar", () => {
         ".search-ai-error",
       )!;
       expect(error.hidden).toBe(false);
-      expect(error.textContent).toBe("Escribe qué quieres buscar.");
+      expect(error.textContent).toBe(
+        "El modelo no devolvió texto. Prueba con otro modelo desde Ajustes.",
+      );
     });
     expect(bar.getQuery().search).toBe("");
   });

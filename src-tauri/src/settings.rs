@@ -43,6 +43,8 @@ pub struct AppSettings {
     pub hidden_models: Vec<String>,
     #[serde(default)]
     pub recent_models: Vec<String>,
+    #[serde(default)]
+    pub search_ai_model: String,
     #[serde(default = "default_terminal_command")]
     pub terminal_command: String,
     #[serde(default)]
@@ -78,6 +80,7 @@ impl Default for AppSettings {
             git_author_email: String::new(),
             hidden_models: Vec::new(),
             recent_models: Vec::new(),
+            search_ai_model: String::new(),
             terminal_command: default_terminal_command(),
             byok_providers: Vec::new(),
         }
@@ -195,6 +198,7 @@ mod tests {
             git_author_email: "ada@example.com".to_string(),
             hidden_models: vec!["openai/gpt-5".to_string()],
             recent_models: vec!["opencode-go/deepseek-v4.1-flash".to_string()],
+            search_ai_model: "deepseek/deepseek-flash".to_string(),
             terminal_command: "opencode".to_string(),
             byok_providers: vec![ByokProvider {
                 id: "deepseek".to_string(),
@@ -232,6 +236,7 @@ mod tests {
         assert_eq!(parsed.git_author_email, "");
         assert!(parsed.hidden_models.is_empty());
         assert!(parsed.recent_models.is_empty());
+        assert!(parsed.search_ai_model.is_empty());
         assert_eq!(parsed.terminal_command, "shell");
         assert_eq!(parsed.color_theme, "bradbit");
         assert!(parsed.byok_providers.is_empty());

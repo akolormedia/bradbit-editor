@@ -330,6 +330,20 @@ export const translations = {
     searchAiEmpty: "Escribe qué quieres buscar.",
     searchAiError: "No se pudo generar la expresión.",
     searchAiNoModel: "Conecta un modelo en Ajustes para usar la IA.",
+    searchAiThinking: "Pensando…",
+    searchAiEmptyAnswer:
+      "El modelo no devolvió texto. Prueba con otro modelo desde Ajustes.",
+    searchAiTruncated:
+      "El modelo se quedó sin tokens antes de responder. Prueba con otro modelo.",
+    searchAiSettings: "Modelo",
+    searchAiSettingsTitle: "Cambiar el modelo de búsqueda con IA",
+    searchAiModelTitle: "Modelo de búsqueda con IA",
+    searchAiModelHint:
+      "Se usa al generar expresiones regulares desde la búsqueda. Por defecto sigue el modelo activo del chat.",
+    searchAiModelDefault: "Predeterminado (modelo del chat)",
+    searchAiModelUnavailable: "Modelo no disponible",
+    searchAiModelEffective: "Ahora: {model}",
+    searchAiModelNoModel: "No hay un modelo conectado todavía.",
     searchUnavailable: "Abre un archivo editable para buscar en él.",
     paletteHint: "↑↓ navegar · Enter abrir · Esc cerrar",
     paletteResultCount: "{count} resultados",
@@ -1030,6 +1044,20 @@ export const translations = {
     searchAiEmpty: "Describe what you want to find.",
     searchAiError: "Could not generate the regex.",
     searchAiNoModel: "Connect a model in Settings to use AI.",
+    searchAiThinking: "Thinking…",
+    searchAiEmptyAnswer:
+      "The model returned no text. Try another model from Settings.",
+    searchAiTruncated:
+      "The model ran out of tokens before answering. Try another model.",
+    searchAiSettings: "Model",
+    searchAiSettingsTitle: "Change the AI search model",
+    searchAiModelTitle: "AI search model",
+    searchAiModelHint:
+      "Used when generating regular expressions from search. Defaults to the active chat model.",
+    searchAiModelDefault: "Default (chat model)",
+    searchAiModelUnavailable: "Unavailable model",
+    searchAiModelEffective: "Now: {model}",
+    searchAiModelNoModel: "No connected model yet.",
     searchUnavailable: "Open an editable file to search in it.",
     paletteHint: "↑↓ navigate · Enter open · Esc close",
     paletteResultCount: "{count} results",

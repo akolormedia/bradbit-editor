@@ -15,6 +15,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   gitAuthorEmail: "",
   hiddenModels: [],
   recentModels: [],
+  searchAiModel: "",
   terminalCommand: "shell",
   byokProviders: [],
 };

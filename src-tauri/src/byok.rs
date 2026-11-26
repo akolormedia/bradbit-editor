@@ -266,7 +266,7 @@ pub fn complete(
         "anthropic" => {
             let body = json!({
                 "model": model,
-                "max_tokens": 500,
+                "max_tokens": 4096,
                 "messages": [{ "role": "user", "content": prompt }],
             });
             (
@@ -296,6 +296,17 @@ pub fn complete(
             }
             let payload: Value = serde_json::from_str(&raw)
                 .map_err(|error| format!("The model returned invalid JSON: {error}"))?;
+            let truncated = match provider.kind.as_str() {
+                "anthropic" => {
+                    payload.get("stop_reason").and_then(Value::as_str) == Some("max_tokens")
+                }
+                _ => {
+                    payload
+                        .pointer("/choices/0/finish_reason")
+                        .and_then(Value::as_str)
+                        == Some("length")
+                }
+            };
             let text = match provider.kind.as_str() {
                 "anthropic" => payload
                     .get("content")
@@ -308,17 +319,49 @@ pub fn complete(
                         })
                     })
                     .map(str::to_string),
-                _ => payload
-                    .pointer("/choices/0/message/content")
-                    .and_then(Value::as_str)
-                    .map(str::to_string),
+                _ => openai_completion_text(&payload),
             };
-            text.map(|value| value.trim().to_string())
+            match text
+                .map(|value| value.trim().to_string())
                 .filter(|value| !value.is_empty())
-                .ok_or_else(|| "The model returned an empty answer".to_string())
+            {
+                Some(value) => Ok(value),
+                None if truncated => Err(
+                    "The model ran out of tokens before answering. Try another model in Settings."
+                        .to_string(),
+                ),
+                None => Err(
+                    "The model returned an empty answer. Try another model in Settings."
+                        .to_string(),
+                ),
+            }
         }
         Err(error) => Err(redact_secrets(&error.to_string())),
     }
+}
+
+fn openai_completion_text(payload: &Value) -> Option<String> {
+    let content = payload.pointer("/choices/0/message/content");
+    if let Some(text) = content.and_then(Value::as_str) {
+        return Some(text.to_string());
+    }
+    if let Some(parts) = content.and_then(Value::as_array) {
+        let joined = parts
+            .iter()
+            .filter_map(|part| {
+                part.get("text")
+                    .and_then(Value::as_str)
+                    .or_else(|| part.get("content").and_then(Value::as_str))
+            })
+            .collect::<String>();
+        if !joined.trim().is_empty() {
+            return Some(joined);
+        }
+    }
+    payload
+        .pointer("/choices/0/text")
+        .and_then(Value::as_str)
+        .map(str::to_string)
 }
 
 fn openai_request(
@@ -330,7 +373,7 @@ fn openai_request(
     let body = json!({
         "model": model,
         "temperature": 0.2,
-        "max_tokens": 500,
+        "max_tokens": 4096,
         "messages": [{ "role": "user", "content": prompt }],
     });
     (
@@ -991,6 +1034,21 @@ mod tests {
     }
 
     #[test]
+    fn openai_completion_text_accepts_strings_arrays_and_legacy_text() {
+        let string = json!({"choices": [{"message": {"content": "hola"}}]});
+        assert_eq!(openai_completion_text(&string).as_deref(), Some("hola"));
+        let array = json!({"choices": [{"message": {"content": [
+            {"type": "text", "text": "gato"},
+            {"type": "text", "text": "s"}
+        ]}}]});
+        assert_eq!(openai_completion_text(&array).as_deref(), Some("gatos"));
+        let legacy = json!({"choices": [{"text": "antiguo"}]});
+        assert_eq!(openai_completion_text(&legacy).as_deref(), Some("antiguo"));
+        let empty = json!({"choices": [{"message": {"content": null}}]});
+        assert_eq!(openai_completion_text(&empty), None);
+    }
+
+    #[test]
     fn openai_request_builds_a_chat_completion_body() {
         let (url, body, headers) = openai_request(
             "https://example.test/v1/chat/completions",
@@ -1001,6 +1059,7 @@ mod tests {
         assert_eq!(url, "https://example.test/v1/chat/completions");
         assert_eq!(body["model"], "modelo");
         assert_eq!(body["messages"][0]["content"], "hola");
+        assert_eq!(body["max_tokens"], 4096);
         assert_eq!(headers[0].0, "Authorization");
         assert_eq!(headers[0].1, "Bearer secreto");
     }
