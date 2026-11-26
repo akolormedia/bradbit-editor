@@ -16,6 +16,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   hiddenModels: [],
   recentModels: [],
   searchAiModel: "",
+  searchAiEffort: "low",
   terminalCommand: "shell",
   byokProviders: [],
 };

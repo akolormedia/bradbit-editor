@@ -1,5 +1,10 @@
 import { t } from "../i18n";
-import { AppSettings, ByokProviderStatus, Language } from "../types";
+import {
+  AppSettings,
+  ByokProviderStatus,
+  Language,
+  SearchAiEffort,
+} from "../types";
 import { COLOR_THEMES, ColorThemeId } from "../theme/palettes";
 import { createIcon } from "../ui/icons";
 import { createIconButton } from "../ui/iconButton";
@@ -744,6 +749,9 @@ export class SettingsPanel {
     if (has("searchAiModel")) {
       this.renderSearchAiModel();
     }
+    if (has("searchAiEffort")) {
+      this.renderSearchAiEffort();
+    }
     if (has("models")) {
       const group = document.createElement("div");
       group.className = "settings-control-stack";
@@ -812,6 +820,33 @@ export class SettingsPanel {
         t(this.options.language, "searchAiModelTitle"),
         t(this.options.language, "searchAiModelHint"),
         stack,
+      ),
+    );
+  }
+
+  private renderSearchAiEffort(): void {
+    const select = this.selectControl(
+      "settings-search-ai-effort",
+      [
+        { value: "none", label: t(this.options.language, "searchAiEffortNone") },
+        { value: "low", label: t(this.options.language, "searchAiEffortLow") },
+        {
+          value: "high",
+          label: t(this.options.language, "searchAiEffortHigh"),
+        },
+        { value: "max", label: t(this.options.language, "searchAiEffortMax") },
+      ],
+      this.options.settings.searchAiEffort,
+      (value) =>
+        this.options.onUpdateSettings({
+          searchAiEffort: value as SearchAiEffort,
+        }),
+    );
+    this.contentEl.appendChild(
+      this.row(
+        t(this.options.language, "searchAiEffortTitle"),
+        t(this.options.language, "searchAiEffortHint"),
+        select,
       ),
     );
   }

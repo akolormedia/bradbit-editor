@@ -136,12 +136,16 @@ describe("editor search bar", () => {
       .querySelector<HTMLButtonElement>('[data-testid="search-ai-generate"]')!
       .click();
 
-    const status = bar.element().querySelector<HTMLElement>(
-      '[data-testid="search-ai-status"]',
+    const feedback = bar.element().querySelector<HTMLElement>(
+      '[data-testid="search-ai-feedback"]',
     )!;
-    await vi.waitFor(() => expect(status.hidden).toBe(false));
+    await vi.waitFor(() => {
+      expect(feedback.hidden).toBe(false);
+      expect(feedback.classList.contains("thinking")).toBe(true);
+      expect(feedback.textContent).toContain("Pensando…");
+    });
     resolve("\\d{3}");
-    await vi.waitFor(() => expect(status.hidden).toBe(true));
+    await vi.waitFor(() => expect(feedback.hidden).toBe(true));
   });
 
   it("ignores a generation that the user canceled", async () => {
@@ -211,11 +215,12 @@ describe("editor search bar", () => {
       .click();
 
     await vi.waitFor(() => {
-      const error = bar.element().querySelector<HTMLElement>(
-        ".search-ai-error",
+      const feedback = bar.element().querySelector<HTMLElement>(
+        '[data-testid="search-ai-feedback"]',
       )!;
-      expect(error.hidden).toBe(false);
-      expect(error.textContent).toBe(
+      expect(feedback.hidden).toBe(false);
+      expect(feedback.classList.contains("error")).toBe(true);
+      expect(feedback.textContent).toBe(
         "El modelo no devolvió texto. Prueba con otro modelo desde Ajustes.",
       );
     });

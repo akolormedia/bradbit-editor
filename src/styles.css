@@ -6532,14 +6532,34 @@ textarea.text-input {
   gap: 6px;
 }
 
-.search-ai-error {
-  color: var(--danger);
-  font-family: var(--font-ui);
-  font-size: 10.5px;
+.search-ai-feedback {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--text-secondary);
+  font: 10.5px var(--font-ui);
 }
 
-.search-ai-error[hidden] {
+.search-ai-feedback[hidden] {
   display: none !important;
+}
+
+.search-ai-feedback.error {
+  color: var(--danger);
+}
+
+.search-ai-feedback.thinking span:last-child {
+  animation: search-ai-pulse 1.4s ease-in-out infinite;
+}
+
+@keyframes search-ai-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.55;
+  }
 }
 
 .cm-editor-search-match {
@@ -6550,18 +6570,6 @@ textarea.text-input {
 .cm-editor-search-match-selected {
   background: var(--accent);
   color: var(--accent-text, #fff);
-}
-
-.search-ai-status {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  color: var(--text-secondary);
-  font: 11px var(--font-ui);
-}
-
-.search-ai-status[hidden] {
-  display: none !important;
 }
 
 .search-ai-spinner {
@@ -6606,4 +6614,12 @@ textarea.text-input {
 
 .search-ai-settings svg {
   flex-shrink: 0;
+}
+
+.search-ai-spinner[hidden] {
+  display: none !important;
+}
+
+.search-ai-feedback.error .search-ai-spinner {
+  display: none;
 }

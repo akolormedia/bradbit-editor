@@ -37,6 +37,8 @@ export interface ByokTestResult {
   error?: string;
 }
 
+export type SearchAiEffort = "none" | "low" | "high" | "max";
+
 export interface AppSettings {
   language: Language;
   theme: ThemeMode;
@@ -53,6 +55,7 @@ export interface AppSettings {
   hiddenModels: string[];
   recentModels: string[];
   searchAiModel: string;
+  searchAiEffort: SearchAiEffort;
   terminalCommand: string;
   byokProviders: ByokProvider[];
 }

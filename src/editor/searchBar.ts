@@ -36,8 +36,9 @@ export class SearchBar {
   private readonly errorEl: HTMLElement;
   private readonly aiPopover: HTMLElement;
   private readonly aiPrompt: HTMLTextAreaElement;
-  private readonly aiError: HTMLElement;
-  private readonly aiStatus: HTMLElement;
+  private readonly aiFeedback: HTMLElement;
+  private readonly aiFeedbackSpinner: HTMLElement;
+  private readonly aiFeedbackText: HTMLElement;
   private readonly aiGenerate: HTMLButtonElement;
   private readonly optionButtons = new Map<keyof SearchBarQuery, HTMLButtonElement>();
   private query: SearchBarQuery = {
@@ -226,20 +227,16 @@ export class SearchBar {
         this.closeAi();
       }
     };
-    this.aiError = document.createElement("div");
-    this.aiError.className = "search-ai-error";
-    this.aiError.hidden = true;
-    this.aiStatus = document.createElement("div");
-    this.aiStatus.className = "search-ai-status";
-    this.aiStatus.dataset.testid = "search-ai-status";
-    this.aiStatus.hidden = true;
-    this.aiStatus.setAttribute("aria-live", "polite");
-    const spinner = document.createElement("span");
-    spinner.className = "search-ai-spinner";
-    spinner.appendChild(createIcon("refresh-cw", 12));
-    const statusText = document.createElement("span");
-    statusText.textContent = t(language, "searchAiThinking");
-    this.aiStatus.append(spinner, statusText);
+    this.aiFeedback = document.createElement("div");
+    this.aiFeedback.className = "search-ai-feedback";
+    this.aiFeedback.dataset.testid = "search-ai-feedback";
+    this.aiFeedback.hidden = true;
+    this.aiFeedback.setAttribute("aria-live", "polite");
+    this.aiFeedbackSpinner = document.createElement("span");
+    this.aiFeedbackSpinner.className = "search-ai-spinner";
+    this.aiFeedbackSpinner.appendChild(createIcon("refresh-cw", 12));
+    this.aiFeedbackText = document.createElement("span");
+    this.aiFeedback.append(this.aiFeedbackSpinner, this.aiFeedbackText);
 
     const aiSettings = document.createElement("button");
     aiSettings.type = "button";
@@ -276,8 +273,7 @@ export class SearchBar {
     this.aiPopover.append(
       aiTitle,
       this.aiPrompt,
-      this.aiError,
-      this.aiStatus,
+      this.aiFeedback,
       aiActions,
     );
     this.root.appendChild(this.aiPopover);
@@ -389,8 +385,7 @@ export class SearchBar {
   private openAi(): void {
     this.aiOpen = true;
     this.aiPopover.hidden = false;
-    this.aiError.hidden = true;
-    this.aiStatus.hidden = true;
+    this.hideFeedback();
     this.aiPrompt.disabled = false;
     this.aiPrompt.focus();
   }
@@ -398,8 +393,7 @@ export class SearchBar {
   private closeAi(): void {
     this.aiOpen = false;
     this.aiPopover.hidden = true;
-    this.aiError.hidden = true;
-    this.aiStatus.hidden = true;
+    this.hideFeedback();
     if (this.generating) {
       this.generation += 1;
       this.generating = false;
@@ -410,12 +404,32 @@ export class SearchBar {
     this.focus();
   }
 
+  private hideFeedback(): void {
+    this.aiFeedback.hidden = true;
+    this.aiFeedback.classList.remove("thinking", "error");
+  }
+
+  private showThinking(): void {
+    this.aiFeedback.hidden = false;
+    this.aiFeedback.classList.remove("error");
+    this.aiFeedback.classList.add("thinking");
+    this.aiFeedbackSpinner.hidden = false;
+    this.aiFeedbackText.textContent = t(this.language, "searchAiThinking");
+  }
+
+  private showFeedbackError(message: string): void {
+    this.aiFeedback.hidden = false;
+    this.aiFeedback.classList.remove("thinking");
+    this.aiFeedback.classList.add("error");
+    this.aiFeedbackSpinner.hidden = true;
+    this.aiFeedbackText.textContent = message;
+  }
+
   private async generateRegex(): Promise<void> {
     if (this.generating) return;
     const description = this.aiPrompt.value.trim();
     if (!description) {
-      this.aiError.textContent = t(this.language, "searchAiEmpty");
-      this.aiError.hidden = false;
+      this.showFeedbackError(t(this.language, "searchAiEmpty"));
       return;
     }
     this.generating = true;
@@ -423,8 +437,7 @@ export class SearchBar {
     this.aiGenerate.disabled = true;
     this.aiGenerate.textContent = t(this.language, "searchAiGenerating");
     this.aiPrompt.disabled = true;
-    this.aiError.hidden = true;
-    this.aiStatus.hidden = false;
+    this.showThinking();
     try {
       const raw = await this.handlers.onGenerateRegex(description);
       if (generation !== this.generation) return;
@@ -434,23 +447,22 @@ export class SearchBar {
       }
       this.aiOpen = false;
       this.aiPopover.hidden = true;
+      this.hideFeedback();
       this.setQuery(regex, { regexp: true });
       this.focus();
     } catch (err) {
       if (generation !== this.generation) return;
-      this.aiStatus.hidden = true;
-      this.aiError.textContent =
+      this.showFeedbackError(
         err instanceof Error
           ? err.message
-          : t(this.language, "searchAiError");
-      this.aiError.hidden = false;
+          : t(this.language, "searchAiError"),
+      );
     } finally {
       if (generation === this.generation) {
         this.generating = false;
         this.aiGenerate.disabled = false;
         this.aiGenerate.textContent = t(this.language, "searchAiGenerate");
         this.aiPrompt.disabled = false;
-        this.aiStatus.hidden = true;
       }
     }
   }

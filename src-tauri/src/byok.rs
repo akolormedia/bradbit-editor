@@ -206,6 +206,7 @@ pub fn complete(
     model_override: Option<&str>,
     key: &str,
     prompt: &str,
+    effort: Option<&str>,
 ) -> Result<String, String> {
     validate_provider(provider)?;
     validate_secret(key)?;
@@ -225,29 +226,33 @@ pub fn complete(
     }
 
     let agent: ureq::Agent = ureq::Agent::config_builder()
-        .timeout_global(Some(Duration::from_secs(60)))
+        .timeout_global(Some(Duration::from_secs(90)))
         .http_status_as_error(false)
         .build()
         .into();
 
+    let reasoning_effort = effort.and_then(|value| effort_for_provider(&provider.kind, value));
     let (url, body, headers) = match provider.kind.as_str() {
         "deepseek" => openai_request(
             "https://api.deepseek.com/chat/completions",
             model,
             prompt,
             key,
+            reasoning_effort,
         ),
         "openrouter" => openai_request(
             "https://openrouter.ai/api/v1/chat/completions",
             model,
             prompt,
             key,
+            reasoning_effort,
         ),
         "openai" => openai_request(
             "https://api.openai.com/v1/chat/completions",
             model,
             prompt,
             key,
+            reasoning_effort,
         ),
         "custom" => {
             let base = provider
@@ -261,7 +266,7 @@ pub fn complete(
             } else {
                 format!("{base}/chat/completions")
             };
-            openai_request(&url, model, prompt, key)
+            openai_request(&url, model, prompt, key, reasoning_effort)
         }
         "anthropic" => {
             let body = json!({
@@ -364,18 +369,50 @@ fn openai_completion_text(payload: &Value) -> Option<String> {
         .map(str::to_string)
 }
 
+fn effort_for_provider(kind: &str, effort: &str) -> Option<&'static str> {
+    let value = effort.trim().to_ascii_lowercase();
+    match kind {
+        "deepseek" | "custom" => match value.as_str() {
+            "none" => Some("none"),
+            "low" => Some("low"),
+            "high" => Some("high"),
+            "max" => Some("max"),
+            _ => None,
+        },
+        "openrouter" => match value.as_str() {
+            "none" => Some("none"),
+            "low" => Some("low"),
+            "high" => Some("high"),
+            "max" => Some("xhigh"),
+            _ => None,
+        },
+        "openai" => match value.as_str() {
+            "none" => Some("minimal"),
+            "low" => Some("low"),
+            "high" => Some("high"),
+            "max" => Some("high"),
+            _ => None,
+        },
+        _ => None,
+    }
+}
+
 fn openai_request(
     url: &str,
     model: &str,
     prompt: &str,
     key: &str,
+    effort: Option<&str>,
 ) -> (String, Value, Vec<(&'static str, String)>) {
-    let body = json!({
+    let mut body = json!({
         "model": model,
         "temperature": 0.2,
         "max_tokens": 4096,
         "messages": [{ "role": "user", "content": prompt }],
     });
+    if let Some(effort) = effort {
+        body["reasoning_effort"] = json!(effort);
+    }
     (
         url.to_string(),
         body,
@@ -1022,13 +1059,13 @@ mod tests {
     #[test]
     fn complete_rejects_missing_models_and_unknown_endpoints() {
         let mut item = provider("p", "deepseek", "DEEPSEEK_KEY");
-        assert!(complete(&item, None, "sk-bradbit-test-key", "hola")
+        assert!(complete(&item, None, "sk-bradbit-test-key", "hola", None)
             .unwrap_err()
             .contains("model"));
 
         item.model = Some("deepseek-chat".to_string());
         item.kind = "opencode".to_string();
-        assert!(complete(&item, None, "sk-bradbit-test-key", "hola")
+        assert!(complete(&item, None, "sk-bradbit-test-key", "hola", None)
             .unwrap_err()
             .contains("completion"));
     }
@@ -1049,17 +1086,29 @@ mod tests {
     }
 
     #[test]
+    fn normalizes_effort_for_each_provider() {
+        assert_eq!(effort_for_provider("deepseek", "low"), Some("low"));
+        assert_eq!(effort_for_provider("deepseek", "max"), Some("max"));
+        assert_eq!(effort_for_provider("deepseek", "medium"), None);
+        assert_eq!(effort_for_provider("openrouter", "max"), Some("xhigh"));
+        assert_eq!(effort_for_provider("openai", "none"), Some("minimal"));
+        assert_eq!(effort_for_provider("anthropic", "low"), None);
+    }
+
+    #[test]
     fn openai_request_builds_a_chat_completion_body() {
         let (url, body, headers) = openai_request(
             "https://example.test/v1/chat/completions",
             "modelo",
             "hola",
             "secreto",
+            Some("low"),
         );
         assert_eq!(url, "https://example.test/v1/chat/completions");
         assert_eq!(body["model"], "modelo");
         assert_eq!(body["messages"][0]["content"], "hola");
         assert_eq!(body["max_tokens"], 4096);
+        assert_eq!(body["reasoning_effort"], "low");
         assert_eq!(headers[0].0, "Authorization");
         assert_eq!(headers[0].1, "Bearer secreto");
     }

@@ -319,6 +319,27 @@ describe("settings panel (T-2.4.4)", () => {
     });
   });
 
+  it("lets the user choose the AI reasoning effort", () => {
+    const onUpdateSettings = vi.fn();
+    const panel = mount(
+      options({ initialCategory: "models", onUpdateSettings }),
+    );
+    const select = panel.element.querySelector<HTMLSelectElement>(
+      '[data-testid="settings-search-ai-effort"]',
+    )!;
+    expect(select.value).toBe("low");
+    expect([...select.options].map((option) => option.textContent)).toEqual([
+      "Sin razonamiento",
+      "Bajo (predeterminado)",
+      "Alto",
+      "Máximo",
+    ]);
+
+    select.value = "none";
+    select.dispatchEvent(new Event("change", { bubbles: true }));
+    expect(onUpdateSettings).toHaveBeenCalledWith({ searchAiEffort: "none" });
+  });
+
   it("keeps an unavailable saved AI search model visible", () => {
     const panel = mount(
       options({

@@ -3566,9 +3566,13 @@ class BradbitApp {
       throw new Error(t(lang, "searchAiNoModel"));
     }
     const prompt = [
-      "Convert this search request into a single JavaScript-compatible regular expression.",
-      "Return only the regular expression source: no slashes around it, no flags, no quotes, no code fences and no explanation.",
-      "The user can still toggle case sensitivity and whole-word matching separately, so do not add flags.",
+      "You convert a writer's search description into exactly one JavaScript regular expression.",
+      "Return only the regex source: no surrounding slashes, no flags, no quotes, no code fences, no explanation and no extra lines.",
+      "Do not add case-insensitive or whole-word syntax; the app has separate toggles for those.",
+      "Escape literal regex metacharacters when the request is for plain text.",
+      "Examples:",
+      String.raw`- "correos" -> [A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}`,
+      String.raw`- "teléfonos" -> \+?\d[\d\s().-]{6,}\d`,
       `Request: ${description}`,
     ].join("\n");
     try {
@@ -3576,6 +3580,7 @@ class BradbitApp {
         target.providerId,
         prompt,
         target.model,
+        this.settings.searchAiEffort,
       );
       if (!raw.trim()) throw new Error(t(lang, "searchAiEmptyAnswer"));
       return raw;
