@@ -584,22 +584,34 @@ fn byok_status(
 }
 
 #[tauri::command]
-fn byok_complete(
+async fn byok_complete(
     provider_id: String,
     model: Option<String>,
     prompt: String,
-    secrets: tauri::State<byok::ByokSecrets>,
+    effort: Option<String>,
+    secrets: tauri::State<'_, byok::ByokSecrets>,
 ) -> Result<String, String> {
     let settings = settings::load_settings()?;
     let provider = settings
         .byok_providers
         .iter()
         .find(|provider| provider.id == provider_id)
+        .cloned()
         .ok_or_else(|| "The selected provider is not configured".to_string())?;
     let key = secrets
         .get(&provider_id)?
         .ok_or_else(|| "Connect a model before using AI notes".to_string())?;
-    byok::complete(provider, model.as_deref(), &key, &prompt)
+    tauri::async_runtime::spawn_blocking(move || {
+        byok::complete(
+            &provider,
+            model.as_deref(),
+            &key,
+            &prompt,
+            effort.as_deref(),
+        )
+    })
+    .await
+    .map_err(|error| format!("The AI request failed: {error}"))?
 }
 
 #[tauri::command]

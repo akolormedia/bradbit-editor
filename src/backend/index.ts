@@ -38,6 +38,7 @@ import {
   PtyStartResult,
   PtyStatus,
   RecentProject,
+  SearchAiEffort,
   SearchMatch,
   TemplateInfo,
 } from "../types";
@@ -1055,6 +1056,7 @@ export const backend = {
     providerId: string,
     prompt: string,
     model?: string,
+    effort?: SearchAiEffort,
   ): Promise<string> {
     if (!isTauriEnvironment()) {
       throw new Error("AI notes require the desktop app");
@@ -1063,6 +1065,7 @@ export const backend = {
       providerId,
       prompt,
       model,
+      effort,
     });
   },
 

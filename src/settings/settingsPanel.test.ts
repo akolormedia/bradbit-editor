@@ -22,6 +22,8 @@ function options(
       busyId: null,
       error: "",
     },
+    searchAiModels: [],
+    searchAiDefaultModel: "DeepSeek · DeepSeek Flash",
     initialCategory: "general",
     initialQuery: "",
     onCategoryChange: vi.fn(),
@@ -281,6 +283,96 @@ describe("settings panel (T-2.4.4)", () => {
       )!
       .click();
     expect(onManageModels).toHaveBeenCalledOnce();
+  });
+
+  it("lets the user choose the AI search model", () => {
+    const onUpdateSettings = vi.fn();
+    const panel = mount(
+      options({
+        initialCategory: "models",
+        searchAiModels: [
+          {
+            value: "deepseek/deepseek-flash",
+            label: "DeepSeek · DeepSeek Flash",
+          },
+        ],
+        onUpdateSettings,
+      }),
+    );
+    const select = panel.element.querySelector<HTMLSelectElement>(
+      '[data-testid="settings-search-ai-model"]',
+    )!;
+    expect(select.value).toBe("");
+    expect([...select.options].map((option) => option.textContent)).toEqual([
+      "Predeterminado (modelo del chat)",
+      "DeepSeek · DeepSeek Flash",
+    ]);
+    expect(
+      panel.element.querySelector('[data-testid="settings-search-ai-current"]')!
+        .textContent,
+    ).toBe("Ahora: DeepSeek · DeepSeek Flash");
+    const controls = panel.element.querySelector(
+      ".settings-search-ai-controls",
+    )!;
+    expect(
+      controls.querySelector('[data-testid="settings-search-ai-model"]'),
+    ).not.toBeNull();
+    expect(
+      controls.querySelector('[data-testid="settings-search-ai-effort"]'),
+    ).not.toBeNull();
+
+    select.value = "deepseek/deepseek-flash";
+    select.dispatchEvent(new Event("change", { bubbles: true }));
+    expect(onUpdateSettings).toHaveBeenCalledWith({
+      searchAiModel: "deepseek/deepseek-flash",
+    });
+  });
+
+  it("lets the user choose the AI reasoning effort", () => {
+    const onUpdateSettings = vi.fn();
+    const panel = mount(
+      options({ initialCategory: "models", onUpdateSettings }),
+    );
+    const select = panel.element.querySelector<HTMLSelectElement>(
+      '[data-testid="settings-search-ai-effort"]',
+    )!;
+    expect(select.value).toBe("low");
+    expect([...select.options].map((option) => option.textContent)).toEqual([
+      "Sin razonamiento",
+      "Bajo (predeterminado)",
+      "Alto",
+      "Máximo",
+    ]);
+
+    expect(
+      select.closest(".settings-search-ai-controls"),
+    ).not.toBeNull();
+    expect(
+      panel.element.querySelectorAll(
+        '[data-testid="settings-search-ai-effort"]',
+      ),
+    ).toHaveLength(1);
+    select.value = "none";
+    select.dispatchEvent(new Event("change", { bubbles: true }));
+    expect(onUpdateSettings).toHaveBeenCalledWith({ searchAiEffort: "none" });
+  });
+
+  it("keeps an unavailable saved AI search model visible", () => {
+    const panel = mount(
+      options({
+        initialCategory: "models",
+        settings: {
+          ...DEFAULT_SETTINGS,
+          searchAiModel: "deepseek/old-model",
+        },
+        searchAiModels: [],
+      }),
+    );
+    const select = panel.element.querySelector<HTMLSelectElement>(
+      '[data-testid="settings-search-ai-model"]',
+    )!;
+    expect(select.value).toBe("deepseek/old-model");
+    expect(select.selectedOptions[0]?.textContent).toBe("Modelo no disponible");
   });
 
   it("offers developer Git terms only with developer options enabled", () => {

@@ -42,6 +42,8 @@ describe("settings catalog (T-2.4.4)", () => {
       "githubAccount",
       "githubToken",
       "byok",
+      "searchAiModel",
+      "searchAiEffort",
       "models",
     ]) {
       expect(ids).toContain(id);

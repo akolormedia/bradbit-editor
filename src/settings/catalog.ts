@@ -171,6 +171,18 @@ export const SETTINGS_ENTRIES: SettingsEntry[] = [
     descriptionKey: "settingsByokHint",
   },
   {
+    id: "searchAiModel",
+    category: "models",
+    labelKey: "searchAiModelTitle",
+    descriptionKey: "searchAiModelHint",
+  },
+  {
+    id: "searchAiEffort",
+    category: "models",
+    labelKey: "searchAiEffortTitle",
+    descriptionKey: "searchAiEffortHint",
+  },
+  {
     id: "models",
     category: "models",
     labelKey: "chatModelsTitle",

@@ -206,6 +206,7 @@ pub fn complete(
     model_override: Option<&str>,
     key: &str,
     prompt: &str,
+    effort: Option<&str>,
 ) -> Result<String, String> {
     validate_provider(provider)?;
     validate_secret(key)?;
@@ -225,29 +226,33 @@ pub fn complete(
     }
 
     let agent: ureq::Agent = ureq::Agent::config_builder()
-        .timeout_global(Some(Duration::from_secs(60)))
+        .timeout_global(Some(Duration::from_secs(90)))
         .http_status_as_error(false)
         .build()
         .into();
 
+    let reasoning_effort = effort.and_then(|value| effort_for_provider(&provider.kind, value));
     let (url, body, headers) = match provider.kind.as_str() {
         "deepseek" => openai_request(
             "https://api.deepseek.com/chat/completions",
             model,
             prompt,
             key,
+            reasoning_effort,
         ),
         "openrouter" => openai_request(
             "https://openrouter.ai/api/v1/chat/completions",
             model,
             prompt,
             key,
+            reasoning_effort,
         ),
         "openai" => openai_request(
             "https://api.openai.com/v1/chat/completions",
             model,
             prompt,
             key,
+            reasoning_effort,
         ),
         "custom" => {
             let base = provider
@@ -261,12 +266,12 @@ pub fn complete(
             } else {
                 format!("{base}/chat/completions")
             };
-            openai_request(&url, model, prompt, key)
+            openai_request(&url, model, prompt, key, reasoning_effort)
         }
         "anthropic" => {
             let body = json!({
                 "model": model,
-                "max_tokens": 500,
+                "max_tokens": 4096,
                 "messages": [{ "role": "user", "content": prompt }],
             });
             (
@@ -296,6 +301,17 @@ pub fn complete(
             }
             let payload: Value = serde_json::from_str(&raw)
                 .map_err(|error| format!("The model returned invalid JSON: {error}"))?;
+            let truncated = match provider.kind.as_str() {
+                "anthropic" => {
+                    payload.get("stop_reason").and_then(Value::as_str) == Some("max_tokens")
+                }
+                _ => {
+                    payload
+                        .pointer("/choices/0/finish_reason")
+                        .and_then(Value::as_str)
+                        == Some("length")
+                }
+            };
             let text = match provider.kind.as_str() {
                 "anthropic" => payload
                     .get("content")
@@ -308,16 +324,76 @@ pub fn complete(
                         })
                     })
                     .map(str::to_string),
-                _ => payload
-                    .pointer("/choices/0/message/content")
-                    .and_then(Value::as_str)
-                    .map(str::to_string),
+                _ => openai_completion_text(&payload),
             };
-            text.map(|value| value.trim().to_string())
+            match text
+                .map(|value| value.trim().to_string())
                 .filter(|value| !value.is_empty())
-                .ok_or_else(|| "The model returned an empty answer".to_string())
+            {
+                Some(value) => Ok(value),
+                None if truncated => Err(
+                    "The model ran out of tokens before answering. Try another model in Settings."
+                        .to_string(),
+                ),
+                None => Err(
+                    "The model returned an empty answer. Try another model in Settings."
+                        .to_string(),
+                ),
+            }
         }
         Err(error) => Err(redact_secrets(&error.to_string())),
+    }
+}
+
+fn openai_completion_text(payload: &Value) -> Option<String> {
+    let content = payload.pointer("/choices/0/message/content");
+    if let Some(text) = content.and_then(Value::as_str) {
+        return Some(text.to_string());
+    }
+    if let Some(parts) = content.and_then(Value::as_array) {
+        let joined = parts
+            .iter()
+            .filter_map(|part| {
+                part.get("text")
+                    .and_then(Value::as_str)
+                    .or_else(|| part.get("content").and_then(Value::as_str))
+            })
+            .collect::<String>();
+        if !joined.trim().is_empty() {
+            return Some(joined);
+        }
+    }
+    payload
+        .pointer("/choices/0/text")
+        .and_then(Value::as_str)
+        .map(str::to_string)
+}
+
+fn effort_for_provider(kind: &str, effort: &str) -> Option<&'static str> {
+    let value = effort.trim().to_ascii_lowercase();
+    match kind {
+        "deepseek" | "custom" => match value.as_str() {
+            "none" => Some("none"),
+            "low" => Some("low"),
+            "high" => Some("high"),
+            "max" => Some("max"),
+            _ => None,
+        },
+        "openrouter" => match value.as_str() {
+            "none" => Some("none"),
+            "low" => Some("low"),
+            "high" => Some("high"),
+            "max" => Some("xhigh"),
+            _ => None,
+        },
+        "openai" => match value.as_str() {
+            "none" => Some("minimal"),
+            "low" => Some("low"),
+            "high" => Some("high"),
+            "max" => Some("high"),
+            _ => None,
+        },
+        _ => None,
     }
 }
 
@@ -326,13 +402,17 @@ fn openai_request(
     model: &str,
     prompt: &str,
     key: &str,
+    effort: Option<&str>,
 ) -> (String, Value, Vec<(&'static str, String)>) {
-    let body = json!({
+    let mut body = json!({
         "model": model,
         "temperature": 0.2,
-        "max_tokens": 500,
+        "max_tokens": 4096,
         "messages": [{ "role": "user", "content": prompt }],
     });
+    if let Some(effort) = effort {
+        body["reasoning_effort"] = json!(effort);
+    }
     (
         url.to_string(),
         body,
@@ -979,15 +1059,40 @@ mod tests {
     #[test]
     fn complete_rejects_missing_models_and_unknown_endpoints() {
         let mut item = provider("p", "deepseek", "DEEPSEEK_KEY");
-        assert!(complete(&item, None, "sk-bradbit-test-key", "hola")
+        assert!(complete(&item, None, "sk-bradbit-test-key", "hola", None)
             .unwrap_err()
             .contains("model"));
 
         item.model = Some("deepseek-chat".to_string());
         item.kind = "opencode".to_string();
-        assert!(complete(&item, None, "sk-bradbit-test-key", "hola")
+        assert!(complete(&item, None, "sk-bradbit-test-key", "hola", None)
             .unwrap_err()
             .contains("completion"));
+    }
+
+    #[test]
+    fn openai_completion_text_accepts_strings_arrays_and_legacy_text() {
+        let string = json!({"choices": [{"message": {"content": "hola"}}]});
+        assert_eq!(openai_completion_text(&string).as_deref(), Some("hola"));
+        let array = json!({"choices": [{"message": {"content": [
+            {"type": "text", "text": "gato"},
+            {"type": "text", "text": "s"}
+        ]}}]});
+        assert_eq!(openai_completion_text(&array).as_deref(), Some("gatos"));
+        let legacy = json!({"choices": [{"text": "antiguo"}]});
+        assert_eq!(openai_completion_text(&legacy).as_deref(), Some("antiguo"));
+        let empty = json!({"choices": [{"message": {"content": null}}]});
+        assert_eq!(openai_completion_text(&empty), None);
+    }
+
+    #[test]
+    fn normalizes_effort_for_each_provider() {
+        assert_eq!(effort_for_provider("deepseek", "low"), Some("low"));
+        assert_eq!(effort_for_provider("deepseek", "max"), Some("max"));
+        assert_eq!(effort_for_provider("deepseek", "medium"), None);
+        assert_eq!(effort_for_provider("openrouter", "max"), Some("xhigh"));
+        assert_eq!(effort_for_provider("openai", "none"), Some("minimal"));
+        assert_eq!(effort_for_provider("anthropic", "low"), None);
     }
 
     #[test]
@@ -997,10 +1102,13 @@ mod tests {
             "modelo",
             "hola",
             "secreto",
+            Some("low"),
         );
         assert_eq!(url, "https://example.test/v1/chat/completions");
         assert_eq!(body["model"], "modelo");
         assert_eq!(body["messages"][0]["content"], "hola");
+        assert_eq!(body["max_tokens"], 4096);
+        assert_eq!(body["reasoning_effort"], "low");
         assert_eq!(headers[0].0, "Authorization");
         assert_eq!(headers[0].1, "Bearer secreto");
     }
