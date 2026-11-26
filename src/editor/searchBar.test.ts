@@ -105,6 +105,21 @@ describe("editor search bar", () => {
     expect(calls.onReplaceAll).toHaveBeenCalledWith("perro");
   });
 
+  it("can hide replacement for project search", () => {
+    const calls = handlers();
+    const bar = new SearchBar("es", calls, { showReplace: false });
+    document.body.appendChild(bar.element());
+    expect(
+      bar.element().querySelector('[data-testid="search-replace-toggle"]'),
+    ).toBeNull();
+    expect(
+      bar.element().querySelector('[data-testid="search-replace-input"]'),
+    ).toBeNull();
+    expect(
+      bar.element().querySelector('[data-testid="search-query-input"]'),
+    ).not.toBeNull();
+  });
+
   it("shows the match counter", () => {
     const { bar } = mount();
     bar.setMatchInfo(2, 8);
