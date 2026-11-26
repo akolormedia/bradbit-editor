@@ -345,6 +345,7 @@ export const translations = {
     searchAiModelEffective: "Ahora: {model}",
     searchAiModelNoModel: "No hay un modelo conectado todavía.",
     searchAiEffortTitle: "Esfuerzo de razonamiento",
+    searchAiEffortLabel: "Esfuerzo",
     searchAiEffortHint:
       "Bajo responde rápido y suele bastar para una expresión regular. Alto y máximo razonan más; sin razonamiento es lo más rápido.",
     searchAiEffortNone: "Sin razonamiento",
@@ -1066,6 +1067,7 @@ export const translations = {
     searchAiModelEffective: "Now: {model}",
     searchAiModelNoModel: "No connected model yet.",
     searchAiEffortTitle: "Reasoning effort",
+    searchAiEffortLabel: "Effort",
     searchAiEffortHint:
       "Low responds quickly and is usually enough for a regular expression. High and max reason more; no reasoning is the fastest.",
     searchAiEffortNone: "No reasoning",

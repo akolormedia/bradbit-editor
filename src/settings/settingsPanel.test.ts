@@ -311,6 +311,15 @@ describe("settings panel (T-2.4.4)", () => {
       panel.element.querySelector('[data-testid="settings-search-ai-current"]')!
         .textContent,
     ).toBe("Ahora: DeepSeek · DeepSeek Flash");
+    const controls = panel.element.querySelector(
+      ".settings-search-ai-controls",
+    )!;
+    expect(
+      controls.querySelector('[data-testid="settings-search-ai-model"]'),
+    ).not.toBeNull();
+    expect(
+      controls.querySelector('[data-testid="settings-search-ai-effort"]'),
+    ).not.toBeNull();
 
     select.value = "deepseek/deepseek-flash";
     select.dispatchEvent(new Event("change", { bubbles: true }));
@@ -335,6 +344,14 @@ describe("settings panel (T-2.4.4)", () => {
       "Máximo",
     ]);
 
+    expect(
+      select.closest(".settings-search-ai-controls"),
+    ).not.toBeNull();
+    expect(
+      panel.element.querySelectorAll(
+        '[data-testid="settings-search-ai-effort"]',
+      ),
+    ).toHaveLength(1);
     select.value = "none";
     select.dispatchEvent(new Event("change", { bubbles: true }));
     expect(onUpdateSettings).toHaveBeenCalledWith({ searchAiEffort: "none" });

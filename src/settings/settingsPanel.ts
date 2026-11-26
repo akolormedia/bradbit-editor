@@ -746,11 +746,8 @@ export class SettingsPanel {
   }
 
   private renderModels(has: (id: string) => boolean): void {
-    if (has("searchAiModel")) {
+    if (has("searchAiModel") || has("searchAiEffort")) {
       this.renderSearchAiModel();
-    }
-    if (has("searchAiEffort")) {
-      this.renderSearchAiEffort();
     }
     if (has("models")) {
       const group = document.createElement("div");
@@ -782,50 +779,32 @@ export class SettingsPanel {
 
   private renderSearchAiModel(): void {
     const value = this.options.settings.searchAiModel;
-    const options = [
+    const modelOptions = [
       {
         value: "",
         label: t(this.options.language, "searchAiModelDefault"),
       },
       ...this.options.searchAiModels,
     ];
-    if (value && !options.some((option) => option.value === value)) {
-      options.push({
+    if (value && !modelOptions.some((option) => option.value === value)) {
+      modelOptions.push({
         value,
         label: t(this.options.language, "searchAiModelUnavailable"),
       });
     }
-    const select = this.selectControl(
+    const model = this.selectControl(
       "settings-search-ai-model",
-      options,
+      modelOptions,
       value,
       (next) => this.options.onUpdateSettings({ searchAiModel: next }),
     );
-    const stack = document.createElement("div");
-    stack.className = "settings-control-stack";
-    const effective = value
-      ? options.find((option) => option.value === value)?.label
-      : this.options.searchAiDefaultModel;
-    const current = document.createElement("p");
-    current.className = "settings-hint";
-    current.dataset.testid = "settings-search-ai-current";
-    current.textContent = effective
-      ? t(this.options.language, "searchAiModelEffective", {
-          model: effective,
-        })
-      : t(this.options.language, "searchAiModelNoModel");
-    stack.append(select, current);
-    this.contentEl.appendChild(
-      this.row(
-        t(this.options.language, "searchAiModelTitle"),
-        t(this.options.language, "searchAiModelHint"),
-        stack,
-      ),
-    );
-  }
+    model.classList.add("settings-search-ai-model");
 
-  private renderSearchAiEffort(): void {
-    const select = this.selectControl(
+    const effortLabel = document.createElement("span");
+    effortLabel.className = "settings-inline-label";
+    effortLabel.textContent = t(this.options.language, "searchAiEffortLabel");
+    effortLabel.title = t(this.options.language, "searchAiEffortHint");
+    const effort = this.selectControl(
       "settings-search-ai-effort",
       [
         { value: "none", label: t(this.options.language, "searchAiEffortNone") },
@@ -837,16 +816,37 @@ export class SettingsPanel {
         { value: "max", label: t(this.options.language, "searchAiEffortMax") },
       ],
       this.options.settings.searchAiEffort,
-      (value) =>
+      (next) =>
         this.options.onUpdateSettings({
-          searchAiEffort: value as SearchAiEffort,
+          searchAiEffort: next as SearchAiEffort,
         }),
     );
+    effort.classList.add("settings-search-ai-effort");
+    effort.title = t(this.options.language, "searchAiEffortHint");
+
+    const controls = document.createElement("div");
+    controls.className = "settings-search-ai-controls";
+    controls.append(model, effortLabel, effort);
+
+    const stack = document.createElement("div");
+    stack.className = "settings-control-stack settings-search-ai-stack";
+    const effective = value
+      ? modelOptions.find((option) => option.value === value)?.label
+      : this.options.searchAiDefaultModel;
+    const current = document.createElement("p");
+    current.className = "settings-hint";
+    current.dataset.testid = "settings-search-ai-current";
+    current.textContent = effective
+      ? t(this.options.language, "searchAiModelEffective", {
+          model: effective,
+        })
+      : t(this.options.language, "searchAiModelNoModel");
+    stack.append(controls, current);
     this.contentEl.appendChild(
       this.row(
-        t(this.options.language, "searchAiEffortTitle"),
-        t(this.options.language, "searchAiEffortHint"),
-        select,
+        t(this.options.language, "searchAiModelTitle"),
+        t(this.options.language, "searchAiModelHint"),
+        stack,
       ),
     );
   }

@@ -6623,3 +6623,32 @@ textarea.text-input {
 .search-ai-feedback.error .search-ai-spinner {
   display: none;
 }
+
+.settings-search-ai-stack {
+  min-width: 380px;
+  max-width: 440px;
+}
+
+.settings-search-ai-controls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.settings-search-ai-controls .settings-search-ai-model {
+  flex: 1 1 auto;
+  min-width: 190px;
+}
+
+.settings-search-ai-controls .settings-search-ai-effort {
+  flex: 0 0 auto;
+  width: 170px;
+  min-width: 170px;
+}
+
+.settings-inline-label {
+  flex-shrink: 0;
+  color: var(--text-muted);
+  font: 11.5px var(--font-ui);
+}
