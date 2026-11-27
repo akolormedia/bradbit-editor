@@ -781,6 +781,9 @@ describe("chat panel (T-2.1.1)", () => {
     )!;
     azul.checked = true;
     azul.dispatchEvent(new Event("change"));
+    expect(
+      azul.closest(".chat-form-option")?.classList.contains("selected"),
+    ).toBe(true);
     expect(submit.disabled).toBe(false);
     const continueInput = panel.element.querySelector<HTMLInputElement>(
       '[data-testid="form-input-frm_1-q1"]',
@@ -820,11 +823,24 @@ describe("chat panel (T-2.1.1)", () => {
     };
     panel.update({ ...readyState(), forms: [baseForm] });
 
+    const rojo = panel.element.querySelector<HTMLInputElement>(
+      '[data-testid="form-input-frm_1-q0-Rojo"]',
+    )!;
+    rojo.checked = true;
+    rojo.dispatchEvent(new Event("change"));
+    expect(
+      rojo.closest(".chat-form-option")?.classList.contains("selected"),
+    ).toBe(true);
+
     const custom = panel.element.querySelector<HTMLInputElement>(
       '[data-testid="form-input-frm_1-q0-custom"]',
     )!;
     custom.value = "Verde";
     custom.dispatchEvent(new Event("input"));
+    expect(rojo.checked).toBe(false);
+    expect(
+      rojo.closest(".chat-form-option")?.classList.contains("selected"),
+    ).toBe(false);
     panel.element
       .querySelector<HTMLButtonElement>('[data-testid="form-submit-frm_1"]')
       ?.click();
@@ -849,6 +865,63 @@ describe("chat panel (T-2.1.1)", () => {
     const selected = answered.querySelectorAll(".chat-question-option.selected");
     expect(selected).toHaveLength(1);
     expect(selected[0].textContent).toContain("Rojo");
+  });
+
+  it("supports multiple choices with a custom answer", () => {
+    const onFormReply = vi.fn();
+    const panel = new ChatPanel(options({ onFormReply }));
+    panel.update({
+      ...readyState(),
+      forms: [
+        {
+          id: "frm_multi",
+          title: "Questions",
+          kind: "question",
+          toolId: null,
+          messageId: null,
+          status: "pending",
+          answer: null,
+          message: null,
+          fields: [
+            {
+              key: "q0",
+              title: "Géneros",
+              type: "multiselect",
+              required: true,
+              options: [
+                { value: "Drama", label: "Drama" },
+                { value: "Comedia", label: "Comedia" },
+              ],
+              custom: true,
+            },
+          ],
+        },
+      ],
+    });
+
+    const drama = panel.element.querySelector<HTMLInputElement>(
+      '[data-testid="form-input-frm_multi-q0-Drama"]',
+    )!;
+    drama.checked = true;
+    drama.dispatchEvent(new Event("change"));
+    expect(
+      drama.closest(".chat-form-option")?.classList.contains("selected"),
+    ).toBe(true);
+
+    const custom = panel.element.querySelector<HTMLInputElement>(
+      '[data-testid="form-input-frm_multi-q0-custom"]',
+    )!;
+    custom.value = "Terror";
+    custom.dispatchEvent(new Event("input"));
+
+    panel.element
+      .querySelector<HTMLButtonElement>(
+        '[data-testid="form-submit-frm_multi"]',
+      )
+      ?.click();
+    expect(onFormReply).toHaveBeenCalledWith("frm_multi", {
+      q0: ["Drama", "Terror"],
+    });
   });
 
   it("renders question tool calls as friendly options with the chosen answer (T-2.5.8)", () => {
