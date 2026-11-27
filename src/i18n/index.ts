@@ -243,6 +243,9 @@ export const translations = {
     settingsFountainAutocomplete: "Sugerencias Fountain",
     settingsFountainAutocompleteHint:
       "Abre sugerencias contextuales al escribir guiones. Nunca dentro del diálogo.",
+    settingsFollowActiveFile: "Seguir el archivo activo de la IA",
+    settingsFollowActiveFileHint:
+      "Abre automáticamente el archivo actual mientras la IA trabaja. Desactívalo para que el editor no cambie de pestaña.",
     settingsShowConfigFilesHint:
       "Muestra .opencode, .bradbit, AGENTS.md y otros archivos de configuración.",
     settingsTerminalCommand: "Comando por defecto",
@@ -724,6 +727,21 @@ export const translations = {
     chatContext: "contexto",
     chatContextDetail:
       "Entrada {input} · Salida {output} · Razonamiento {reasoning} · Caché {cache}",
+    chatToolPreparing: "Preparando",
+    chatToolReading: "Leyendo",
+    chatToolEditing: "Editando",
+    chatToolWriting: "Escribiendo",
+    chatToolExecuting: "Ejecutando",
+    chatToolSearching: "Buscando",
+    chatToolFetching: "Consultando",
+    chatToolLoadingSkill: "Cargando skill",
+    chatToolAsking: "Preguntando",
+    chatToolUsing: "Usando",
+    chatToolStateWorking: "Trabajando",
+    chatToolStateSaved: "Guardado",
+    chatToolStateError: "Error",
+    chatToolWriteError: "Error al escribir",
+    chatToolEditError: "Error al editar",
     chatToolRead: "Leyó",
     chatToolEdit: "Editó",
     chatToolWrite: "Escribió",
@@ -747,6 +765,8 @@ export const translations = {
     chatPermissionAlways: "Permitir siempre",
     chatPermissionReject: "Rechazar",
     chatFileOutsideProject: "Ese archivo está fuera del proyecto abierto.",
+    chatFileUnsaved:
+      "No abrí {path}: tiene cambios sin guardar. Guárdalo o ciérralo para ver la escritura en vivo.",
     chatFormTitle: "El agente tiene una pregunta",
     chatFormSubmit: "Responder",
     chatFormAnswered: "Respondida",
@@ -1047,6 +1067,9 @@ export const translations = {
     settingsFountainAutocomplete: "Fountain suggestions",
     settingsFountainAutocompleteHint:
       "Open contextual suggestions while writing screenplays. Never inside dialogue.",
+    settingsFollowActiveFile: "Follow the AI's active file",
+    settingsFollowActiveFileHint:
+      "Automatically opens the active file while the AI works. Turn it off to keep the editor on your current tab.",
     settingsShowConfigFilesHint:
       "Show .opencode, .bradbit, AGENTS.md and other configuration files.",
     settingsTerminalCommand: "Default command",
@@ -1526,6 +1549,21 @@ export const translations = {
     chatContext: "context",
     chatContextDetail:
       "Input {input} · Output {output} · Reasoning {reasoning} · Cache {cache}",
+    chatToolPreparing: "Preparing",
+    chatToolReading: "Reading",
+    chatToolEditing: "Editing",
+    chatToolWriting: "Writing",
+    chatToolExecuting: "Running",
+    chatToolSearching: "Searching",
+    chatToolFetching: "Fetching",
+    chatToolLoadingSkill: "Loading skill",
+    chatToolAsking: "Asking",
+    chatToolUsing: "Using",
+    chatToolStateWorking: "Working",
+    chatToolStateSaved: "Saved",
+    chatToolStateError: "Error",
+    chatToolWriteError: "Could not write",
+    chatToolEditError: "Could not edit",
     chatToolRead: "Read",
     chatToolEdit: "Edited",
     chatToolWrite: "Wrote",
@@ -1549,6 +1587,8 @@ export const translations = {
     chatPermissionAlways: "Allow always",
     chatPermissionReject: "Reject",
     chatFileOutsideProject: "That file is outside the opened project.",
+    chatFileUnsaved:
+      "Did not open {path}: it has unsaved changes. Save or close it to see the live writing.",
     chatFormTitle: "The agent has a question",
     chatFormSubmit: "Answer",
     chatFormAnswered: "Answered",

@@ -494,6 +494,54 @@ describe("chat panel (T-2.1.1)", () => {
     );
   });
 
+  it("shows step-by-step progress for files the agent writes (T-3.14.2)", () => {
+    const panel = new ChatPanel(options());
+    const tool = {
+      id: "tool_write",
+      name: "write",
+      status: "streaming" as const,
+      input: { path: "script/capitulo-1.fountain" },
+      output: "",
+      error: "",
+      executed: false,
+      files: ["/proyecto/script/capitulo-1.fountain"],
+      answers: [],
+    };
+    const state = (status: "streaming" | "running" | "completed") => ({
+      ...readyState(),
+      messages: [
+        {
+          id: "assistant:msg_write",
+          role: "assistant" as const,
+          parts: [{ type: "tool" as const, tool: { ...tool, status } }],
+        },
+      ],
+    });
+
+    panel.update(state("streaming"));
+    expect(panel.element.textContent).toContain(
+      "Preparando script/capitulo-1.fountain",
+    );
+    expect(
+      panel.element.querySelector('[data-testid="tool-state-tool_write"]')
+        ?.textContent,
+    ).toBe("Trabajando");
+
+    panel.update(state("running"));
+    expect(panel.element.textContent).toContain(
+      "Escribiendo script/capitulo-1.fountain",
+    );
+
+    panel.update(state("completed"));
+    expect(panel.element.textContent).toContain(
+      "Escribió script/capitulo-1.fountain",
+    );
+    expect(
+      panel.element.querySelector('[data-testid="tool-state-tool_write"]')
+        ?.textContent,
+    ).toBe("Guardado");
+  });
+
   it("chooses Markdown, Fountain or plain rendering for tool results", () => {
     const panel = new ChatPanel(options());
     panel.update({

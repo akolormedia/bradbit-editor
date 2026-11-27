@@ -149,6 +149,15 @@ describe("settings panel (T-2.4.4)", () => {
     expect(onUpdateSettings).toHaveBeenCalledWith({
       fountainAutocomplete: false,
     });
+
+    const followActiveFile = panel.element.querySelector<HTMLInputElement>(
+      '[data-testid="settings-follow-active-file"]',
+    )!;
+    followActiveFile.checked = false;
+    followActiveFile.dispatchEvent(new Event("change", { bubbles: true }));
+    expect(onUpdateSettings).toHaveBeenCalledWith({
+      followActiveFile: false,
+    });
   });
 
   it("hides developer settings by default and reveals them with the toggle", () => {

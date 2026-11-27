@@ -35,6 +35,7 @@ describe("settings catalog (T-2.4.4)", () => {
       "wordWrap",
       "lineNumbers",
       "fountainAutocomplete",
+      "followActiveFile",
       "showConfigFiles",
       "terminalCommand",
       "gitAuthorName",
@@ -79,5 +80,10 @@ describe("settings catalog (T-2.4.4)", () => {
       ),
     ).toEqual(["theme", "colorTheme", "fontSize"]);
     expect(visibleEntriesForCategory("appearance", "es", "zzz")).toEqual([]);
+    expect(
+      visibleEntriesForCategory("editor", "es", "archivo activo").map(
+        (entry) => entry.id,
+      ),
+    ).toEqual(["followActiveFile"]);
   });
 });
