@@ -4621,6 +4621,465 @@ textarea.text-input {
   flex-wrap: wrap;
 }
 
+/* Skills inventory (T-3.15.2) */
+.skills-browser {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-height: 0;
+}
+
+.skills-hint {
+  margin: 0;
+}
+
+.skills-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.skills-search {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: 30px;
+  padding: 0 8px;
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  background: var(--bg-input);
+}
+
+.skills-search:focus-within {
+  border-color: var(--accent);
+}
+
+.skills-search-icon {
+  display: inline-flex;
+  flex-shrink: 0;
+  color: var(--text-muted);
+}
+
+.skills-search-input {
+  flex: 1;
+  min-width: 0;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: var(--text-primary);
+  font-family: var(--font-ui);
+  font-size: 12px;
+  outline: none;
+}
+
+.skills-search-input::placeholder {
+  color: var(--text-muted);
+}
+
+.skills-refresh {
+  flex-shrink: 0;
+}
+
+.skills-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.skills-filter {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.skills-filter-label {
+  color: var(--text-muted);
+  font-size: 11px;
+}
+
+.skills-filter-select {
+  height: 28px;
+  padding: 0 6px;
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  background: var(--bg-input);
+  color: var(--text-primary);
+  font-family: var(--font-ui);
+  font-size: 11.5px;
+  outline: none;
+}
+
+.skills-filter-select:focus {
+  border-color: var(--accent);
+}
+
+.skills-summary {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: 11px;
+}
+
+.skills-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.skill-card {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  width: 100%;
+  padding: 9px 11px;
+  border: 1px solid var(--border-color);
+  border-radius: 7px;
+  background: var(--bg-surface);
+  color: var(--text-primary);
+  font-family: var(--font-ui);
+  text-align: left;
+  cursor: pointer;
+}
+
+.skill-card:hover {
+  border-color: var(--accent);
+  background: var(--bg-hover);
+}
+
+.skill-card:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+.skill-card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.skill-card-name {
+  font-size: 12.5px;
+  font-weight: 600;
+}
+
+.skill-badges {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  flex-wrap: wrap;
+}
+
+.skill-badge {
+  padding: 1px 5px;
+  border: 1px solid currentColor;
+  border-radius: 999px;
+  color: var(--text-muted);
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.skill-badge.state-effective {
+  color: var(--success);
+}
+
+.skill-badge.state-overridden {
+  color: var(--text-muted);
+}
+
+.skill-badge.state-invalid {
+  color: var(--danger);
+}
+
+.skill-badge.scope-project {
+  color: var(--accent);
+}
+
+.skill-card-description {
+  color: var(--text-secondary);
+  font-size: 11.5px;
+  line-height: 1.4;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.skill-card-description.empty {
+  color: var(--text-muted);
+  font-style: italic;
+}
+
+.skill-card-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  color: var(--text-muted);
+  font-size: 10.5px;
+}
+
+.skill-id {
+  flex-shrink: 0;
+  padding: 1px 4px;
+  border-radius: 3px;
+  background: var(--bg-input);
+  color: var(--text-secondary);
+  font-family: var(--font-mono);
+  font-size: 10px;
+}
+
+.skill-path {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: var(--font-mono);
+}
+
+.skills-loading,
+.skills-empty {
+  padding: 18px;
+  border: 1px dashed var(--border-color);
+  border-radius: 8px;
+  color: var(--text-muted);
+  font-size: 12px;
+  text-align: center;
+}
+
+.skills-empty-title {
+  margin-bottom: 4px;
+  color: var(--text-primary);
+  font-weight: 600;
+}
+
+.skills-catalog-warnings {
+  margin-top: 4px;
+  color: var(--text-muted);
+  font-size: 11px;
+}
+
+.skills-catalog-warnings summary {
+  cursor: pointer;
+}
+
+.skills-catalog-warnings ul {
+  margin: 6px 0 0;
+  padding-left: 18px;
+  line-height: 1.5;
+}
+
+.skills-error-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.skills-detail-view {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.skills-back-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  align-self: flex-start;
+  padding: 2px 0;
+  border: none;
+  background: transparent;
+  color: var(--text-muted);
+  font-family: var(--font-ui);
+  font-size: 11.5px;
+  cursor: pointer;
+}
+
+.skills-back-btn:hover {
+  color: var(--text-primary);
+}
+
+.skill-detail-header {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.skill-detail-name {
+  margin: 0;
+  color: var(--text-primary);
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.skill-detail-id {
+  padding: 1px 5px;
+  border-radius: 3px;
+  background: var(--bg-input);
+  color: var(--text-secondary);
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+}
+
+.skill-detail-description {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.skill-detail-notice {
+  margin: 0;
+  padding: 7px 9px;
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  background: var(--bg-surface);
+  color: var(--text-muted);
+  font-size: 11px;
+  overflow-wrap: anywhere;
+}
+
+.skill-detail-section {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.skill-detail-section-title {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.skill-meta-grid {
+  display: grid;
+  grid-template-columns: 150px minmax(0, 1fr);
+  gap: 4px 12px;
+  margin: 0;
+  padding: 10px;
+  border: 1px solid var(--border-color);
+  border-radius: 7px;
+  background: var(--bg-surface);
+  font-size: 11.5px;
+}
+
+.skill-meta-grid dt {
+  color: var(--text-muted);
+}
+
+.skill-meta-grid dd {
+  margin: 0;
+  color: var(--text-primary);
+  overflow-wrap: anywhere;
+}
+
+.skill-meta-grid code {
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+}
+
+.skill-detail-markdown.markdown-preview {
+  height: auto;
+  overflow: visible;
+  padding: 12px 14px;
+  border: 1px solid var(--border-color);
+  border-radius: 7px;
+  background: var(--bg-surface);
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.skill-detail-markdown.markdown-preview > :first-child {
+  margin-top: 0;
+}
+
+.skill-detail-markdown.markdown-preview > :last-child {
+  margin-bottom: 0;
+}
+
+.skill-detail-markdown.markdown-preview h1 {
+  font-size: 1.45em;
+}
+
+.skill-detail-markdown.markdown-preview h2 {
+  font-size: 1.25em;
+}
+
+.skill-detail-markdown.markdown-preview h3 {
+  font-size: 1.1em;
+}
+
+.skill-frontmatter {
+  margin: 0;
+  padding: 10px 12px;
+  border: 1px solid var(--border-color);
+  border-radius: 7px;
+  background: var(--bg-surface);
+  color: var(--text-primary);
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.skill-file-list {
+  margin: 0;
+  padding: 8px 12px 8px 28px;
+  border: 1px solid var(--border-color);
+  border-radius: 7px;
+  background: var(--bg-surface);
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+.skill-file-list code {
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+}
+
+.skill-valid {
+  margin: 0;
+  color: var(--success);
+  font-size: 11.5px;
+}
+
+.skill-message-list {
+  padding: 8px 10px;
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  font-size: 11.5px;
+}
+
+.skill-message-list strong {
+  display: block;
+  margin-bottom: 4px;
+}
+
+.skill-message-list ul {
+  margin: 0;
+  padding-left: 18px;
+  line-height: 1.5;
+}
+
+.skill-message-list.skill-errors {
+  border-color: var(--danger);
+  color: var(--danger);
+}
+
+.skill-message-list.skill-warnings {
+  color: var(--text-muted);
+}
+
 /* BYOK providers (T-3.1.9) */
 .byok-stack {
   min-width: 340px;
