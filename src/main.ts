@@ -112,6 +112,7 @@ import {
 import { readPartialJsonString } from "./session/partialJson";
 import {
   applyLiveEdit,
+  liveWritingHighlight,
   revealLiveWriteContent,
 } from "./session/liveWrite";
 import { matchesKitCommand } from "./kit/localize";
@@ -3853,6 +3854,7 @@ class BradbitApp {
       const index = original.indexOf(oldString);
       if (index >= 0) this.editor?.scrollToIndex(index);
     }
+    this.highlightLiveWriting(live);
     this.scheduleLiveWriteAnimation();
     if (live.pendingCompletion && live.revealed === live.content) {
       void this.completeLiveWrite();
@@ -3916,6 +3918,30 @@ class BradbitApp {
     }
   }
 
+  private highlightLiveWriting(
+    live: NonNullable<BradbitApp["liveWrite"]>,
+  ): void {
+    if (
+      !this.editor ||
+      !live.path ||
+      this.tabState.activeTabPath !== live.path
+    ) {
+      return;
+    }
+    const range = liveWritingHighlight(
+      live.mode,
+      live.originalContent,
+      live.oldString,
+      live.revealed.length,
+      live.revealedNewString,
+    );
+    if (!range) {
+      this.editor.clearLiveWritingHighlight();
+      return;
+    }
+    this.editor.setLiveWritingHighlight(range.from, range.to);
+  }
+
   private updateLiveWritePreview(
     live: NonNullable<BradbitApp["liveWrite"]>,
   ): void {
@@ -3946,6 +3972,7 @@ class BradbitApp {
     }
     if (this.tabState.activeTabPath === live.path) {
       this.editor?.updateLivePreview(live.path, live.revealed);
+      this.highlightLiveWriting(live);
       if (live.mode === "edit") {
         const index = live.originalContent.indexOf(live.oldString);
         if (index >= 0) {
@@ -4011,6 +4038,7 @@ class BradbitApp {
         ),
       };
     }
+    this.editor?.clearLiveWritingHighlight();
     this.editor?.finishLivePreview(live.path, content, this.settings);
     this.refreshOutlineSoon();
     this.render();
@@ -4047,6 +4075,7 @@ class BradbitApp {
             : tab,
         ),
       };
+      this.editor?.clearLiveWritingHighlight();
       this.editor?.finishLivePreview(
         live.path,
         live.originalContent,
@@ -6398,6 +6427,9 @@ class BradbitApp {
               this.settings,
               { scrollToEnd: this.liveWrite?.mode !== "edit" },
             );
+            if (this.liveWrite?.path === activeTab.path) {
+              this.highlightLiveWriting(this.liveWrite);
+            }
             if (
               this.liveWrite?.mode === "edit" &&
               this.liveWrite.path === activeTab.path

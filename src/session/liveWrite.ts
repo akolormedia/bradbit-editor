@@ -31,3 +31,26 @@ export function applyLiveEdit(
     original.slice(0, index) + newString + original.slice(index + oldString.length)
   );
 }
+
+
+export interface LiveWritingHighlight {
+  from: number;
+  to: number;
+}
+
+/** Range of the preview that should look selected while the AI writes. */
+export function liveWritingHighlight(
+  mode: "write" | "edit",
+  original: string,
+  oldString: string,
+  revealedLength: number,
+  revealedNewStringLength: number,
+): LiveWritingHighlight | null {
+  if (mode === "write") {
+    return revealedLength > 0 ? { from: 0, to: revealedLength } : null;
+  }
+  if (revealedNewStringLength <= 0) return null;
+  const index = original.indexOf(oldString);
+  if (index < 0) return null;
+  return { from: index, to: index + revealedNewStringLength };
+}
