@@ -7484,3 +7484,134 @@ button.project-search-context-line {
   font-weight: 600;
   letter-spacing: 0;
 }
+
+/* --- Welcome brief confirmation and project creation ------------------- */
+
+.welcome-brief-card {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 14px;
+  border: 1px solid var(--border-color);
+  border-radius: 11px;
+  background: var(--bg-surface);
+}
+
+.welcome-brief-card-icon {
+  display: inline-flex;
+  flex-shrink: 0;
+  color: var(--accent);
+}
+
+.welcome-brief-card-copy {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.welcome-brief-card-copy strong {
+  color: var(--text-primary);
+  font: 12.5px var(--font-ui);
+}
+
+.welcome-brief-card-copy span {
+  color: var(--text-muted);
+  font: 10.5px var(--font-ui);
+}
+
+.welcome-brief-card-meta {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: var(--font-mono);
+}
+
+.welcome-project-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  align-items: center;
+  padding: 24px;
+}
+
+.welcome-project-dialog {
+  width: min(620px, calc(100vw - 48px));
+  max-height: min(760px, calc(100vh - 48px));
+  overflow-y: auto;
+  padding: 18px 20px;
+}
+
+.welcome-project-form {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.welcome-project-form-header h3 {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.welcome-project-form-header p {
+  margin: 4px 0 0;
+  color: var(--text-muted);
+  font-size: 11.5px;
+}
+
+.welcome-project-brief {
+  min-height: 140px;
+  resize: vertical;
+  font-family: var(--font-ui);
+  line-height: 1.5;
+}
+
+.welcome-destination-question {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px 12px;
+  margin-bottom: 10px;
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  background: var(--bg-input);
+}
+
+.welcome-destination-question p {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: 11.5px;
+  line-height: 1.45;
+}
+
+.welcome-destination-question-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.welcome-project-footer {
+  margin-top: 2px;
+}
+
+@media (max-width: 720px) {
+  .welcome-brief-card {
+    flex-wrap: wrap;
+  }
+
+  .welcome-brief-card .toolbar-btn {
+    width: 100%;
+  }
+
+  .welcome-project-backdrop {
+    padding: 12px;
+  }
+
+  .welcome-project-dialog {
+    width: calc(100vw - 24px);
+    max-height: calc(100vh - 24px);
+    padding: 14px;
+  }
+}

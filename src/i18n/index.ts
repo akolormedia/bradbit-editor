@@ -38,6 +38,30 @@ export const translations = {
     welcomeTemplateSourceBundled: "Incluida",
     welcomeTemplateSourceUser: "Tuya",
     welcomeTemplateSourceBlank: "En blanco",
+    welcomeDraftReadyTitle: "Brief listo: {name}",
+    welcomeDraftReadyHint:
+      "Revisa la plantilla, el nombre y la carpeta antes de crear el proyecto.",
+    welcomeDraftReadyAction: "Revisar y crear",
+    welcomeProjectTitle: "Revisa tu proyecto",
+    welcomeProjectHint:
+      "Puedes ajustar el brief, el nombre, la plantilla y la carpeta antes de crear.",
+    welcomeProjectBrief: "Brief del proyecto",
+    welcomeProjectBriefHint:
+      "Este texto se cargará en el chat del proyecto.",
+    welcomeProjectBriefPlaceholder:
+      "Describe la idea, el formato, la audiencia y los entregables…",
+    welcomeProjectDestinationPicked:
+      "Elegiste esta carpeta antes del chat. El proyecto se creará dentro de ella.",
+    welcomeProjectDestinationQuestion:
+      "Antes del chat elegiste esta carpeta. ¿La usamos para el proyecto?",
+    welcomeProjectDestinationUse: "Usar esta carpeta",
+    welcomeProjectDestinationOther: "Elegir otra carpeta",
+    welcomeProjectDestinationNote:
+      "El proyecto se creará dentro de esta carpeta.",
+    welcomeProjectBriefEmpty: "El brief no puede estar vacío.",
+    welcomeProjectContinue: "Seguir hablando",
+    welcomeTemplatePlaceholder: "Elige una plantilla",
+    welcomeBriefTemplateLabel: "Plantilla: {template}",
     healthTitle: "Primeros pasos",
     healthNote:
       "Escribir no depende del modelo de IA: conéctalo cuando lo necesites.",
@@ -816,6 +840,29 @@ export const translations = {
     welcomeTemplateSourceBundled: "Bundled",
     welcomeTemplateSourceUser: "Yours",
     welcomeTemplateSourceBlank: "Blank",
+    welcomeDraftReadyTitle: "Brief ready: {name}",
+    welcomeDraftReadyHint:
+      "Review the template, name and folder before creating the project.",
+    welcomeDraftReadyAction: "Review and create",
+    welcomeProjectTitle: "Review your project",
+    welcomeProjectHint:
+      "You can adjust the brief, name, template and folder before creating it.",
+    welcomeProjectBrief: "Project brief",
+    welcomeProjectBriefHint: "This text will be loaded into the project chat.",
+    welcomeProjectBriefPlaceholder:
+      "Describe the idea, format, audience and deliverables…",
+    welcomeProjectDestinationPicked:
+      "You chose this folder before the chat. The project will be created inside it.",
+    welcomeProjectDestinationQuestion:
+      "You chose this folder before the chat. Should we use it for the project?",
+    welcomeProjectDestinationUse: "Use this folder",
+    welcomeProjectDestinationOther: "Choose another folder",
+    welcomeProjectDestinationNote:
+      "The project will be created inside this folder.",
+    welcomeProjectBriefEmpty: "The brief cannot be empty.",
+    welcomeProjectContinue: "Keep chatting",
+    welcomeTemplatePlaceholder: "Choose a template",
+    welcomeBriefTemplateLabel: "Template: {template}",
     healthTitle: "Getting started",
     healthNote:
       "Writing does not depend on the AI model: connect it whenever you need it.",
