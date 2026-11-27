@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { applyLiveEdit, revealLiveWriteContent } from "./liveWrite";
+import {
+  applyLiveEdit,
+  liveWritingHighlight,
+  revealLiveWriteContent,
+} from "./liveWrite";
 
 describe("live write animation", () => {
   it("reveals short content in small steps and finishes", () => {
@@ -29,6 +33,23 @@ describe("live write animation", () => {
     );
     expect(applyLiveEdit("uno dos", "falta", "tres", false)).toBe("uno dos");
     expect(applyLiveEdit("uno", "uno", "", false)).toBe("");
+  });
+
+  it("marks the new text but only while it is being written", () => {
+    expect(liveWritingHighlight("write", "", "", 10, 0)).toEqual({
+      from: 0,
+      to: 10,
+    });
+    expect(liveWritingHighlight("write", "", "", 0, 0)).toBeNull();
+    expect(
+      liveWritingHighlight("edit", "uno dos tres", "dos", 5, 3),
+    ).toEqual({ from: 4, to: 7 });
+    expect(
+      liveWritingHighlight("edit", "uno dos tres", "dos", 5, 0),
+    ).toBeNull();
+    expect(
+      liveWritingHighlight("edit", "uno dos tres", "falta", 5, 3),
+    ).toBeNull();
   });
 
   it("keeps a shared prefix when the target changes", () => {

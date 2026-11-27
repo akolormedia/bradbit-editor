@@ -4,6 +4,8 @@ import {
   EditorState,
   Extension,
   RangeSetBuilder,
+  StateEffect,
+  StateField,
   Transaction,
 } from "@codemirror/state";
 import {
@@ -71,6 +73,32 @@ import {
 import { InlineBlameView } from "./inlineBlame";
 import { InlineDiffView } from "./inlineDiffView";
 import { computeWrapEdit } from "./markdownFormat";
+
+const setLiveWritingHighlight = StateEffect.define<{
+  from: number;
+  to: number;
+} | null>();
+
+const liveWritingHighlightField = StateField.define<DecorationSet>({
+  create: () => Decoration.none,
+  update(highlights, transaction) {
+    let next = highlights.map(transaction.changes);
+    for (const effect of transaction.effects) {
+      if (!effect.is(setLiveWritingHighlight)) continue;
+      next =
+        effect.value && effect.value.to > effect.value.from
+          ? Decoration.set([
+              Decoration.mark({ class: "cm-ai-writing" }).range(
+                effect.value.from,
+                effect.value.to,
+              ),
+            ])
+          : Decoration.none;
+    }
+    return next;
+  },
+  provide: (field) => EditorView.decorations.from(field),
+});
 
 /**
  * Fountain 1.1 highlighter. A stream parser is not enough here: CodeMirror
@@ -220,6 +248,10 @@ function buildAppearanceExtension(settings: AppSettings): Extension {
     ".cm-selectionBackground, ::selection": {
       backgroundColor: "var(--bg-selection) !important",
     },
+    ".cm-ai-writing": {
+      backgroundColor: "var(--bg-selection)",
+      borderRadius: "2px",
+    },
     ".cm-gutters": {
       backgroundColor: "var(--bg-editor)",
       color: "var(--text-muted)",
@@ -316,6 +348,13 @@ export class BradbitCodeMirror {
   public openDocument(path: string, content: string, settings: AppSettings): void {
     this.settings = settings;
     const switched = this.currentPath !== path;
+    const keepScroll =
+      !switched && this.view
+        ? {
+            top: this.view.scrollDOM.scrollTop,
+            left: this.view.scrollDOM.scrollLeft,
+          }
+        : null;
     if (this.view && this.currentPath) {
       this.statesByPath.set(this.currentPath, this.view.state);
       this.scrollPositions.set(this.currentPath, {
@@ -340,6 +379,17 @@ export class BradbitCodeMirror {
     } else {
       this.view.setState(state);
       this.applySettings(settings);
+      if (keepScroll) {
+        const restore = () => {
+          if (!this.view || this.currentPath !== path) return;
+          this.view.scrollDOM.scrollTop = keepScroll.top;
+          this.view.scrollDOM.scrollLeft = keepScroll.left;
+        };
+        restore();
+        if (typeof window.requestAnimationFrame === "function") {
+          window.requestAnimationFrame(restore);
+        }
+      }
     }
     if (switched && this.view) {
       const target = this.scrollPositions.get(path) ?? { top: 0, left: 0 };
@@ -394,6 +444,29 @@ export class BradbitCodeMirror {
     if (this.liveScrollToEnd) this.scrollPreviewToEnd();
   }
 
+  public getScrollPosition(): { top: number; left: number } | null {
+    if (!this.view) return null;
+    return {
+      top: this.view.scrollDOM.scrollTop,
+      left: this.view.scrollDOM.scrollLeft,
+    };
+  }
+
+  public restoreScrollPosition(position: {
+    top: number;
+    left: number;
+  }): void {
+    const apply = () => {
+      if (!this.view) return;
+      this.view.scrollDOM.scrollTop = position.top;
+      this.view.scrollDOM.scrollLeft = position.left;
+    };
+    apply();
+    if (typeof window.requestAnimationFrame === "function") {
+      window.requestAnimationFrame(apply);
+    }
+  }
+
   public scrollToIndex(index: number): void {
     if (!this.view) return;
     const position = Math.max(
@@ -405,12 +478,33 @@ export class BradbitCodeMirror {
     });
   }
 
+  public setLiveWritingHighlight(from: number, to: number): void {
+    if (!this.view) return;
+    const length = this.view.state.doc.length;
+    const start = Math.max(0, Math.min(from, length));
+    const end = Math.max(start, Math.min(to, length));
+    this.view.dispatch({
+      effects: setLiveWritingHighlight.of(
+        start < end ? { from: start, to: end } : null,
+      ),
+    });
+  }
+
+  public clearLiveWritingHighlight(): void {
+    this.view?.dispatch({
+      effects: setLiveWritingHighlight.of(null),
+    });
+  }
+
   public finishLivePreview(
     path: string,
     content: string,
     settings: AppSettings,
   ): void {
-    if (this.livePreviewPath === path) this.livePreviewPath = null;
+    if (this.livePreviewPath === path) {
+      this.livePreviewPath = null;
+      this.clearLiveWritingHighlight();
+    }
     this.livePreviewUpdating = false;
     this.liveScrollToEnd = true;
     if (this.currentPath === path) {
@@ -1036,6 +1130,7 @@ export class BradbitCodeMirror {
             ? [EditorState.readOnly.of(true), EditorView.editable.of(false)]
             : [],
         ),
+        liveWritingHighlightField,
         EditorState.transactionFilter.of((transaction) => {
           if (
             this.livePreviewPath &&
