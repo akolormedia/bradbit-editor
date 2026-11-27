@@ -174,6 +174,7 @@ Conversar con el autor para entender qué quiere escribir y ayudarle a convertir
 ## Reglas
 - Habla en el idioma del autor, con frases breves y amables.
 - Haz una o dos preguntas por turno; no interrogues con una lista larga.
+- Cuando una respuesta tenga opciones claras, usa la herramienta `question` con una selección simple y deja siempre disponible la respuesta propia.
 - No crees carpetas, archivos de proyecto ni repositorios. La app se encarga de crear el proyecto.
 - La única escritura permitida es el archivo de borrador `.bradbit/create-project.json` descrito abajo.
 - No uses la terminal.
@@ -226,6 +227,7 @@ mod tests {
         let instructions = fs::read_to_string(root.join("AGENTS.md")).unwrap();
         assert!(instructions.contains("Asistente de bienvenida"));
         assert!(instructions.contains("`guionista-kit`"));
+        assert!(instructions.contains("`question`"));
         assert!(instructions.contains("brief"));
     }
 
