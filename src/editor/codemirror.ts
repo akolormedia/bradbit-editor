@@ -444,6 +444,29 @@ export class BradbitCodeMirror {
     if (this.liveScrollToEnd) this.scrollPreviewToEnd();
   }
 
+  public getScrollPosition(): { top: number; left: number } | null {
+    if (!this.view) return null;
+    return {
+      top: this.view.scrollDOM.scrollTop,
+      left: this.view.scrollDOM.scrollLeft,
+    };
+  }
+
+  public restoreScrollPosition(position: {
+    top: number;
+    left: number;
+  }): void {
+    const apply = () => {
+      if (!this.view) return;
+      this.view.scrollDOM.scrollTop = position.top;
+      this.view.scrollDOM.scrollLeft = position.left;
+    };
+    apply();
+    if (typeof window.requestAnimationFrame === "function") {
+      window.requestAnimationFrame(apply);
+    }
+  }
+
   public scrollToIndex(index: number): void {
     if (!this.view) return;
     const position = Math.max(

@@ -6317,6 +6317,8 @@ class BradbitApp {
     if (previousTree) this.treeScrollTop = previousTree.scrollTop;
     const chatScroll: ChatScrollState | null =
       this.chatPanel?.getScrollState() ?? null;
+    const editorScroll = this.editor?.getScrollPosition() ?? null;
+    const editorPath = this.tabState.activeTabPath;
 
     this.rootEl.innerHTML = "";
     const shell = document.createElement("div");
@@ -6463,6 +6465,14 @@ class BradbitApp {
     }
 
     if (!this.versionOpen) this.syncDiffView(activeTab);
+
+    if (
+      editorScroll &&
+      !this.versionOpen &&
+      this.tabState.activeTabPath === editorPath
+    ) {
+      this.editor?.restoreScrollPosition(editorScroll);
+    }
 
     // Keep native menu labels, check marks and enabled items aligned with the UI.
     this.syncMenu();
