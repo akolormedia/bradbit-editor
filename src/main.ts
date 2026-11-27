@@ -110,6 +110,7 @@ import {
   ToolFileActivity,
 } from "./session/toolFiles";
 import { readPartialJsonString } from "./session/partialJson";
+import { revealLiveWriteContent } from "./session/liveWrite";
 import { matchesKitCommand } from "./kit/localize";
 import { configFilesVisible, effectiveGitAuthor } from "./settings/developer";
 import { GENERAL_COMMANDS, mergeGeneralCommands } from "./kit/generalCommands";
@@ -377,6 +378,8 @@ class BradbitApp {
     path: string | null;
     raw: string;
     content: string;
+    revealed: string;
+    pendingCompletion: boolean;
     originalContent: string;
     originalSavedContent: string;
     originalViewMode: OpenTab["viewMode"];
@@ -3594,7 +3597,9 @@ class BradbitApp {
 
   private startLiveWrite(sessionId: string, toolId: string): void {
     if (this.liveWrite && this.liveWrite.toolId !== toolId) {
-      this.discardLiveWrite();
+      this.liveWrite.revealed = this.liveWrite.content;
+      this.liveWrite.pendingCompletion = true;
+      void this.completeLiveWrite();
     }
     this.liveToolFile = null;
     this.liveWrite = {
@@ -3603,6 +3608,8 @@ class BradbitApp {
       path: null,
       raw: "",
       content: "",
+      revealed: "",
+      pendingCompletion: false,
       originalContent: "",
       originalSavedContent: "",
       originalViewMode: "edit",
@@ -3639,7 +3646,7 @@ class BradbitApp {
     }
     const content = readPartialJsonString(live.raw, "content");
     if (content !== null) live.content = content;
-    if (this.liveWrite === live) this.scheduleLiveWritePaint();
+    if (this.liveWrite === live) this.scheduleLiveWriteAnimation();
   }
 
   private applyLiveWriteInput(toolId: string, input: unknown): void {
@@ -3658,7 +3665,7 @@ class BradbitApp {
       );
       if (relative) this.openLiveWriteTab(live, relative);
     }
-    if (this.liveWrite === live) this.scheduleLiveWritePaint();
+    if (this.liveWrite === live) this.scheduleLiveWriteAnimation();
   }
 
   private openLiveWriteTab(
@@ -3688,8 +3695,8 @@ class BradbitApp {
           tab.path === path
             ? {
                 ...tab,
-                content: live.content,
-                savedContent: live.content,
+                content: live.revealed,
+                savedContent: live.revealed,
                 livePreview: true,
                 preview: false,
                 viewMode: "edit",
@@ -3700,7 +3707,7 @@ class BradbitApp {
     } else {
       this.tabState = openFileInTabs(
         this.tabState,
-        { path, name: this.fileName(path), content: live.content },
+        { path, name: this.fileName(path), content: live.revealed },
         true,
       );
       this.tabState = {
@@ -3715,29 +3722,50 @@ class BradbitApp {
     this.render();
   }
 
-  private scheduleLiveWritePaint(): void {
+  private scheduleLiveWriteAnimation(): void {
     if (this.liveWriteFrame !== null) return;
-    const paint = () => {
+    const step = () => {
       this.liveWriteFrame = null;
-      this.paintLiveWrite();
+      this.advanceLiveWrite();
     };
     this.liveWriteFrame =
       typeof window.requestAnimationFrame === "function"
-        ? window.requestAnimationFrame(paint)
-        : window.setTimeout(paint, 16);
+        ? window.requestAnimationFrame(step)
+        : window.setTimeout(step, 16);
   }
 
-  private paintLiveWrite(): void {
+  private advanceLiveWrite(): void {
     const live = this.liveWrite;
     if (!live?.path) return;
+    const target = live.content;
+    if (!target.startsWith(live.revealed)) {
+      live.revealed = "";
+    }
+    if (live.revealed.length < target.length) {
+      live.revealed = revealLiveWriteContent(target, live.revealed);
+      this.updateLiveWritePreview(live);
+    }
+    if (live.revealed.length < target.length) {
+      this.scheduleLiveWriteAnimation();
+      return;
+    }
+    if (live.pendingCompletion) {
+      void this.completeLiveWrite();
+    }
+  }
+
+  private updateLiveWritePreview(
+    live: NonNullable<BradbitApp["liveWrite"]>,
+  ): void {
+    if (!live.path) return;
     const tab = this.tabState.tabs.find((item) => item.path === live.path);
     if (!tab) {
       this.liveWrite = null;
       return;
     }
     if (
-      tab.content !== live.content ||
-      tab.savedContent !== live.content ||
+      tab.content !== live.revealed ||
+      tab.savedContent !== live.revealed ||
       !tab.livePreview
     ) {
       this.tabState = {
@@ -3746,8 +3774,8 @@ class BradbitApp {
           item.path === live.path
             ? {
                 ...item,
-                content: live.content,
-                savedContent: live.content,
+                content: live.revealed,
+                savedContent: live.revealed,
                 livePreview: true,
               }
             : item,
@@ -3755,7 +3783,7 @@ class BradbitApp {
       };
     }
     if (this.tabState.activeTabPath === live.path) {
-      this.editor?.updateLivePreview(live.path, live.content);
+      this.editor?.updateLivePreview(live.path, live.revealed);
     }
   }
 
@@ -3770,10 +3798,19 @@ class BradbitApp {
   }
 
   private async completeLiveWrite(): Promise<void> {
-    this.clearLiveWriteFrame();
     const live = this.liveWrite;
+    if (!live?.path) {
+      this.clearLiveWriteFrame();
+      this.liveWrite = null;
+      return;
+    }
+    if (live.revealed !== live.content) {
+      live.pendingCompletion = true;
+      this.scheduleLiveWriteAnimation();
+      return;
+    }
+    this.clearLiveWriteFrame();
     this.liveWrite = null;
-    if (!live?.path) return;
     const root = this.folder?.rootPath;
     let content = live.content;
     if (root) {
