@@ -1678,32 +1678,55 @@ export class ChatPanel {
     });
   }
 
-  private toolVerb(name: string): string {
+  private toolVerb(tool: ChatToolCall): string {
     const lang = this.options.language;
-    switch (name) {
+    const running = tool.status === "streaming" || tool.status === "running";
+    switch (tool.name) {
       case "read":
-        return t(lang, "chatToolRead");
+        return t(lang, running ? "chatToolReading" : "chatToolRead");
       case "edit":
       case "multiedit":
       case "patch":
       case "apply_patch":
+        if (tool.status === "error") {
+          return t(lang, "chatToolEditError");
+        }
+        if (running) {
+          return t(
+            lang,
+            tool.status === "streaming"
+              ? "chatToolPreparing"
+              : "chatToolEditing",
+          );
+        }
         return t(lang, "chatToolEdit");
       case "write":
+        if (tool.status === "error") {
+          return t(lang, "chatToolWriteError");
+        }
+        if (running) {
+          return t(
+            lang,
+            tool.status === "streaming"
+              ? "chatToolPreparing"
+              : "chatToolWriting",
+          );
+        }
         return t(lang, "chatToolWrite");
       case "shell":
-        return t(lang, "chatToolShell");
+        return t(lang, running ? "chatToolExecuting" : "chatToolShell");
       case "glob":
       case "grep":
-        return t(lang, "chatToolSearch");
+        return t(lang, running ? "chatToolSearching" : "chatToolSearch");
       case "webfetch":
       case "websearch":
-        return t(lang, "chatToolWeb");
+        return t(lang, running ? "chatToolFetching" : "chatToolWeb");
       case "skill":
-        return t(lang, "chatToolSkill");
+        return t(lang, running ? "chatToolLoadingSkill" : "chatToolSkill");
       case "question":
-        return t(lang, "chatToolQuestion");
+        return t(lang, running ? "chatToolAsking" : "chatToolQuestion");
       default:
-        return t(lang, "chatToolDefault");
+        return t(lang, running ? "chatToolUsing" : "chatToolDefault");
     }
   }
 
@@ -1975,13 +1998,26 @@ export class ChatPanel {
     const label = document.createElement("span");
     label.className = "chat-tool-label";
     const summary = this.toolSummary(tool);
-    label.textContent = [this.toolVerb(tool.name), summary]
+    label.textContent = [this.toolVerb(tool), summary]
       .filter(Boolean)
       .join(" ");
     const chevron = document.createElement("span");
     chevron.className = "chat-tool-chevron";
     chevron.appendChild(createIcon("chevron-down", 12));
-    header.append(icon, label, chevron);
+    header.append(icon, label);
+    if (this.isEditTool(tool.name)) {
+      const state = document.createElement("span");
+      state.className = `chat-tool-state ${tool.status}`;
+      state.dataset.testid = `tool-state-${tool.id}`;
+      state.textContent =
+        tool.status === "completed"
+          ? t(lang, "chatToolStateSaved")
+          : tool.status === "error"
+            ? t(lang, "chatToolStateError")
+            : t(lang, "chatToolStateWorking");
+      header.appendChild(state);
+    }
+    header.appendChild(chevron);
 
     const details = document.createElement("div");
     details.className = "chat-tool-details";

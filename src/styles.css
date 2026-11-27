@@ -1849,6 +1849,32 @@ textarea.text-input {
   white-space: nowrap;
 }
 
+.chat-tool-state {
+  flex-shrink: 0;
+  padding: 1px 6px;
+  border-radius: 999px;
+  background: var(--bg-input);
+  color: var(--text-muted);
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+
+.chat-tool-state.streaming,
+.chat-tool-state.running {
+  background: var(--bg-hover);
+  color: var(--accent);
+}
+
+.chat-tool-state.completed {
+  color: var(--success);
+}
+
+.chat-tool-state.error {
+  color: var(--danger);
+}
+
 .chat-tool-chevron {
   display: inline-flex;
   flex-shrink: 0;

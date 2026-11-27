@@ -105,6 +105,10 @@ import {
 import { addSessionTab, removeSessionTab, SessionTabInfo } from "./session/sessionTabs";
 import { projectRelativePath } from "./session/chatPaths";
 import { parseSlashCommand } from "./session/composer";
+import {
+  toolFileActivity,
+  ToolFileActivity,
+} from "./session/toolFiles";
 import { matchesKitCommand } from "./kit/localize";
 import { configFilesVisible, effectiveGitAuthor } from "./settings/developer";
 import { GENERAL_COMMANDS, mergeGeneralCommands } from "./kit/generalCommands";
@@ -365,6 +369,7 @@ class BradbitApp {
   private githubPullRequests: GitHubPullRequest[] = [];
   private githubPrLoading = false;
   private chatState: ChatState = { ...initialChatState };
+  private liveToolFile: { toolId: string; path: string } | null = null;
   private welcomeChatState: ChatState = { ...initialChatState };
   private welcomeChatPanel: ChatPanel | null = null;
   private welcomeSessionId: string | null = null;
@@ -3569,6 +3574,89 @@ class BradbitApp {
     }
   }
 
+  private async handleToolFileActivity(
+    activity: ToolFileActivity,
+  ): Promise<void> {
+    if (!this.folder || this.versionOpen) return;
+    const root = this.folder.rootPath;
+    if (activity.phase === "running") {
+      const tab = this.tabState.tabs.find(
+        (item) => item.path === activity.path,
+      );
+      if (tab && isTabDirty(tab)) {
+        this.showStatusNotice(
+          t(this.settings.language, "chatFileUnsaved", {
+            path: activity.path,
+          }),
+        );
+        return;
+      }
+      if (tab && this.tabState.activeTabPath === activity.path) {
+        this.liveToolFile = { toolId: activity.toolId, path: activity.path };
+        return;
+      }
+      this.liveToolFile = { toolId: activity.toolId, path: activity.path };
+      let content = tab?.content ?? "";
+      if (!tab) {
+        try {
+          content = await backend.readTextFile(root, activity.path);
+        } catch {
+          content = "";
+        }
+        if (!this.folder || this.folder.rootPath !== root) return;
+      }
+      this.tabState = openFileInTabs(
+        this.tabState,
+        {
+          path: activity.path,
+          name: this.fileName(activity.path),
+          content,
+        },
+        true,
+      );
+      this.render();
+      return;
+    }
+
+    if (this.liveToolFile?.toolId !== activity.toolId) return;
+    this.liveToolFile = null;
+    if (activity.phase === "completed") {
+      await this.reloadToolFile(activity.path);
+    }
+  }
+
+  private async reloadToolFile(path: string): Promise<void> {
+    if (!this.folder) return;
+    const root = this.folder.rootPath;
+    const tab = this.tabState.tabs.find((item) => item.path === path);
+    if (!tab || isTabDirty(tab)) return;
+    try {
+      const content = await backend.readTextFile(root, path);
+      if (!this.folder || this.folder.rootPath !== root) return;
+      const current = this.tabState.tabs.find((item) => item.path === path);
+      if (!current || isTabDirty(current) || current.content === content) {
+        return;
+      }
+      this.tabState = {
+        ...this.tabState,
+        tabs: this.tabState.tabs.map((item) =>
+          item.path === path
+            ? {
+                ...item,
+                content,
+                savedContent: content,
+                externalChange: false,
+              }
+            : item,
+        ),
+      };
+      this.editor?.closeDocumentState(path);
+      this.render();
+    } catch (err) {
+      console.error("Could not reload the file written by the agent", err);
+    }
+  }
+
   private async openChatToolFile(
     rawPath: string,
     showDiff: boolean,
@@ -3601,6 +3689,29 @@ class BradbitApp {
     this.chatSessions.set(targetId, next);
     if (targetId === this.activeChatSessionId) {
       this.chatState = next;
+      const rawTool = data.tool;
+      const toolId =
+        rawTool && typeof rawTool === "object" && !Array.isArray(rawTool)
+          ? (rawTool as Record<string, unknown>).id
+          : null;
+      const toolPart =
+        typeof toolId === "string"
+          ? next.messages
+              .flatMap((message) => message.parts)
+              .find(
+                (part) => part.type === "tool" && part.tool.id === toolId,
+              )
+          : null;
+      if (toolPart?.type === "tool") {
+        const activity = toolFileActivity(
+          this.folder?.rootPath ?? null,
+          event.type,
+          { tool: toolPart.tool },
+        );
+        if (activity) {
+          void this.handleToolFileActivity(activity);
+        }
+      }
     }
     this.updateChatPanel();
   }
