@@ -25,6 +25,14 @@ function ready() {
 }
 
 describe("chat state (T-2.1.1)", () => {
+  it("keeps the session model when there are no messages yet", () => {
+    const state = chatFromHistory(
+      { ...session, model: "opencode-go/hy4#high" },
+      [],
+    );
+    expect(state.model).toBe("opencode-go/hy4#high");
+  });
+
   it("walks through starting, ready and error states", () => {
     expect(chatStarting(initialChatState).status).toBe("starting");
     const connected = chatStarted(chatStarting(initialChatState), session);

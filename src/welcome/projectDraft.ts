@@ -56,14 +56,3 @@ export function validateWelcomeDraft(
 export function welcomeDraftPreview(draft: WelcomeDraft): string {
   return projectPathPreview(draft.destination, draft.name);
 }
-
-export function buildWelcomeBriefMessage(
-  brief: string,
-  templateName: string,
-): string {
-  const lines = ["Brief del proyecto", "", brief.trim()];
-  if (templateName.trim()) {
-    lines.push("", `Plantilla: ${templateName.trim()}`);
-  }
-  return lines.join("\n");
-}

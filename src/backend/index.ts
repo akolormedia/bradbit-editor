@@ -667,6 +667,11 @@ export const backend = {
     );
   },
 
+  async welcomeCleanupWorkspace(): Promise<void> {
+    if (!isTauriEnvironment()) return;
+    await tauriInvoke<void>("welcome_cleanup_workspace");
+  },
+
   async saveCurrentAsTemplate(folderPath: string, name: string): Promise<TemplateInfo> {
     if (!isTauriEnvironment()) {
       throw new Error("Saving templates requires the desktop app");

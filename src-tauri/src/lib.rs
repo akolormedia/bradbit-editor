@@ -185,6 +185,11 @@ fn welcome_read_project_request() -> Result<Option<welcome::WelcomeProjectReques
 }
 
 #[tauri::command]
+fn welcome_cleanup_workspace() -> Result<(), String> {
+    welcome::cleanup_workspace()
+}
+
+#[tauri::command]
 fn save_current_as_template(
     folder_path: String,
     name: String,
@@ -984,6 +989,7 @@ pub fn run() {
             create_project_from_template,
             welcome_prepare_workspace,
             welcome_read_project_request,
+            welcome_cleanup_workspace,
             save_current_as_template,
             open_templates_folder,
             reveal_in_finder,

@@ -1,7 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { WelcomeProjectRequest, WelcomeTemplate } from "../types";
 import {
-  buildWelcomeBriefMessage,
   validateWelcomeDraft,
   welcomeDraftFromRequest,
   welcomeDraftPreview,
@@ -63,14 +62,4 @@ describe("welcome project draft", () => {
     expect(welcomeDraftPreview(draft)).toBe("/tmp/La casa");
   });
 
-  it("builds the handoff message with the template decision", () => {
-    expect(
-      buildWelcomeBriefMessage("Una historia.", "Guion Audiovisual"),
-    ).toBe(
-      "Brief del proyecto\n\nUna historia.\n\nPlantilla: Guion Audiovisual",
-    );
-    expect(buildWelcomeBriefMessage("Solo el brief.", "")).toBe(
-      "Brief del proyecto\n\nSolo el brief.",
-    );
-  });
 });
