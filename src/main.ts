@@ -293,7 +293,7 @@ type ModalState =
 const NATIVE_MENU_KEYS = new Set(["b", "i", "s", "o", "n", "w", ",", "f"]);
 
 function isNativeMenuShortcut(key: string, _shift: boolean, alt: boolean): boolean {
-  if (key === "e") return true;
+  if (key === "e" && !alt) return true;
   if (key === "p") return true;
   if (key === "g" && alt) return true;
   return NATIVE_MENU_KEYS.has(key);
@@ -352,6 +352,7 @@ class BradbitApp {
   private versionDiffs: Record<string, VersionDiffState | undefined> = {};
   private versionExpanded = new Set<string>();
   private versionOpen = false;
+  private versionDiffMode: "unified" | "split" = "unified";
   private versionGeneratingMessage = false;
   private gitBusy = false;
   private gitHistoryLoading = false;
@@ -6233,6 +6234,50 @@ class BradbitApp {
         e.preventDefault();
         return;
       }
+      if (
+        this.versionOpen &&
+        this.modal.kind === "none" &&
+        this.sidebarVisible &&
+        this.sidebarTab === "versions"
+      ) {
+        if (e.altKey) {
+          if (letter === "e") {
+            e.preventDefault();
+            this.expandAllVersionChanges();
+            return;
+          }
+          if (letter === "r") {
+            e.preventDefault();
+            this.collapseAllVersionChanges();
+            return;
+          }
+          if (letter === "a") {
+            e.preventDefault();
+            this.setSelectedVersionStage(true);
+            return;
+          }
+          if (letter === "d") {
+            e.preventDefault();
+            this.setSelectedVersionStage(false);
+            return;
+          }
+          if (letter === "j") {
+            e.preventDefault();
+            this.navigateVersionChange(1);
+            return;
+          }
+          if (letter === "k") {
+            e.preventDefault();
+            this.navigateVersionChange(-1);
+            return;
+          }
+        }
+        if (e.key === "Enter") {
+          e.preventDefault();
+          void this.saveVersion(false);
+          return;
+        }
+      }
       if (letter === "e" && e.shiftKey) {
         e.preventDefault();
         this.toggleSidebar();
@@ -7566,6 +7611,7 @@ class BradbitApp {
         expanded: this.versionExpanded,
         selectedPath: this.versionSelectedPath,
         busy: this.gitBusy,
+        diffMode: this.versionDiffMode,
       },
       {
         onToggleFile: (path) => this.toggleVersionChange(path),
@@ -7585,18 +7631,52 @@ class BradbitApp {
         },
         onStageAll: () => void this.stageAllVersions(),
         onDiscardFile: (path) => this.requestDiscardPath(path),
-        onExpandAll: () => {
-          for (const entry of entries) this.versionExpanded.add(entry.path);
-          this.renderVersionPreservingScroll();
-          void this.loadExpandedVersionDiffs();
-        },
-        onCollapseAll: () => {
-          this.versionExpanded.clear();
+        onExpandAll: () => this.expandAllVersionChanges(),
+        onCollapseAll: () => this.collapseAllVersionChanges(),
+        onDiffModeChange: (mode) => {
+          this.versionDiffMode = mode;
           this.renderVersionPreservingScroll();
         },
         onFocusComposer: () => this.focusVersionComposer(),
       },
     );
+  }
+
+  private expandAllVersionChanges(): void {
+    for (const entry of this.gitStatus?.entries ?? []) {
+      this.versionExpanded.add(entry.path);
+    }
+    this.renderVersionPreservingScroll();
+    void this.loadExpandedVersionDiffs();
+  }
+
+  private collapseAllVersionChanges(): void {
+    this.versionExpanded.clear();
+    this.renderVersionPreservingScroll();
+  }
+
+  private setSelectedVersionStage(stage: boolean): void {
+    const path = this.versionSelectedPath;
+    if (!path) return;
+    void this.stageVersionPaths([path], stage);
+  }
+
+  private navigateVersionChange(direction: 1 | -1): void {
+    const path = this.versionSelectedPath;
+    const selected = path
+      ? this.rootEl.querySelector<HTMLElement>(
+          `.version-file-card[data-version-file="${CSS.escape(path)}"]`,
+        )
+      : null;
+    const card = selected?.classList.contains("expanded")
+      ? selected
+      : this.rootEl.querySelector<HTMLElement>(".version-file-card.expanded") ??
+        selected;
+    card
+      ?.querySelector<HTMLButtonElement>(
+        direction > 0 ? ".version-diff-next" : ".version-diff-prev",
+      )
+      ?.click();
   }
 
   private async loadExpandedVersionDiffs(): Promise<void> {

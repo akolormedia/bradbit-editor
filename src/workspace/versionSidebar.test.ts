@@ -177,6 +177,26 @@ describe("version sidebar (T-3.11.2)", () => {
     expect(root.textContent).toContain("Prepara al menos un archivo");
   });
 
+  it("links the version tabs to the panel for assistive tech", () => {
+    const calls = handlers();
+    const root = createVersionSidebar(state(), calls);
+    const changes = root.querySelector<HTMLButtonElement>(
+      '[data-version-view="changes"]',
+    )!;
+    expect(changes.getAttribute("aria-controls")).toBe("version-view-panel");
+    expect(changes.tabIndex).toBe(0);
+    const panel = root.querySelector<HTMLElement>("#version-view-panel")!;
+    expect(panel.getAttribute("role")).toBe("tabpanel");
+    expect(panel.getAttribute("aria-labelledby")).toBe(
+      "version-view-tab-changes",
+    );
+
+    changes.dispatchEvent(
+      new KeyboardEvent("keydown", { key: "ArrowRight", bubbles: true }),
+    );
+    expect(calls.onViewChange).toHaveBeenCalledWith("history");
+  });
+
   it("shows the history and toggles a commit", () => {
     const calls = handlers();
     const root = createVersionSidebar(
@@ -197,6 +217,43 @@ describe("version sidebar (T-3.11.2)", () => {
     expect(root.textContent).toContain("Primera versión");
     root.querySelector<HTMLButtonElement>('[data-commit-id="abc"]')!.click();
     expect(calls.onToggleCommit).toHaveBeenCalledWith("abc");
+  });
+
+  it("shows the files of a version and restores one", () => {
+    const calls = handlers();
+    const root = createVersionSidebar(
+      state({
+        view: "history",
+        history: [
+          {
+            id: "abc",
+            author: "Ana",
+            email: "ana@example.com",
+            date: "2026-11-25T10:00:00Z",
+            subject: "Primera versión",
+          },
+        ],
+        expandedCommitId: "abc",
+        commitFiles: {
+          abc: [
+            {
+              path: "guion/acto-1.fountain",
+              oldPath: null,
+              status: "M",
+            },
+          ],
+        },
+      }),
+      calls,
+    );
+    expect(root.textContent).toContain("guion/acto-1.fountain");
+    root
+      .querySelector<HTMLButtonElement>('[data-restore-path="guion/acto-1.fountain"]')!
+      .click();
+    expect(calls.onRestoreFile).toHaveBeenCalledWith(
+      "abc",
+      "guion/acto-1.fountain",
+    );
   });
 
   it("opens the branch menu and the AI notes action", () => {

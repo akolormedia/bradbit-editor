@@ -44,6 +44,7 @@ function state(overrides: Partial<VersionChangesViewState> = {}): VersionChanges
     expanded: new Set(["guion/acto-1.fountain", "exports/acto.pdf"]),
     selectedPath: "guion/acto-1.fountain",
     busy: false,
+    diffMode: "unified",
     ...overrides,
   };
 }
@@ -60,11 +61,69 @@ function handlers(): VersionChangesViewHandlers {
     onDiscardFile: vi.fn(),
     onExpandAll: vi.fn(),
     onCollapseAll: vi.fn(),
+    onDiffModeChange: vi.fn(),
     onFocusComposer: vi.fn(),
   };
 }
 
 describe("version changes view (T-3.11.3)", () => {
+  it("switches between unified and split diff layouts", () => {
+    const calls = handlers();
+    const root = createVersionChangesView(state(), calls);
+    root
+      .querySelector<HTMLButtonElement>('[data-testid="version-diff-split"]')!
+      .click();
+    expect(calls.onDiffModeChange).toHaveBeenCalledWith("split");
+    root
+      .querySelector<HTMLButtonElement>('[data-testid="version-diff-unified"]')!
+      .click();
+    expect(calls.onDiffModeChange).toHaveBeenCalledWith("unified");
+  });
+
+  it("renders both sides of a split diff", () => {
+    const root = createVersionChangesView(
+      state({ diffMode: "split" }),
+      handlers(),
+    );
+    expect(root.querySelectorAll(".version-split-row").length).toBeGreaterThan(
+      0,
+    );
+    expect(root.textContent).toContain("Cleia entra.");
+    expect(root.textContent).toContain("Cleia entra con el gato.");
+    expect(root.textContent).toContain("El gato maúlla.");
+  });
+
+  it("navigates between hunks and shows the active one", () => {
+    const twoHunks = [
+      patch,
+      "@@ -10,1 +11,1 @@",
+      "-Viejo final.",
+      "+Nuevo final.",
+    ].join("\n");
+    const root = createVersionChangesView(
+      state({
+        diffs: {
+          "guion/acto-1.fountain": { status: "ready", patch: twoHunks },
+          "exports/acto.pdf": { status: "ready", patch: "Binary files differ" },
+        },
+      }),
+      handlers(),
+    );
+    const next = root.querySelector<HTMLButtonElement>(
+      '[data-testid="version-diff-next-guion/acto-1.fountain"]',
+    )!;
+    const counter = root.querySelector<HTMLElement>(
+      ".version-diff-nav-counter",
+    )!;
+    const hunks = root.querySelectorAll<HTMLElement>(".version-diff-hunk");
+    expect(counter.textContent).toBe("1/2");
+    expect(hunks[0].classList.contains("active")).toBe(true);
+
+    next.click();
+    expect(counter.textContent).toBe("2/2");
+    expect(hunks[1].classList.contains("active")).toBe(true);
+  });
+
   it("renders file accordions with stats and inline diff lines", () => {
     const calls = handlers();
     const root = createVersionChangesView(state(), calls);

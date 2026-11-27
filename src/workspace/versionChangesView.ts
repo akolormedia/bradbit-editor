@@ -1,4 +1,5 @@
 import { entryKind } from "../git/versions";
+import { t } from "../i18n";
 import { GitFileChange, GitStatusEntry, Language } from "../types";
 import { createIcon } from "../ui/icons";
 import { createIconButton } from "../ui/iconButton";
@@ -9,7 +10,11 @@ import {
   versionFileName,
   versionTotals,
 } from "./versionChanges";
-import { parseVersionDiff, VersionDiffLine } from "./versionDiff";
+import {
+  parseVersionDiff,
+  splitVersionDiffHunk,
+  VersionDiffLine,
+} from "./versionDiff";
 import {
   createVersionStatus,
   versionChangeLabel,
@@ -30,6 +35,7 @@ export interface VersionChangesViewState {
   expanded: Set<string>;
   selectedPath: string | null;
   busy: boolean;
+  diffMode: "unified" | "split";
 }
 
 export interface VersionChangesViewHandlers {
@@ -43,6 +49,7 @@ export interface VersionChangesViewHandlers {
   onDiscardFile: (path: string) => void;
   onExpandAll: () => void;
   onCollapseAll: () => void;
+  onDiffModeChange: (mode: "unified" | "split") => void;
   onFocusComposer: () => void;
 }
 
@@ -73,16 +80,34 @@ function renderToolbar(
     createIconButton({
       icon: "chevron-down",
       label: versionTerm(state.language, state.developerTerms, "versionExpandAll"),
-      title: versionTerm(state.language, state.developerTerms, "versionExpandAll"),
+      title: `${versionTerm(state.language, state.developerTerms, "versionExpandAll")} · ⌥⌘E`,
       className: "version-tool-btn",
       onClick: () => handlers.onExpandAll(),
     }),
     createIconButton({
       icon: "chevron-up",
       label: versionTerm(state.language, state.developerTerms, "versionCollapseAll"),
-      title: versionTerm(state.language, state.developerTerms, "versionCollapseAll"),
+      title: `${versionTerm(state.language, state.developerTerms, "versionCollapseAll")} · ⌥⌘R`,
       className: "version-tool-btn",
       onClick: () => handlers.onCollapseAll(),
+    }),
+    createIconButton({
+      icon: "columns-2",
+      label: t(state.language, "diffSplit"),
+      title: t(state.language, "diffSplit"),
+      className: "version-tool-btn",
+      testId: "version-diff-split",
+      active: state.diffMode === "split",
+      onClick: () => handlers.onDiffModeChange("split"),
+    }),
+    createIconButton({
+      icon: "rows-3",
+      label: t(state.language, "diffUnified"),
+      title: t(state.language, "diffUnified"),
+      className: "version-tool-btn",
+      testId: "version-diff-unified",
+      active: state.diffMode === "unified",
+      onClick: () => handlers.onDiffModeChange("unified"),
     }),
   );
 
@@ -108,7 +133,7 @@ function renderToolbar(
   stage.className = "version-stage-btn";
   stage.dataset.testid = "version-stage-selected";
   stage.textContent = versionTerm(state.language, state.developerTerms, "versionStageAction");
-  stage.title = versionTerm(state.language, state.developerTerms, "versionStageTooltip");
+  stage.title = `${versionTerm(state.language, state.developerTerms, "versionStageTooltip")} · ⌥⌘A`;
   stage.disabled = state.busy || !selectedEntry || selectedStaged;
   stage.onclick = () => handlers.onStageSelected();
 
@@ -117,7 +142,7 @@ function renderToolbar(
   unstage.className = "version-stage-btn";
   unstage.dataset.testid = "version-unstage-selected";
   unstage.textContent = versionTerm(state.language, state.developerTerms, "versionUnstageAction");
-  unstage.title = versionTerm(state.language, state.developerTerms, "versionUnstageTooltip");
+  unstage.title = `${versionTerm(state.language, state.developerTerms, "versionUnstageTooltip")} · ⌥⌘D`;
   unstage.disabled = state.busy || !selectedEntry || !selectedStaged;
   unstage.onclick = () => handlers.onUnstageSelected();
 
@@ -134,6 +159,7 @@ function renderToolbar(
   save.className = "version-save-view-btn";
   save.dataset.testid = "version-focus-composer";
   save.textContent = versionTerm(state.language, state.developerTerms, "versionsSave");
+  save.title = `${versionTerm(state.language, state.developerTerms, "versionCommitTooltip")} · ⌘↵`;
   save.disabled = state.busy;
   save.onclick = () => handlers.onFocusComposer();
 
@@ -311,6 +337,7 @@ function renderDiff(
   }
 
   let rendered = 0;
+  const hunkEls: HTMLElement[] = [];
   for (const hunk of parsed.hunks) {
     const hunkEl = document.createElement("div");
     hunkEl.className = "version-diff-hunk";
@@ -329,26 +356,127 @@ function renderDiff(
     );
     if (hunkActions) hunkEl.appendChild(hunkActions);
 
-    for (const line of hunk.lines) {
-      if (rendered >= MAX_DIFF_LINES) {
-        const note = document.createElement("div");
-        note.className = "version-diff-note";
-        note.textContent = versionTerm(
-          state.language,
-          state.developerTerms,
-          "versionDiffTruncated",
-          { count: String(MAX_DIFF_LINES) },
-        );
-        hunkEl.appendChild(note);
-        container.appendChild(hunkEl);
-        return container;
+    if (state.diffMode === "split") {
+      for (const row of splitVersionDiffHunk(hunk)) {
+        if (rendered >= MAX_DIFF_LINES) {
+          const note = document.createElement("div");
+          note.className = "version-diff-note";
+          note.textContent = versionTerm(
+            state.language,
+            state.developerTerms,
+            "versionDiffTruncated",
+            { count: String(MAX_DIFF_LINES) },
+          );
+          hunkEl.appendChild(note);
+          break;
+        }
+        if (row.kind === "meta") {
+          const meta = document.createElement("div");
+          meta.className = "version-split-meta";
+          meta.textContent = row.left?.text ?? "";
+          hunkEl.appendChild(meta);
+        } else {
+          const split = document.createElement("div");
+          split.className = "version-split-row";
+          split.append(
+            renderSplitCell(row.left, "left"),
+            renderSplitCell(row.right, "right"),
+          );
+          hunkEl.appendChild(split);
+        }
+        rendered += 1;
       }
-      hunkEl.appendChild(renderDiffLine(line));
-      rendered += 1;
+    } else {
+      for (const line of hunk.lines) {
+        if (rendered >= MAX_DIFF_LINES) {
+          const note = document.createElement("div");
+          note.className = "version-diff-note";
+          note.textContent = versionTerm(
+            state.language,
+            state.developerTerms,
+            "versionDiffTruncated",
+            { count: String(MAX_DIFF_LINES) },
+          );
+          hunkEl.appendChild(note);
+          break;
+        }
+        hunkEl.appendChild(renderDiffLine(line));
+        rendered += 1;
+      }
     }
+    hunkEls.push(hunkEl);
     container.appendChild(hunkEl);
   }
+  if (hunkEls.length > 1) {
+    container.prepend(
+      renderDiffNavigation(hunkEls, entry.path, state.language),
+    );
+  }
   return container;
+}
+
+function renderSplitCell(
+  line: VersionDiffLine | null,
+  side: "left" | "right",
+): HTMLElement {
+  const cell = document.createElement("div");
+  cell.className = "version-split-cell";
+  if (!line) {
+    cell.classList.add("empty");
+    return cell;
+  }
+  cell.classList.add(`version-split-${line.kind}`);
+  const number = document.createElement("span");
+  number.className = "version-diff-number";
+  const value = side === "left" ? line.oldLine : line.newLine;
+  number.textContent = value === null ? "" : String(value);
+  const text = document.createElement("span");
+  text.className = "version-diff-text";
+  text.textContent = line.text.length > 0 ? line.text : " ";
+  cell.append(number, text);
+  return cell;
+}
+
+function renderDiffNavigation(
+  hunks: HTMLElement[],
+  path: string,
+  language: Language,
+): HTMLElement {
+  const nav = document.createElement("div");
+  nav.className = "version-diff-nav";
+  const prev = document.createElement("button");
+  prev.type = "button";
+  prev.className = "version-diff-nav-btn version-diff-prev";
+  prev.dataset.testid = `version-diff-prev-${path}`;
+  prev.textContent = "↑";
+  prev.title = `${t(language, "gitDiffPreviousChange")} · ⌥⌘K`;
+  prev.setAttribute("aria-label", prev.title);
+  const next = document.createElement("button");
+  next.type = "button";
+  next.className = "version-diff-nav-btn version-diff-next";
+  next.dataset.testid = `version-diff-next-${path}`;
+  next.textContent = "↓";
+  next.title = `${t(language, "gitDiffNextChange")} · ⌥⌘J`;
+  next.setAttribute("aria-label", next.title);
+  const counter = document.createElement("span");
+  counter.className = "version-diff-nav-counter";
+  counter.setAttribute("aria-live", "polite");
+  let active = 0;
+  const update = (index: number, scroll = true) => {
+    active = Math.max(0, Math.min(index, hunks.length - 1));
+    for (const [hunkIndex, hunk] of hunks.entries()) {
+      hunk.classList.toggle("active", hunkIndex === active);
+    }
+    counter.textContent = `${active + 1}/${hunks.length}`;
+    if (scroll) {
+      hunks[active].scrollIntoView?.({ block: "center" });
+    }
+  };
+  prev.onclick = () => update(active - 1);
+  next.onclick = () => update(active + 1);
+  update(0, false);
+  nav.append(prev, counter, next);
+  return nav;
 }
 
 function renderDiffLine(line: VersionDiffLine): HTMLElement {
