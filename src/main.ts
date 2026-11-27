@@ -42,6 +42,7 @@ import {
   RecentProject,
   SearchMatch,
   TemplateInfo,
+  WelcomeProjectRequest,
   WelcomeTemplate,
 } from "./types";
 import { copyTextToClipboard } from "./workspace/clipboard";
@@ -133,6 +134,13 @@ import {
   welcomeTemplateLabel,
   welcomeTemplateSourceLabel,
 } from "./welcome/templates";
+import {
+  validateWelcomeDraft,
+  WelcomeDraft,
+  welcomeDraftFromRequest,
+  welcomeDraftPreview,
+} from "./welcome/projectDraft";
+import { renderWelcomeProjectForm } from "./welcome/projectDraftForm";
 import { createIconButton } from "./ui/iconButton";
 import { createFountainToolbar } from "./editor/fountainToolbar";
 import {
@@ -368,6 +376,13 @@ class BradbitApp {
   private welcomeTemplateId = "";
   private welcomeTemplatePickerOpen = false;
   private welcomeTemplatePromptDismissed = false;
+  private welcomeDestinationPicked = false;
+  private welcomeDestinationQuestion = false;
+  private welcomeDestinationAnswered = false;
+  private welcomeRequest: WelcomeProjectRequest | null = null;
+  private welcomeRequestSignature = "";
+  private welcomeDraft: WelcomeDraft | null = null;
+  private welcomeProjectOpen = false;
   private byokStatus: ByokProviderStatus[] = [];
   private byokKeyDrafts: Record<string, string> = {};
   private byokBusyId: string | null = null;
@@ -2490,6 +2505,13 @@ class BradbitApp {
     this.welcomeTemplateId = "";
     this.welcomeTemplatePickerOpen = false;
     this.welcomeTemplatePromptDismissed = false;
+    this.welcomeDestinationPicked = false;
+    this.welcomeDestinationQuestion = false;
+    this.welcomeDestinationAnswered = false;
+    this.welcomeRequest = null;
+    this.welcomeRequestSignature = "";
+    this.welcomeDraft = null;
+    this.welcomeProjectOpen = false;
     if (streaming && sessionId) {
       void backend.opencodeAbort(sessionId).catch(() => {});
     }
@@ -2541,12 +2563,16 @@ class BradbitApp {
   }
 
   private handleWelcomeOpenCodeEvent(event: OpenCodeEvent): void {
+    const wasStreaming = this.welcomeChatState.streaming;
     this.welcomeChatState = applyOpenCodeEvent(
       this.welcomeChatState,
       event,
       this.settings.language,
     );
     this.updateWelcomeChatPanel();
+    if (wasStreaming && !this.welcomeChatState.streaming) {
+      void this.loadWelcomeRequest();
+    }
   }
 
   private async replyWelcomePermission(
@@ -2670,10 +2696,158 @@ class BradbitApp {
       const picked = await backend.pickFolderDialog();
       if (!picked) return;
       this.welcomeDestination = picked;
+      this.welcomeDestinationPicked = true;
+      this.welcomeDestinationAnswered = false;
+      this.welcomeDestinationQuestion = false;
+      if (this.welcomeDraft) {
+        this.welcomeDraft = { ...this.welcomeDraft, destination: picked };
+      }
       this.welcomeSwitcherOpen = true;
       this.render();
     } catch (err) {
       this.showStatusNotice(err instanceof Error ? err.message : String(err));
+    }
+  }
+
+  private async loadWelcomeRequest(attempt = 0): Promise<void> {
+    if (this.folder || !this.welcomeWorkspacePath) return;
+    try {
+      const request = await backend.welcomeReadProjectRequest();
+      if (this.folder || !this.welcomeWorkspacePath || !request) return;
+      const signature = [
+        request.name,
+        request.templateId,
+        request.brief,
+      ].join("\u0000");
+      if (signature === this.welcomeRequestSignature) return;
+      this.welcomeRequestSignature = signature;
+      this.welcomeRequest = request;
+      if (!this.welcomeDraft || !this.welcomeProjectOpen) {
+        const destination =
+          this.welcomeDraft?.destination || this.welcomeDestination;
+        const draft = welcomeDraftFromRequest(
+          request,
+          this.welcomeTemplates,
+          destination,
+          this.welcomeTemplateId,
+        );
+        this.welcomeDraft = this.welcomeDraft
+          ? { ...draft, destination: this.welcomeDraft.destination }
+          : draft;
+        this.welcomeDestinationQuestion =
+          this.welcomeDestinationPicked &&
+          !this.welcomeDestinationAnswered &&
+          Boolean(this.welcomeDraft.destination);
+      }
+      this.render();
+    } catch (err) {
+      console.error("Could not read the welcome project request", err);
+      if (attempt < 3) {
+        window.setTimeout(
+          () => void this.loadWelcomeRequest(attempt + 1),
+          250 * (attempt + 1),
+        );
+      }
+    }
+  }
+
+  private openWelcomeProject(): void {
+    if (!this.welcomeRequest || !this.welcomeDraft) return;
+    this.welcomeSwitcherOpen = false;
+    this.welcomeTemplatePickerOpen = false;
+    this.welcomeProjectOpen = true;
+    this.welcomeDraft = { ...this.welcomeDraft, error: "" };
+    this.welcomeDestinationQuestion =
+      this.welcomeDestinationPicked &&
+      !this.welcomeDestinationAnswered &&
+      Boolean(this.welcomeDraft.destination);
+    this.render();
+  }
+
+  private closeWelcomeProject(): void {
+    if (!this.welcomeProjectOpen) return;
+    this.welcomeProjectOpen = false;
+    if (this.welcomeDraft) {
+      this.welcomeDraft = { ...this.welcomeDraft, error: "" };
+    }
+    this.render();
+  }
+
+  private updateWelcomeDraft(patch: Partial<WelcomeDraft>): void {
+    if (!this.welcomeDraft) return;
+    this.welcomeDraft = { ...this.welcomeDraft, ...patch };
+  }
+
+  private usePickedWelcomeDestination(): void {
+    this.welcomeDestinationAnswered = true;
+    this.welcomeDestinationQuestion = false;
+    this.render();
+  }
+
+  private async chooseWelcomeProjectDestination(): Promise<void> {
+    try {
+      const picked = await backend.pickFolderDialog();
+      if (!picked || !this.welcomeDraft) return;
+      this.welcomeDestination = picked;
+      this.welcomeDestinationPicked = true;
+      this.welcomeDestinationAnswered = true;
+      this.welcomeDestinationQuestion = false;
+      this.welcomeDraft = { ...this.welcomeDraft, destination: picked };
+      this.render();
+    } catch (err) {
+      this.showStatusNotice(err instanceof Error ? err.message : String(err));
+    }
+  }
+
+  private welcomeDraftErrorKey(
+    error: NonNullable<ReturnType<typeof validateWelcomeDraft>>,
+  ): TranslationKey {
+    return error === "brief"
+      ? "welcomeProjectBriefEmpty"
+      : this.projectErrorKey(error);
+  }
+
+  private async submitWelcomeProject(): Promise<void> {
+    const draft = this.welcomeDraft;
+    if (!draft || draft.submitting) return;
+    const validation = validateWelcomeDraft(draft);
+    if (validation) {
+      this.welcomeDraft = {
+        ...draft,
+        error: t(this.settings.language, this.welcomeDraftErrorKey(validation)),
+      };
+      this.render();
+      return;
+    }
+
+    this.welcomeDraft = { ...draft, submitting: true, error: "" };
+    this.render();
+    try {
+      const created = await backend.createProjectFromTemplate(
+        draft.templateId,
+        draft.name.trim(),
+        draft.destination.trim(),
+      );
+      if (this.welcomeDraft) {
+        this.welcomeDraft = { ...this.welcomeDraft, submitting: false };
+      }
+      this.welcomeProjectOpen = false;
+      await this.openFolderByPath(created.path);
+      this.showStatusNotice(
+        t(
+          this.settings.language,
+          created.gitInitialized ? "projectCreated" : "projectCreatedNoGit",
+        ),
+      );
+    } catch (err) {
+      if (this.welcomeDraft) {
+        this.welcomeDraft = {
+          ...this.welcomeDraft,
+          submitting: false,
+          error: err instanceof Error ? err.message : String(err),
+        };
+      }
+      this.render();
     }
   }
 
@@ -5227,6 +5401,23 @@ class BradbitApp {
         this.render();
         return;
       }
+      if (e.key === "Escape" && !e.defaultPrevented) {
+        if (this.welcomeProjectOpen) {
+          e.preventDefault();
+          this.closeWelcomeProject();
+          return;
+        }
+        if (this.welcomeTemplatePickerOpen) {
+          e.preventDefault();
+          this.closeWelcomeTemplatePicker();
+          return;
+        }
+        if (this.welcomeSwitcherOpen) {
+          e.preventDefault();
+          this.closeWelcomeSwitcher();
+          return;
+        }
+      }
       if (!mod) return;
       if (e.defaultPrevented) return;
 
@@ -5601,10 +5792,17 @@ class BradbitApp {
     this.welcomeLocationEl = location;
     footer.appendChild(location);
 
-    inner.append(wordmark, chatShell, footer);
+    inner.append(wordmark, chatShell);
+    const requestCard = this.renderWelcomeRequestCard(lang);
+    if (requestCard) {
+      inner.appendChild(requestCard);
+    }
+    inner.appendChild(footer);
     container.appendChild(inner);
 
-    if (this.welcomeSwitcherOpen) {
+    if (this.welcomeProjectOpen) {
+      container.appendChild(this.renderWelcomeProjectDialog(lang));
+    } else if (this.welcomeSwitcherOpen) {
       container.appendChild(this.renderWelcomeSwitcher(lang));
     } else if (this.welcomeTemplatePickerOpen) {
       container.appendChild(this.renderWelcomeTemplatePicker(lang));
@@ -5616,6 +5814,78 @@ class BradbitApp {
       void this.startWelcomeChat();
     }
     return container;
+  }
+
+  private renderWelcomeRequestCard(
+    lang: AppSettings["language"],
+  ): HTMLElement | null {
+    const draft = this.welcomeDraft;
+    if (!draft) return null;
+    const card = document.createElement("section");
+    card.className = "welcome-brief-card";
+    card.dataset.testid = "welcome-brief-card";
+    const icon = document.createElement("span");
+    icon.className = "welcome-brief-card-icon";
+    icon.appendChild(createIcon("sparkles", 16));
+    const copy = document.createElement("div");
+    copy.className = "welcome-brief-card-copy";
+    const title = document.createElement("strong");
+    title.textContent = t(lang, "welcomeDraftReadyTitle", {
+      name: draft.name,
+    });
+    const hint = document.createElement("span");
+    hint.textContent = t(lang, "welcomeDraftReadyHint");
+    const meta = document.createElement("span");
+    meta.className = "welcome-brief-card-meta";
+    const template = this.welcomeTemplates.find(
+      (item) => item.id === draft.templateId,
+    );
+    meta.textContent = [template?.name, welcomeDraftPreview(draft)]
+      .filter(Boolean)
+      .join(" · ");
+    copy.append(title, hint, meta);
+    const action = document.createElement("button");
+    action.type = "button";
+    action.className = "toolbar-btn primary";
+    action.dataset.testid = "welcome-brief-review";
+    action.textContent = t(lang, "welcomeDraftReadyAction");
+    action.onclick = () => this.openWelcomeProject();
+    card.append(icon, copy, action);
+    return card;
+  }
+
+  private renderWelcomeProjectDialog(
+    lang: AppSettings["language"],
+  ): HTMLElement {
+    const backdrop = document.createElement("div");
+    backdrop.className = "welcome-switcher-backdrop welcome-project-backdrop";
+    backdrop.dataset.testid = "welcome-project-backdrop";
+    backdrop.onclick = () => this.closeWelcomeProject();
+
+    const panel = document.createElement("section");
+    panel.className = "welcome-switcher welcome-project-dialog";
+    panel.dataset.testid = "welcome-project-dialog";
+    panel.onclick = (event) => event.stopPropagation();
+
+    const draft = this.welcomeDraft;
+    if (draft) {
+      panel.appendChild(
+        renderWelcomeProjectForm({
+          language: lang,
+          draft,
+          templates: this.welcomeTemplates,
+          destinationPickedBeforeChat: this.welcomeDestinationQuestion,
+          onChange: (patch) => this.updateWelcomeDraft(patch),
+          onChooseDestination: () =>
+            void this.chooseWelcomeProjectDestination(),
+          onUsePickedDestination: () => this.usePickedWelcomeDestination(),
+          onCancel: () => this.closeWelcomeProject(),
+          onCreate: () => void this.submitWelcomeProject(),
+        }),
+      );
+    }
+    backdrop.appendChild(panel);
+    return backdrop;
   }
 
   private renderWelcomeSwitcher(lang: AppSettings["language"]): HTMLElement {

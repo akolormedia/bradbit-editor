@@ -447,6 +447,7 @@ export interface WelcomeWorkspace {
 export interface WelcomeProjectRequest {
   name: string;
   templateId: string;
+  brief: string;
 }
 
 export interface WorkspaceLayout {

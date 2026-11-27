@@ -32,6 +32,8 @@ pub struct WelcomeWorkspace {
 pub struct WelcomeProjectRequest {
     pub name: String,
     pub template_id: String,
+    #[serde(default)]
+    pub brief: String,
 }
 
 /// Create the disposable workspace seeded with the welcome agent instructions.
@@ -110,12 +112,20 @@ fn parse_project_request(raw: &str) -> Result<WelcomeProjectRequest, String> {
         .and_then(serde_json::Value::as_str)
         .unwrap_or_default()
         .trim();
+    let brief = value
+        .get("brief")
+        .or_else(|| value.get("summary"))
+        .or_else(|| value.get("resumen"))
+        .and_then(serde_json::Value::as_str)
+        .unwrap_or_default()
+        .trim();
     if name.is_empty() || template_id.is_empty() {
         return Err("The project request needs a name and a templateId".to_string());
     }
     Ok(WelcomeProjectRequest {
         name: name.to_string(),
         template_id: template_id.to_string(),
+        brief: brief.to_string(),
     })
 }
 
@@ -150,12 +160,24 @@ Conversar con el autor para entender qué quiere escribir y ayudarle a convertir
 ## Reglas
 - Habla en el idioma del autor, con frases breves y amables.
 - Haz una o dos preguntas por turno; no interrogues con una lista larga.
-- No crees carpetas, archivos ni repositorios. La app se encarga de crear el proyecto.
-- No uses la terminal ni herramientas de escritura.
+- No crees carpetas, archivos de proyecto ni repositorios. La app se encarga de crear el proyecto.
+- La única escritura permitida es el archivo de borrador `.bradbit/create-project.json` descrito abajo.
+- No uses la terminal.
 - No digas que el proyecto ya está creado.
 - Cuando el brief esté claro, resume las decisiones en pocas líneas y sugiere un nombre y una plantilla.
 - La app puede mostrarte una nota como [Plantilla: Guionista]. Si aparece, respeta esa elección y no vuelvas a preguntar por la plantilla.
 - Si la nota dice [Plantilla: Decidir en el chat], ayuda al autor a elegir entre las plantillas disponibles.
+
+## Entregable
+Cuando el brief esté completo, escribe exactamente `.bradbit/create-project.json` con este formato. No añadas texto fuera del JSON dentro del archivo:
+
+```json
+{{"name":"Nombre del proyecto","templateId":"guionista-kit","brief":"Brief completo en Markdown, con idea, formato, audiencia, tono y entregables."}}
+```
+
+- Usa `blank` como `templateId` solo si el autor eligió un proyecto en blanco.
+- El `brief` debe ser autosuficiente: la app lo cargará en el chat del proyecto.
+- Después de escribir el archivo responde: "Listo. Revisa la tarjeta para confirmar la carpeta y crear el proyecto."
 
 ## Plantillas disponibles
 {template_lines}
@@ -211,18 +233,18 @@ mod tests {
             Some(WelcomeProjectRequest {
                 name: "Mi guion".to_string(),
                 template_id: "guionista-kit".to_string(),
+                brief: String::new(),
             })
         );
 
         fs::write(
             root.join(REQUEST_RELATIVE),
-            "```json\n{\"name\":\"Serie\",\"template\":\"guionista-kit\"}\n```",
+            "```json\n{\"name\":\"Serie\",\"template\":\"guionista-kit\",\"brief\":\"Una serie sobre el mar.\"}\n```",
         )
         .unwrap();
-        assert_eq!(
-            read_project_request_in(&root).unwrap().unwrap().name,
-            "Serie"
-        );
+        let series = read_project_request_in(&root).unwrap().unwrap();
+        assert_eq!(series.name, "Serie");
+        assert_eq!(series.brief, "Una serie sobre el mar.");
 
         fs::write(
             root.join(REQUEST_RELATIVE),

@@ -132,7 +132,7 @@ pub fn create_project_from_template_in(
     user_dir: &Path,
 ) -> Result<CreatedProject, String> {
     let name = validate_project_name(name)?;
-    let destination = canonical_directory(destination)?;
+    let destination = canonical_or_create_directory(destination)?;
     let project_path = destination.join(&name);
     if project_path.exists() {
         return Err(format!(
@@ -340,6 +340,15 @@ fn canonical_directory(path: &str) -> Result<PathBuf, String> {
     Ok(canonical)
 }
 
+fn canonical_or_create_directory(path: &str) -> Result<PathBuf, String> {
+    let value = Path::new(path);
+    if !value.exists() {
+        fs::create_dir_all(value)
+            .map_err(|e| format!("Could not create the folder '{}': {}", path, e))?;
+    }
+    canonical_directory(path)
+}
+
 fn validate_project_name(name: &str) -> Result<String, String> {
     validate_name(name, "El nombre del proyecto")
 }
@@ -475,6 +484,23 @@ mod tests {
         assert_eq!(created.name, "Mi Proyecto");
         assert!(created.git_initialized);
         assert!(project.join(".git").is_dir());
+    }
+
+    #[test]
+    fn creates_a_missing_destination_folder() {
+        let dir = tempdir().unwrap();
+        let user_dir = dir.path().join("templates");
+        let destination = dir.path().join("new-projects");
+
+        let created = create_project_from_template_in(
+            BLANK_ID,
+            "Proyecto Nuevo",
+            destination.to_str().unwrap(),
+            &user_dir,
+        )
+        .unwrap();
+        assert!(destination.is_dir());
+        assert!(Path::new(&created.path).is_dir());
     }
 
     #[test]
