@@ -1503,6 +1503,18 @@ textarea.text-input {
   cursor: pointer;
 }
 
+.chat-message-area {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  width: 100%;
+  display: flex;
+}
+
+.chat-message-area .chat-messages {
+  flex: 1;
+}
+
 .chat-messages {
   flex: 1;
   min-height: 0;
@@ -1517,6 +1529,46 @@ textarea.text-input {
   display: flex;
   flex-direction: column;
   gap: 14px;
+}
+
+.chat-follow-work {
+  position: absolute;
+  left: 50%;
+  bottom: 10px;
+  z-index: 12;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 28px;
+  padding: 0 12px;
+  border: 1px solid var(--border-color);
+  border-radius: 999px;
+  background: var(--bg-elevated);
+  color: var(--text-primary);
+  font-family: var(--font-ui);
+  font-size: 10.5px;
+  font-weight: 600;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.25);
+  transform: translateX(-50%);
+  cursor: pointer;
+}
+
+.chat-follow-work:hover {
+  background: var(--bg-hover);
+}
+
+.chat-follow-work[hidden] {
+  display: none;
+}
+
+.chat-follow-work-icon {
+  display: inline-flex;
+  flex-shrink: 0;
+}
+
+.chat-panel-welcome .chat-message-area {
+  flex: none;
+  width: 100%;
 }
 
 .chat-empty {
