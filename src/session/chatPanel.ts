@@ -37,6 +37,8 @@ function setCheckIcon(element: HTMLElement, active: boolean): void {
 
 export interface ChatPanelOptions {
   variant?: "session" | "welcome";
+  welcomeTemplateLabel?: string;
+  onWelcomeTemplateClick?: () => void;
   language: Language;
   projectName: string;
   projectRoot: string;
@@ -91,6 +93,9 @@ export class ChatPanel {
   private composer: HTMLTextAreaElement;
   private plusBtn: HTMLButtonElement;
   private modelBtn: HTMLButtonElement;
+  private templateBtn: HTMLButtonElement;
+  private templateLabelEl: HTMLElement;
+  private welcomePromptHost: HTMLElement;
   private modelProviderEl: HTMLElement;
   private modelSlashEl: HTMLElement;
   private modelNameEl: HTMLElement;
@@ -247,6 +252,17 @@ export class ChatPanel {
       onClick: () => this.togglePlusPopover(),
     });
 
+    this.templateBtn = document.createElement("button");
+    this.templateBtn.type = "button";
+    this.templateBtn.className = "chat-template-btn";
+    this.templateBtn.dataset.testid = "welcome-template-button";
+    this.templateBtn.title = t(options.language, "welcomeTemplateLabel");
+    this.templateBtn.appendChild(createIcon("folder", 13));
+    this.templateLabelEl = document.createElement("span");
+    this.templateLabelEl.className = "chat-template-label";
+    this.templateBtn.appendChild(this.templateLabelEl);
+    this.templateBtn.onclick = () => this.options.onWelcomeTemplateClick?.();
+
     this.modelBtn = document.createElement("button");
     this.modelBtn.type = "button";
     this.modelBtn.className = "chat-model-btn";
@@ -315,6 +331,7 @@ export class ChatPanel {
 
     bar.append(
       this.plusBtn,
+      this.templateBtn,
       this.modelBtn,
       this.effortBtn,
       spacer,
@@ -386,11 +403,16 @@ export class ChatPanel {
       this.hideMenus();
     });
 
+    this.welcomePromptHost = document.createElement("div");
+    this.welcomePromptHost.className = "chat-welcome-prompt-host";
+    this.welcomePromptHost.hidden = true;
+
     this.element.append(
       this.tabsEl,
       header,
       this.errorEl,
       this.messagesEl,
+      this.welcomePromptHost,
       composer,
     );
     this.update(initialChatState, options);
@@ -475,6 +497,12 @@ export class ChatPanel {
     this.updateSendState();
   }
 
+  public setWelcomePrompt(element: HTMLElement | null): void {
+    this.welcomePromptHost.replaceChildren();
+    this.welcomePromptHost.hidden = !element;
+    if (element) this.welcomePromptHost.appendChild(element);
+  }
+
   public clearDraft(): void {
     this.hideMenus();
     this.composer.value = "";
@@ -555,6 +583,15 @@ export class ChatPanel {
   }
 
   private updateComposerControls(): void {
+    const welcome = this.options.variant === "welcome";
+    this.templateBtn.hidden = !welcome;
+    this.templateBtn.disabled = !welcome;
+    this.templateLabelEl.textContent =
+      this.options.welcomeTemplateLabel ||
+      t(this.options.language, "welcomeTemplateLabel");
+    this.templateBtn.title =
+      this.options.welcomeTemplateLabel ||
+      t(this.options.language, "welcomeTemplateLabel");
     const current = this.currentModel();
     if (!this.state.model) {
       this.modelProviderEl.textContent = "";

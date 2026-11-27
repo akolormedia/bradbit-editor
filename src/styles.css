@@ -7198,3 +7198,236 @@ button.project-search-context-line {
     padding: 12px 12px 72px;
   }
 }
+
+/* --- Welcome template selection ---------------------------------------- */
+
+.chat-template-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+  max-width: 220px;
+  height: 24px;
+  padding: 0 6px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-secondary);
+  font: 10.5px var(--font-ui);
+  cursor: pointer;
+}
+
+.chat-panel:not(.chat-panel-welcome) .chat-template-btn {
+  display: none;
+}
+
+.chat-template-btn:hover:not(:disabled) {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+
+.chat-template-btn:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.chat-template-label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.chat-welcome-prompt-host {
+  flex-shrink: 0;
+  width: 100%;
+  max-width: 860px;
+  margin: 0 auto;
+  padding: 0 12px 8px;
+}
+
+.chat-welcome-prompt-host[hidden] {
+  display: none !important;
+}
+
+.welcome-template-prompt {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 10px;
+  border: 1px solid var(--border-color);
+  border-radius: 10px;
+  background: var(--bg-surface);
+}
+
+.welcome-template-prompt-icon {
+  display: inline-flex;
+  flex-shrink: 0;
+  color: var(--accent);
+}
+
+.welcome-template-prompt-copy {
+  min-width: 0;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.welcome-template-prompt-copy strong {
+  color: var(--text-primary);
+  font: 11.5px var(--font-ui);
+}
+
+.welcome-template-prompt-copy span {
+  color: var(--text-muted);
+  font: 10.5px var(--font-ui);
+}
+
+.welcome-template-prompt-actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.welcome-template-prompt-btn,
+.welcome-template-prompt-link {
+  padding: 3px 7px;
+  border-radius: 5px;
+  font: 10px var(--font-ui);
+  cursor: pointer;
+}
+
+.welcome-template-prompt-btn {
+  border: 1px solid var(--border-color);
+  background: var(--bg-input);
+  color: var(--text-secondary);
+}
+
+.welcome-template-prompt-btn:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+
+.welcome-template-prompt-link {
+  border: none;
+  background: transparent;
+  color: var(--text-muted);
+}
+
+.welcome-template-prompt-link:hover {
+  color: var(--text-primary);
+}
+
+.welcome-template-picker {
+  gap: 0;
+  padding: 0;
+  overflow: hidden;
+}
+
+.welcome-template-picker-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 13px 14px 10px;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.welcome-template-picker-header h3 {
+  margin: 0 0 3px;
+  color: var(--text-primary);
+  font: 13px var(--font-ui);
+}
+
+.welcome-template-picker-header p {
+  margin: 0;
+  color: var(--text-muted);
+  font: 10.5px var(--font-ui);
+}
+
+.welcome-template-close {
+  flex-shrink: 0;
+}
+
+.welcome-template-list {
+  min-height: 0;
+  overflow-y: auto;
+  padding: 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.welcome-template-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 8px 9px;
+  border: none;
+  border-radius: 7px;
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
+}
+
+.welcome-template-row:hover {
+  background: var(--bg-hover);
+}
+
+.welcome-template-row.selected {
+  background: var(--bg-active);
+}
+
+.welcome-template-row-copy {
+  min-width: 0;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.welcome-template-row-copy strong {
+  color: var(--text-primary);
+  font: 11.5px var(--font-ui);
+}
+
+.welcome-template-row-copy span {
+  overflow: hidden;
+  color: var(--text-muted);
+  font: 10.5px var(--font-ui);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.welcome-template-row-meta {
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+  gap: 6px;
+  color: var(--accent);
+}
+
+.welcome-template-source {
+  padding: 1px 5px;
+  border-radius: 999px;
+  background: var(--bg-active);
+  color: var(--text-muted);
+  font: 9px var(--font-ui);
+}
+
+@media (max-width: 640px) {
+  .welcome-template-prompt {
+    flex-wrap: wrap;
+  }
+
+  .welcome-template-prompt-actions {
+    width: 100%;
+  }
+
+  .chat-template-btn {
+    max-width: 120px;
+  }
+}

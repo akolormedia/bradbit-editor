@@ -117,6 +117,47 @@ describe("chat panel (T-2.1.1)", () => {
     expect(panel.element.classList.contains("chat-panel-welcome")).toBe(true);
   });
 
+  it("shows the welcome template control and action", () => {
+    const onWelcomeTemplateClick = vi.fn();
+    const panel = new ChatPanel(
+      options({
+        variant: "welcome",
+        welcomeTemplateLabel: "Guion Audiovisual",
+        onWelcomeTemplateClick,
+      }),
+    );
+    const button = panel.element.querySelector<HTMLButtonElement>(
+      '[data-testid="welcome-template-button"]',
+    )!;
+    expect(button.hidden).toBe(false);
+    expect(button.textContent).toContain("Guion Audiovisual");
+    button.click();
+    expect(onWelcomeTemplateClick).toHaveBeenCalledOnce();
+
+    const session = new ChatPanel(options());
+    expect(
+      session.element.querySelector<HTMLButtonElement>(
+        '[data-testid="welcome-template-button"]',
+      )!.hidden,
+    ).toBe(true);
+  });
+
+  it("shows a welcome prompt above the composer", () => {
+    const panel = new ChatPanel(options({ variant: "welcome" }));
+    const prompt = document.createElement("div");
+    prompt.textContent = "¿Plantilla o proyecto en blanco?";
+    panel.setWelcomePrompt(prompt);
+    const host = panel.element.querySelector<HTMLElement>(
+      ".chat-welcome-prompt-host",
+    )!;
+    expect(host.hidden).toBe(false);
+    expect(host.textContent).toContain("¿Plantilla o proyecto en blanco?");
+
+    panel.setWelcomePrompt(null);
+    expect(host.hidden).toBe(true);
+    expect(host.childElementCount).toBe(0);
+  });
+
   it("renames a session from the tab with Enter and cancels with Escape (T-2.5.3)", () => {
     const onRenameSession = vi.fn();
     const panel = new ChatPanel(options({ onRenameSession }));
