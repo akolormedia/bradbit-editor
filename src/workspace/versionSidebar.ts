@@ -156,12 +156,20 @@ function renderViewTabs(
     const button = document.createElement("button");
     button.type = "button";
     button.setAttribute("role", "tab");
+    button.id = `version-view-tab-${item.id}`;
     button.className = "version-view-tab";
     button.dataset.versionView = item.id;
     button.textContent = item.label;
     button.setAttribute("aria-selected", String(state.view === item.id));
+    button.setAttribute("aria-controls", "version-view-panel");
+    button.tabIndex = state.view === item.id ? 0 : -1;
     button.classList.toggle("active", state.view === item.id);
     button.onclick = () => handlers.onViewChange(item.id);
+    button.onkeydown = (event) => {
+      if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") return;
+      event.preventDefault();
+      handlers.onViewChange(item.id === "changes" ? "history" : "changes");
+    };
     tabs.appendChild(button);
   }
   return tabs;
@@ -173,6 +181,9 @@ function renderBody(
 ): HTMLElement {
   const body = document.createElement("div");
   body.className = "version-sidebar-body";
+  body.id = "version-view-panel";
+  body.setAttribute("role", "tabpanel");
+  body.setAttribute("aria-labelledby", `version-view-tab-${state.view}`);
 
   if (state.error) {
     const error = document.createElement("div");
@@ -603,7 +614,7 @@ function renderComposer(
   save.type = "button";
   save.className = "version-commit-btn";
   save.dataset.testid = "save-version-btn";
-  save.title = versionTerm(state.language, state.developerTerms, "versionCommitTooltip");
+  save.title = `${versionTerm(state.language, state.developerTerms, "versionCommitTooltip")} · ⌘↵`;
   save.disabled =
     state.busy ||
     state.generatingMessage ||

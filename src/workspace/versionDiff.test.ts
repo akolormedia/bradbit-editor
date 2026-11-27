@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { newFilePatch, parseVersionDiff } from "./versionDiff";
+import {
+  newFilePatch,
+  parseVersionDiff,
+  splitVersionDiffHunk,
+} from "./versionDiff";
 
 const PATCH = [
   "diff --git a/escena.md b/escena.md",
@@ -60,6 +64,77 @@ describe("version diff parser", () => {
     ).toBe(true);
     expect(parseVersionDiff("").empty).toBe(true);
     expect(parseVersionDiff("\n").empty).toBe(true);
+  });
+
+  it("pairs removed and added lines for a side-by-side view", () => {
+    const parsed = parseVersionDiff(PATCH);
+    expect(splitVersionDiffHunk(parsed.hunks[0])).toEqual([
+      {
+        kind: "context",
+        left: {
+          kind: "context",
+          oldLine: 10,
+          newLine: 10,
+          text: "Cleia tiene un gato.",
+        },
+        right: {
+          kind: "context",
+          oldLine: 10,
+          newLine: 10,
+          text: "Cleia tiene un gato.",
+        },
+      },
+      {
+        kind: "changed",
+        left: {
+          kind: "removed",
+          oldLine: 11,
+          newLine: null,
+          text: "El gato duerme.",
+        },
+        right: {
+          kind: "added",
+          oldLine: null,
+          newLine: 11,
+          text: "El gato se llama Cholo.",
+        },
+      },
+      {
+        kind: "changed",
+        left: null,
+        right: {
+          kind: "added",
+          oldLine: null,
+          newLine: 12,
+          text: "Camina sobre el piano.",
+        },
+      },
+      {
+        kind: "context",
+        left: {
+          kind: "context",
+          oldLine: 12,
+          newLine: 13,
+          text: "La casa está en silencio.",
+        },
+        right: {
+          kind: "context",
+          oldLine: 12,
+          newLine: 13,
+          text: "La casa está en silencio.",
+        },
+      },
+      {
+        kind: "meta",
+        left: {
+          kind: "meta",
+          oldLine: null,
+          newLine: null,
+          text: "No newline at end of file",
+        },
+        right: null,
+      },
+    ]);
   });
 
   it("renders new files as additions", () => {

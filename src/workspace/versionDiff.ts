@@ -130,3 +130,57 @@ export function newFilePatch(path: string, content: string): string {
     body,
   ].join("\n");
 }
+
+
+export type VersionSplitRowKind = "context" | "changed" | "meta";
+
+export interface VersionSplitRow {
+  kind: VersionSplitRowKind;
+  left: VersionDiffLine | null;
+  right: VersionDiffLine | null;
+}
+
+/**
+ * Pairs removed and added lines for a side-by-side diff. Consecutive removed
+ * and added blocks are aligned by index; context and meta rows span both sides.
+ */
+export function splitVersionDiffHunk(
+  hunk: VersionDiffHunk,
+): VersionSplitRow[] {
+  const rows: VersionSplitRow[] = [];
+  let index = 0;
+  while (index < hunk.lines.length) {
+    const line = hunk.lines[index];
+    if (line.kind === "context") {
+      rows.push({ kind: "context", left: line, right: line });
+      index += 1;
+      continue;
+    }
+    if (line.kind === "meta") {
+      rows.push({ kind: "meta", left: line, right: null });
+      index += 1;
+      continue;
+    }
+    const removed: VersionDiffLine[] = [];
+    const added: VersionDiffLine[] = [];
+    while (
+      index < hunk.lines.length &&
+      (hunk.lines[index].kind === "removed" ||
+        hunk.lines[index].kind === "added")
+    ) {
+      const item = hunk.lines[index];
+      if (item.kind === "removed") removed.push(item);
+      else added.push(item);
+      index += 1;
+    }
+    const count = Math.max(removed.length, added.length);
+    for (let pair = 0; pair < count; pair += 1) {
+      rows.push({
+        kind: "changed",
+        left: removed[pair] ?? null,
+        right: added[pair] ?? null,
+      });
+    }
+  }
+  return rows;
+}
