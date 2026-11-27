@@ -23,3 +23,29 @@ export function filterChatModelsByKeys(
   if (allowed.size === 0) return [];
   return models.filter((model) => allowed.has(model.providerId));
 }
+
+export interface ChatModelSelection {
+  providerId: string;
+  modelId: string;
+  variant: string;
+}
+
+/**
+ * Parses the `provider/model#variant` ref used by the chat composer. The
+ * variant carries the reasoning effort selected for the model.
+ */
+export function parseChatModelSelection(
+  raw: string | null | undefined,
+): ChatModelSelection | null {
+  if (!raw) return null;
+  const hash = raw.indexOf("#");
+  const base = hash >= 0 ? raw.slice(0, hash) : raw;
+  const variant = hash >= 0 ? raw.slice(hash + 1) : "";
+  const slash = base.indexOf("/");
+  if (slash <= 0 || slash === base.length - 1) return null;
+  return {
+    providerId: base.slice(0, slash),
+    modelId: base.slice(slash + 1),
+    variant,
+  };
+}

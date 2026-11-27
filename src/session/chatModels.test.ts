@@ -1,6 +1,9 @@
 import { describe, expect, it } from "vitest";
 import { ByokProviderStatus, OpenCodeModel } from "../types";
-import { filterChatModelsByKeys } from "./chatModels";
+import {
+  filterChatModelsByKeys,
+  parseChatModelSelection,
+} from "./chatModels";
 
 const provider = (
   id: string,
@@ -43,6 +46,23 @@ describe("chat models with keys", () => {
     expect(
       filterChatModelsByKeys(models, [provider("opencode", true)]),
     ).toEqual(models);
+  });
+
+  it("parses the provider, model and reasoning effort", () => {
+    expect(parseChatModelSelection("opencode-go/hy4#high")).toEqual({
+      providerId: "opencode-go",
+      modelId: "hy4",
+      variant: "high",
+    });
+    expect(parseChatModelSelection("deepseek/deepseek-flash")).toEqual({
+      providerId: "deepseek",
+      modelId: "deepseek-flash",
+      variant: "",
+    });
+    expect(parseChatModelSelection("")).toBeNull();
+    expect(parseChatModelSelection(null)).toBeNull();
+    expect(parseChatModelSelection("hy4")).toBeNull();
+    expect(parseChatModelSelection("provider/")).toBeNull();
   });
 
   it("returns nothing when no provider has a key", () => {

@@ -48,6 +48,20 @@ pub fn read_project_request() -> Result<Option<WelcomeProjectRequest>, String> {
     read_project_request_in(&root)
 }
 
+/// Remove the disposable workspace after the project chat has taken over.
+pub fn cleanup_workspace() -> Result<(), String> {
+    let root = crate::settings::config_dir()?.join(WORKSPACE_DIR);
+    cleanup_workspace_in(&root)
+}
+
+fn cleanup_workspace_in(root: &Path) -> Result<(), String> {
+    if root.exists() {
+        fs::remove_dir_all(root)
+            .map_err(|error| format!("Could not clean the welcome workspace: {error}"))?;
+    }
+    Ok(())
+}
+
 fn default_destination() -> PathBuf {
     dirs::document_dir()
         .or_else(dirs::home_dir)
@@ -213,6 +227,18 @@ mod tests {
         assert!(instructions.contains("Asistente de bienvenida"));
         assert!(instructions.contains("`guionista-kit`"));
         assert!(instructions.contains("brief"));
+    }
+
+    #[test]
+    fn cleans_up_the_temporary_workspace() {
+        let dir = tempdir().unwrap();
+        let root = dir.path().join(WORKSPACE_DIR);
+        prepare_workspace_in(&root, &[template()], &dir.path().join("out")).unwrap();
+        assert!(root.exists());
+
+        cleanup_workspace_in(&root).unwrap();
+        assert!(!root.exists());
+        cleanup_workspace_in(&root).unwrap();
     }
 
     #[test]

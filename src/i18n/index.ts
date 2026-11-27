@@ -62,6 +62,9 @@ export const translations = {
     welcomeProjectContinue: "Seguir hablando",
     welcomeTemplatePlaceholder: "Elige una plantilla",
     welcomeBriefTemplateLabel: "Plantilla: {template}",
+    welcomeBriefMessageTitle: "Brief del proyecto",
+    welcomeBriefDecisions: "Decisiones",
+    welcomeBriefLocation: "Ubicación: {path}",
     healthTitle: "Primeros pasos",
     healthNote:
       "Escribir no depende del modelo de IA: conéctalo cuando lo necesites.",
@@ -863,6 +866,9 @@ export const translations = {
     welcomeProjectContinue: "Keep chatting",
     welcomeTemplatePlaceholder: "Choose a template",
     welcomeBriefTemplateLabel: "Template: {template}",
+    welcomeBriefMessageTitle: "Project brief",
+    welcomeBriefDecisions: "Decisions",
+    welcomeBriefLocation: "Location: {path}",
     healthTitle: "Getting started",
     healthNote:
       "Writing does not depend on the AI model: connect it whenever you need it.",

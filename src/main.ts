@@ -128,7 +128,10 @@ import { openContextMenu, type ContextMenuItem } from "./ui/contextMenu";
 import { convertDocxToMarkdown, type DocxImportWarning } from "./import/docx";
 import { folderPdfErrorCopy } from "./export/folderPdfError";
 import { createIcon } from "./ui/icons";
-import { filterChatModelsByKeys } from "./session/chatModels";
+import {
+  filterChatModelsByKeys,
+  parseChatModelSelection,
+} from "./session/chatModels";
 import { filterWelcomeProjects } from "./welcome/welcomeProjects";
 import {
   welcomeTemplateLabel,
@@ -141,6 +144,10 @@ import {
   welcomeDraftPreview,
 } from "./welcome/projectDraft";
 import { renderWelcomeProjectForm } from "./welcome/projectDraftForm";
+import {
+  buildProjectHandoff,
+  ProjectHandoff,
+} from "./welcome/handoff";
 import { createIconButton } from "./ui/iconButton";
 import { createFountainToolbar } from "./editor/fountainToolbar";
 import {
@@ -383,6 +390,7 @@ class BradbitApp {
   private welcomeRequestSignature = "";
   private welcomeDraft: WelcomeDraft | null = null;
   private welcomeProjectOpen = false;
+  private pendingProjectHandoff: ProjectHandoff | null = null;
   private byokStatus: ByokProviderStatus[] = [];
   private byokKeyDrafts: Record<string, string> = {};
   private byokBusyId: string | null = null;
@@ -2828,6 +2836,20 @@ class BradbitApp {
         draft.name.trim(),
         draft.destination.trim(),
       );
+      const template = this.welcomeTemplates.find(
+        (item) => item.id === draft.templateId,
+      );
+      this.pendingProjectHandoff = buildProjectHandoff({
+        rootPath: created.path,
+        name: draft.name,
+        brief: draft.brief,
+        templateName:
+          draft.templateId === "blank"
+            ? t(this.settings.language, "welcomeTemplateBlank")
+            : template?.name ?? draft.templateId,
+        model: this.welcomeChatState.model,
+        language: this.settings.language,
+      });
       if (this.welcomeDraft) {
         this.welcomeDraft = { ...this.welcomeDraft, submitting: false };
       }
@@ -3118,6 +3140,13 @@ class BradbitApp {
     }
     const root = this.folder.rootPath;
     const lang = this.settings.language;
+    if (
+      this.pendingProjectHandoff &&
+      this.pendingProjectHandoff.rootPath !== root
+    ) {
+      this.pendingProjectHandoff = null;
+    }
+    const hasPendingHandoff = Boolean(this.pendingProjectHandoff);
     this.chatSessions.clear();
     this.chatSessionOrder = [];
     this.activeChatSessionId = null;
@@ -3218,6 +3247,14 @@ class BradbitApp {
       this.opencodeUnlisten = await backend.listenOpenCodeEvents((event) =>
         this.handleOpenCodeEvent(event),
       );
+      await this.applyPendingProjectHandoff();
+      if (hasPendingHandoff) {
+        try {
+          await backend.welcomeCleanupWorkspace();
+        } catch (err) {
+          console.error("Could not clean the welcome workspace", err);
+        }
+      }
       this.persistWorkspaceState();
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
@@ -3227,6 +3264,73 @@ class BradbitApp {
       this.chatState = chatFailed(this.chatState, message, action);
     }
     this.updateChatPanel();
+  }
+
+  private async applyPendingProjectHandoff(): Promise<void> {
+    const handoff = this.pendingProjectHandoff;
+    if (!handoff) return;
+    if (!this.folder || this.folder.rootPath !== handoff.rootPath) {
+      this.pendingProjectHandoff = null;
+      return;
+    }
+    const sessionId = this.activeChatSessionId;
+    if (!sessionId) return;
+    this.pendingProjectHandoff = null;
+
+    const updateState = (
+      update: (state: ChatState) => ChatState,
+    ): ChatState => {
+      const current = this.chatSessions.get(sessionId) ?? this.chatState;
+      const next = update(current);
+      this.chatSessions.set(sessionId, next);
+      if (this.activeChatSessionId === sessionId) {
+        this.chatState = next;
+      }
+      return next;
+    };
+
+    const selection = parseChatModelSelection(handoff.model);
+    if (selection) {
+      try {
+        await backend.opencodeSwitchModel(
+          sessionId,
+          selection.providerId,
+          selection.modelId,
+          selection.variant || undefined,
+        );
+        updateState((state) => ({ ...state, model: handoff.model }));
+      } catch (err) {
+        console.error("Could not keep the welcome model", err);
+      }
+    }
+
+    if (handoff.sessionTitle) {
+      try {
+        await backend.opencodeRenameSession(sessionId, handoff.sessionTitle);
+        updateState((state) => ({
+          ...state,
+          title: handoff.sessionTitle,
+        }));
+      } catch (err) {
+        console.error("Could not rename the project session", err);
+      }
+    }
+
+    const withMessage = updateState((state) =>
+      appendUserMessage(state, handoff.message),
+    );
+    this.updateChatPanel();
+    try {
+      await backend.opencodeSend(sessionId, handoff.message);
+    } catch (err) {
+      const failed = chatSendFailed(
+        withMessage,
+        err instanceof Error ? err.message : String(err),
+      );
+      this.chatSessions.set(sessionId, failed);
+      this.chatState = failed;
+      this.updateChatPanel();
+    }
   }
 
   private async stopChatSession(): Promise<void> {

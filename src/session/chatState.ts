@@ -167,7 +167,7 @@ export function chatFromHistory(
   const agent = [...messages].reverse().find((message) => message.agent)?.agent;
   return {
     ...state,
-    model: model ?? null,
+    model: model ?? session.model ?? null,
     agent: agent ?? null,
     messages: messages.map((message) => ({
       id: message.id,
