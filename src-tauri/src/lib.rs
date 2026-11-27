@@ -18,6 +18,7 @@ pub mod opencode;
 pub mod pty;
 pub mod search;
 pub mod settings;
+pub mod skills;
 pub mod templates;
 pub mod watcher;
 pub mod welcome;
@@ -905,6 +906,21 @@ fn discover_kit(root: String) -> Result<kit::KitCatalog, String> {
 }
 
 #[tauri::command]
+fn skills_list(root: Option<String>) -> Result<skills::SkillCatalog, String> {
+    skills::discover(root.as_deref())
+}
+
+#[tauri::command]
+fn skills_read(root: Option<String>, path: String) -> Result<skills::SkillDocument, String> {
+    skills::read(root.as_deref(), &path)
+}
+
+#[tauri::command]
+fn skills_validate(root: Option<String>, path: String) -> Result<skills::SkillValidation, String> {
+    skills::validate(root.as_deref(), &path)
+}
+
+#[tauri::command]
 fn open_folder(path: String, show_config: bool) -> Result<OpenedFolder, String> {
     let opened = fs_ops::open_folder(&path, show_config)?;
     let _ = settings::record_recent_project(&opened.root_path, &opened.name);
@@ -1065,6 +1081,9 @@ pub fn run() {
             save_workspace_state,
             open_folder,
             discover_kit,
+            skills_list,
+            skills_read,
+            skills_validate,
             list_directory_tree,
             read_text_file,
             write_text_file,

@@ -319,6 +319,59 @@ export interface KitCatalog {
   skills: KitSkill[];
 }
 
+export interface SkillLocalized {
+  name?: string;
+  description?: string;
+  aliases: string[];
+}
+
+export type SkillSource =
+  | "app"
+  | "opencode"
+  | "claude"
+  | "agents"
+  | "kit"
+  | "config";
+
+export interface SkillInfo {
+  id: string;
+  name: string;
+  description: string;
+  aliases: string[];
+  i18n: Record<string, SkillLocalized>;
+  source: SkillSource;
+  scope: "global" | "project";
+  path: string;
+  root: string;
+  relativePath: string;
+  format: "file" | "directory";
+  valid: boolean;
+  errors: string[];
+  warnings: string[];
+  autoinvoke: boolean;
+  disableModelInvocation: boolean;
+  files: string[];
+  effective: boolean;
+  overriddenBy: string | null;
+}
+
+export interface SkillCatalog {
+  skills: SkillInfo[];
+  warnings: string[];
+}
+
+export interface SkillDocument {
+  info: SkillInfo;
+  frontmatter: string;
+  body: string;
+}
+
+export interface SkillValidation {
+  valid: boolean;
+  errors: string[];
+  warnings: string[];
+}
+
 export interface OpenCodeSession {
   id: string;
   title: string;

@@ -40,6 +40,9 @@ import {
   RecentProject,
   SearchAiEffort,
   SearchMatch,
+  SkillCatalog,
+  SkillDocument,
+  SkillValidation,
   TemplateInfo,
   WelcomeProjectRequest,
   WelcomeTemplate,
@@ -296,6 +299,39 @@ export const backend = {
       return { agents: [], commands: [], skills: [] };
     }
     return tauriInvoke<KitCatalog>("discover_kit", { root: rootPath });
+  },
+
+  async skillsList(rootPath: string | null): Promise<SkillCatalog> {
+    if (!isTauriEnvironment()) {
+      return { skills: [], warnings: [] };
+    }
+    return tauriInvoke<SkillCatalog>("skills_list", { root: rootPath });
+  },
+
+  async skillsRead(
+    rootPath: string | null,
+    path: string,
+  ): Promise<SkillDocument> {
+    if (!isTauriEnvironment()) {
+      throw new Error("Skills require the desktop app");
+    }
+    return tauriInvoke<SkillDocument>("skills_read", {
+      root: rootPath,
+      path,
+    });
+  },
+
+  async skillsValidate(
+    rootPath: string | null,
+    path: string,
+  ): Promise<SkillValidation> {
+    if (!isTauriEnvironment()) {
+      throw new Error("Skills require the desktop app");
+    }
+    return tauriInvoke<SkillValidation>("skills_validate", {
+      root: rootPath,
+      path,
+    });
   },
 
   async openFolder(path: string, showConfigFiles: boolean): Promise<OpenedFolder> {
