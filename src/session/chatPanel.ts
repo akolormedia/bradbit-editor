@@ -89,6 +89,9 @@ export class ChatPanel {
   private options: ChatPanelOptions;
   private state: ChatState = initialChatState;
   private messagesEl: HTMLElement;
+  private messageAreaEl: HTMLElement;
+  private followWorkBtn: HTMLButtonElement;
+  private followWorkLabelEl: HTMLElement;
   private requestsEl: HTMLElement;
   private composer: HTMLTextAreaElement;
   private composerEl: HTMLElement;
@@ -196,6 +199,25 @@ export class ChatPanel {
 
     this.messagesEl = document.createElement("div");
     this.messagesEl.className = "chat-messages";
+    this.messagesEl.addEventListener("scroll", () =>
+      this.updateFollowButton(),
+    );
+
+    this.followWorkBtn = document.createElement("button");
+    this.followWorkBtn.type = "button";
+    this.followWorkBtn.className = "chat-follow-work";
+    this.followWorkBtn.dataset.testid = "chat-follow-work";
+    this.followWorkBtn.hidden = true;
+    const followIcon = document.createElement("span");
+    followIcon.className = "chat-follow-work-icon";
+    followIcon.appendChild(createIcon("arrow-down", 13));
+    this.followWorkLabelEl = document.createElement("span");
+    this.followWorkBtn.append(followIcon, this.followWorkLabelEl);
+    this.followWorkBtn.onclick = () => this.resumeFollowing();
+
+    this.messageAreaEl = document.createElement("div");
+    this.messageAreaEl.className = "chat-message-area";
+    this.messageAreaEl.append(this.messagesEl, this.followWorkBtn);
 
     this.requestsEl = document.createElement("div");
     this.requestsEl.className = "chat-requests";
@@ -422,7 +444,7 @@ export class ChatPanel {
       this.tabsEl,
       header,
       this.errorEl,
-      this.messagesEl,
+      this.messageAreaEl,
       this.welcomePromptHost,
       composer,
     );
@@ -469,6 +491,12 @@ export class ChatPanel {
     this.composer.placeholder = t(
       lang,
       welcome ? "welcomeChatPlaceholder" : "chatComposerPlaceholder",
+    );
+    this.followWorkLabelEl.textContent = t(lang, "chatFollowWork");
+    this.followWorkBtn.title = t(lang, "chatFollowWork");
+    this.followWorkBtn.setAttribute(
+      "aria-label",
+      t(lang, "chatFollowWork"),
     );
     this.renderTabs();
 
@@ -1138,6 +1166,7 @@ export class ChatPanel {
     const text = this.composer.value.trim();
     if (!text) return;
     this.hideMenus();
+    this.forceScrollToBottom = true;
     this.options.onSend(text);
   }
 
@@ -1296,6 +1325,18 @@ export class ChatPanel {
     input.onblur = () => finish(true);
   }
 
+  private updateFollowButton(): void {
+    const overflow =
+      this.messagesEl.scrollHeight > this.messagesEl.clientHeight + 1;
+    this.followWorkBtn.hidden = !overflow || this.isNearBottom();
+  }
+
+  private resumeFollowing(): void {
+    this.forceScrollToBottom = true;
+    this.messagesEl.scrollTop = this.messagesEl.scrollHeight;
+    this.updateFollowButton();
+  }
+
   private renderMessages(): void {
     const previousScrollTop = this.messagesEl.scrollTop;
     const shouldStick = this.forceScrollToBottom || this.isNearBottom();
@@ -1326,6 +1367,7 @@ export class ChatPanel {
       this.textBubbles.clear();
       this.renderedTexts.clear();
       this.lastRenderStructure = structure;
+      this.updateFollowButton();
       return;
     }
 
@@ -1335,6 +1377,7 @@ export class ChatPanel {
     if (structure === this.lastRenderStructure) {
       if (this.updateMessageTexts()) {
         if (shouldStick) this.pinToBottom();
+        this.updateFollowButton();
         return;
       }
     }
@@ -1479,6 +1522,7 @@ export class ChatPanel {
     } else {
       this.messagesEl.scrollTop = previousScrollTop;
     }
+    this.updateFollowButton();
   }
 
   private messageStructureKey(): string {
@@ -1574,6 +1618,7 @@ export class ChatPanel {
       if (!this.messagesEl.isConnected) return;
       if (!this.isNearBottom()) return;
       this.messagesEl.scrollTop = this.messagesEl.scrollHeight;
+      this.updateFollowButton();
     };
     if (typeof window.requestAnimationFrame === "function") {
       window.requestAnimationFrame(settle);

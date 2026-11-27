@@ -1473,6 +1473,29 @@ describe("chat panel (T-2.1.1)", () => {
     expect(metrics.scrollTop).toBe(200);
   });
 
+  it("offers to resume following the work after scrolling up (T-3.14.1)", () => {
+    const panel = new ChatPanel(options());
+    panel.update(streamingAssistant("Hola"));
+    const messages = panel.element.querySelector<HTMLElement>(".chat-messages")!;
+    const metrics = mockScrollMetrics(messages, {
+      scrollHeight: 2000,
+      clientHeight: 400,
+      scrollTop: 1600,
+    });
+    const button = panel.element.querySelector<HTMLButtonElement>(
+      '[data-testid="chat-follow-work"]',
+    )!;
+    expect(button.hidden).toBe(true);
+
+    metrics.scrollTop = 200;
+    messages.dispatchEvent(new Event("scroll"));
+    expect(button.hidden).toBe(false);
+
+    button.click();
+    expect(metrics.scrollTop).toBe(1600);
+    expect(button.hidden).toBe(true);
+  });
+
   it("keeps the chat pinned to the bottom while it was already there (T-3.10.9)", () => {
     const panel = new ChatPanel(options());
     panel.update(streamingAssistant("Hola"));
