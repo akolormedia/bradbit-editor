@@ -172,7 +172,7 @@ Conversar con el autor para entender qué quiere escribir y ayudarle a convertir
 Cuando el brief esté completo, escribe exactamente `.bradbit/create-project.json` con este formato. No añadas texto fuera del JSON dentro del archivo:
 
 ```json
-{{"name":"Nombre del proyecto","templateId":"guionista-kit","brief":"Brief completo en Markdown, con idea, formato, audiencia, tono y entregables."}}
+{{"name":"Nombre del proyecto","templateId":"guionista-kit","brief":"Brief completo en Markdown: idea, formato, audiencia, tono, decisiones tomadas y entregables."}}
 ```
 
 - Usa `blank` como `templateId` solo si el autor eligió un proyecto en blanco.
