@@ -4,6 +4,7 @@ import {
   EditorState,
   Extension,
   RangeSetBuilder,
+  Transaction,
 } from "@codemirror/state";
 import {
   Decoration,
@@ -290,6 +291,9 @@ export class BradbitCodeMirror {
   private appearanceCompartment = new Compartment();
   private languageCompartment = new Compartment();
   private completionCompartment = new Compartment();
+  private readOnlyCompartment = new Compartment();
+  private livePreviewPath: string | null = null;
+  private livePreviewUpdating = false;
 
   constructor(
     private parent: HTMLElement,
@@ -350,6 +354,82 @@ export class BradbitCodeMirror {
     }
     this.reportCursor(this.view.state);
     void this.refreshInlineDiff();
+  }
+
+  public openLivePreview(
+    path: string,
+    content: string,
+    settings: AppSettings,
+  ): void {
+    this.livePreviewPath = path;
+    this.openDocument(path, content, settings);
+    this.applyReadOnly(true);
+    this.scrollPreviewToEnd();
+  }
+
+  public isLivePreview(path: string): boolean {
+    return this.livePreviewPath === path && this.currentPath === path;
+  }
+
+  public updateLivePreview(path: string, content: string): void {
+    const view = this.view;
+    if (!view || this.currentPath !== path || this.livePreviewPath !== path) {
+      return;
+    }
+    const current = view.state.doc.toString();
+    if (current === content) return;
+    const changes = content.startsWith(current)
+      ? { from: current.length, insert: content.slice(current.length) }
+      : { from: 0, to: current.length, insert: content };
+    this.livePreviewUpdating = true;
+    view.dispatch({
+      changes,
+      annotations: Transaction.addToHistory.of(false),
+    });
+    this.livePreviewUpdating = false;
+    this.scrollPreviewToEnd();
+  }
+
+  public finishLivePreview(
+    path: string,
+    content: string,
+    settings: AppSettings,
+  ): void {
+    if (this.livePreviewPath === path) this.livePreviewPath = null;
+    this.livePreviewUpdating = false;
+    if (this.currentPath === path) {
+      this.openDocument(path, content, settings);
+      this.applyReadOnly(false);
+    } else {
+      this.statesByPath.delete(path);
+    }
+  }
+
+  private applyReadOnly(enabled: boolean): void {
+    this.view?.dispatch({
+      effects: this.readOnlyCompartment.reconfigure(
+        enabled
+          ? [EditorState.readOnly.of(true), EditorView.editable.of(false)]
+          : [],
+      ),
+    });
+  }
+
+  private scrollPreviewToEnd(): void {
+    const scroll = () => {
+      if (
+        !this.view ||
+        !this.livePreviewPath ||
+        this.currentPath !== this.livePreviewPath
+      ) {
+        return;
+      }
+      this.view.scrollDOM.scrollTop = this.view.scrollDOM.scrollHeight;
+    };
+    scroll();
+    if (typeof window.requestAnimationFrame === "function") {
+      window.requestAnimationFrame(scroll);
+    }
   }
 
   /** Baseline (HEAD) content used for the inline Git diff; `null` = new file. */
@@ -935,6 +1015,22 @@ export class BradbitCodeMirror {
               )
             : [],
         ),
+        this.readOnlyCompartment.of(
+          this.livePreviewPath === path
+            ? [EditorState.readOnly.of(true), EditorView.editable.of(false)]
+            : [],
+        ),
+        EditorState.transactionFilter.of((transaction) => {
+          if (
+            this.livePreviewPath &&
+            this.currentPath === this.livePreviewPath &&
+            transaction.docChanged &&
+            !this.livePreviewUpdating
+          ) {
+            return [];
+          }
+          return transaction;
+        }),
         this.languageCompartment.of(languageExtensionForPath(path)),
         this.inlineDiff.extension(),
         this.inlineBlame.extension(),
@@ -980,10 +1076,18 @@ export class BradbitCodeMirror {
         EditorView.updateListener.of((update: ViewUpdate) => {
           if (!this.currentPath) return;
           if (update.docChanged) {
-            this.callbacks.onContentChange(this.currentPath, update.state.doc.toString());
-            this.scheduleInlineDiff();
+            if (!this.livePreviewUpdating) {
+              this.callbacks.onContentChange(
+                this.currentPath,
+                update.state.doc.toString(),
+              );
+              this.scheduleInlineDiff();
+            }
           }
-          if (update.selectionSet || update.docChanged) {
+          if (
+            !this.livePreviewUpdating &&
+            (update.selectionSet || update.docChanged)
+          ) {
             this.reportCursor(update.state);
           }
         }),

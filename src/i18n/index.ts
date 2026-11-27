@@ -767,6 +767,8 @@ export const translations = {
     chatFileOutsideProject: "Ese archivo está fuera del proyecto abierto.",
     chatFileUnsaved:
       "No abrí {path}: tiene cambios sin guardar. Guárdalo o ciérralo para ver la escritura en vivo.",
+    chatFileWriting:
+      "La IA está escribiendo este archivo. Espera a que termine para guardarlo.",
     chatFormTitle: "El agente tiene una pregunta",
     chatFormSubmit: "Responder",
     chatFormAnswered: "Respondida",
@@ -1589,6 +1591,8 @@ export const translations = {
     chatFileOutsideProject: "That file is outside the opened project.",
     chatFileUnsaved:
       "Did not open {path}: it has unsaved changes. Save or close it to see the live writing.",
+    chatFileWriting:
+      "The AI is writing this file. Wait for it to finish before saving.",
     chatFormTitle: "The agent has a question",
     chatFormSubmit: "Answer",
     chatFormAnswered: "Answered",
