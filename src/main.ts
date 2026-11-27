@@ -3978,6 +3978,14 @@ class BradbitApp {
     this.chatSessions.set(targetId, next);
     if (targetId === this.activeChatSessionId) {
       this.chatState = next;
+      if (
+        this.liveWrite &&
+        (event.type === "session.execution.interrupted" ||
+          event.type === "session.execution.failed" ||
+          event.type === "client.stream_error")
+      ) {
+        this.discardLiveWrite();
+      }
       const rawTool = data.tool;
       const toolId =
         rawTool && typeof rawTool === "object" && !Array.isArray(rawTool)
