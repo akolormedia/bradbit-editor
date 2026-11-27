@@ -107,6 +107,16 @@ describe("chat panel (T-2.1.1)", () => {
     expect(input.placeholder).toContain("@");
   });
 
+  it("uses the welcome variant without the empty-state card", () => {
+    const panel = new ChatPanel(options({ variant: "welcome" }));
+    const input = panel.element.querySelector<HTMLTextAreaElement>(
+      '[data-testid="chat-input"]',
+    )!;
+    expect(input.placeholder).toBe("Escribe el brief de tu proyecto…");
+    expect(panel.element.querySelector(".chat-empty")).toBeNull();
+    expect(panel.element.classList.contains("chat-panel-welcome")).toBe(true);
+  });
+
   it("renames a session from the tab with Enter and cancels with Escape (T-2.5.3)", () => {
     const onRenameSession = vi.fn();
     const panel = new ChatPanel(options({ onRenameSession }));
