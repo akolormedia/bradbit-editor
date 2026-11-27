@@ -2344,6 +2344,73 @@ textarea.text-input {
   color: var(--accent);
 }
 
+.chat-form-progress {
+  color: var(--text-muted);
+  font-family: var(--font-ui);
+  font-size: 9.5px;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+}
+
+.chat-form-wizard-body {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.chat-form-review-title {
+  color: var(--text-primary);
+  font-family: var(--font-ui);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.chat-form-review-list {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.chat-form-review-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 7px 8px;
+  border: 1px solid var(--border-color);
+  border-radius: 7px;
+  background: var(--bg-input);
+}
+
+.chat-form-review-copy {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.chat-form-review-label {
+  color: var(--text-muted);
+  font-family: var(--font-ui);
+  font-size: 9.5px;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+}
+
+.chat-form-review-value {
+  color: var(--text-primary);
+  font-family: var(--font-ui);
+  font-size: 11.5px;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+}
+
+.chat-form-review-item .chat-request-btn {
+  flex-shrink: 0;
+}
+
 .chat-form-status {
   font-size: 9.5px;
   font-weight: 700;

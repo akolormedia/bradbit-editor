@@ -43,6 +43,38 @@ function readyState() {
   });
 }
 
+function multiQuestionForm() {
+  return {
+    id: "frm_1",
+    title: "Questions",
+    kind: "question",
+    toolId: "tool_q",
+    messageId: "msg_q",
+    status: "pending" as const,
+    answer: null,
+    message: null,
+    fields: [
+      {
+        key: "q0",
+        title: "Color favorito",
+        description: "¿Cuál prefieres?",
+        type: "string" as const,
+        required: true,
+        options: [
+          { value: "Rojo", label: "Rojo" },
+          { value: "Azul", label: "Azul" },
+        ],
+        custom: true,
+      },
+      {
+        key: "q1",
+        title: "¿Continuar?",
+        type: "boolean" as const,
+      },
+    ],
+  };
+}
+
 function streamingAssistant(text: string) {
   return {
     ...readyState(),
@@ -777,52 +809,20 @@ describe("chat panel (T-2.1.1)", () => {
     expect(context.title).toContain("Entrada 1.2k");
   });
 
-  it("renders question forms, validates them and sends all answers (T-2.1.4)", () => {
+  it("walks through question forms one by one and submits after review (T-3.10.13)", () => {
     const onFormReply = vi.fn();
     const panel = new ChatPanel(options({ onFormReply }));
-    panel.update({
-      ...readyState(),
-      forms: [
-        {
-          id: "frm_1",
-          title: "Questions",
-          kind: "question",
-          toolId: "tool_q",
-          messageId: "msg_q",
-          status: "pending",
-          answer: null,
-          message: null,
-          fields: [
-            {
-              key: "q0",
-              title: "Color favorito",
-              description: "¿Cuál prefieres?",
-              type: "string",
-              required: true,
-              options: [
-                { value: "Rojo", label: "Rojo" },
-                { value: "Azul", label: "Azul" },
-              ],
-              custom: true,
-            },
-            {
-              key: "q1",
-              title: "¿Continuar?",
-              type: "boolean",
-            },
-          ],
-        },
-      ],
-    });
+    panel.update({ ...readyState(), forms: [multiQuestionForm()] });
 
     expect(panel.element.textContent).toContain("El agente tiene una pregunta");
+    expect(panel.element.textContent).toContain("Pregunta 1 de 2");
     expect(panel.element.textContent).toContain("Color favorito");
-    expect(panel.element.textContent).toContain("¿Continuar?");
+    expect(panel.element.textContent).not.toContain("¿Continuar?");
 
-    const submit = panel.element.querySelector<HTMLButtonElement>(
-      '[data-testid="form-submit-frm_1"]',
+    const next = panel.element.querySelector<HTMLButtonElement>(
+      '[data-testid="form-next-frm_1"]',
     )!;
-    expect(submit.disabled).toBe(true);
+    expect(next.disabled).toBe(true);
 
     const azul = panel.element.querySelector<HTMLInputElement>(
       '[data-testid="form-input-frm_1-q0-Azul"]',
@@ -832,18 +832,133 @@ describe("chat panel (T-2.1.1)", () => {
     expect(
       azul.closest(".chat-form-option")?.classList.contains("selected"),
     ).toBe(true);
-    expect(submit.disabled).toBe(false);
+    expect(next.disabled).toBe(false);
+    next.click();
+
+    expect(panel.element.textContent).toContain("Pregunta 2 de 2");
+    expect(panel.element.textContent).toContain("¿Continuar?");
+    expect(panel.element.textContent).not.toContain("Color favorito");
     const continueInput = panel.element.querySelector<HTMLInputElement>(
       '[data-testid="form-input-frm_1-q1"]',
     )!;
     continueInput.checked = true;
     continueInput.dispatchEvent(new Event("change"));
 
-    submit.click();
+    const review = panel.element.querySelector<HTMLButtonElement>(
+      '[data-testid="form-next-frm_1"]',
+    )!;
+    expect(review.textContent).toBe("Revisar respuestas");
+    review.click();
+
+    expect(panel.element.textContent).toContain("Revisa tus respuestas");
+    expect(panel.element.textContent).toContain("Azul");
+    expect(panel.element.textContent).toContain("Sí");
+    const submit = panel.element.querySelector<HTMLButtonElement>(
+      '[data-testid="form-submit-frm_1"]',
+    )!;
+    expect(submit.disabled).toBe(false);
+
+    panel.element
+      .querySelector<HTMLButtonElement>('[data-testid="form-edit-frm_1-q1"]')
+      ?.click();
+    expect(panel.element.textContent).toContain("Pregunta 2 de 2");
+    expect(
+      panel.element.querySelector('[data-testid="form-input-frm_1-q1"]'),
+    ).not.toBeNull();
+
+    panel.element
+      .querySelector<HTMLButtonElement>('[data-testid="form-next-frm_1"]')
+      ?.click();
+    panel.element
+      .querySelector<HTMLButtonElement>('[data-testid="form-submit-frm_1"]')
+      ?.click();
     expect(onFormReply).toHaveBeenCalledWith("frm_1", {
       q0: "Azul",
       q1: true,
     });
+  });
+
+  it("shows custom and optional answers in the review (T-3.10.13)", () => {
+    const onFormReply = vi.fn();
+    const panel = new ChatPanel(options({ onFormReply }));
+    panel.update({
+      ...readyState(),
+      forms: [
+        {
+          id: "frm_2",
+          title: "Questions",
+          kind: "question",
+          toolId: null,
+          messageId: null,
+          status: "pending",
+          answer: null,
+          message: null,
+          fields: [
+            {
+              key: "q0",
+              title: "Color",
+              type: "string",
+              required: true,
+              options: [{ value: "Rojo", label: "Rojo" }],
+              custom: true,
+            },
+            {
+              key: "q1",
+              title: "Notas",
+              type: "string",
+            },
+          ],
+        },
+      ],
+    });
+    const custom = panel.element.querySelector<HTMLInputElement>(
+      '[data-testid="form-input-frm_2-q0-custom"]',
+    )!;
+    custom.value = "Verde";
+    custom.dispatchEvent(new Event("input"));
+    panel.element
+      .querySelector<HTMLButtonElement>('[data-testid="form-next-frm_2"]')
+      ?.click();
+    panel.element
+      .querySelector<HTMLButtonElement>('[data-testid="form-next-frm_2"]')
+      ?.click();
+
+    expect(panel.element.textContent).toContain("Verde");
+    expect(panel.element.textContent).toContain("Sin respuesta");
+    panel.element
+      .querySelector<HTMLButtonElement>('[data-testid="form-submit-frm_2"]')
+      ?.click();
+    expect(onFormReply).toHaveBeenCalledWith("frm_2", { q0: "Verde" });
+  });
+
+  it("keeps the current question when the chat re-renders (T-3.10.13)", () => {
+    const panel = new ChatPanel(options());
+    const state = { ...readyState(), forms: [multiQuestionForm()] };
+    panel.update(state);
+    panel.element
+      .querySelector<HTMLInputElement>(
+        '[data-testid="form-input-frm_1-q0-Azul"]',
+      )!
+      .dispatchEvent(new Event("change"));
+    panel.element
+      .querySelector<HTMLButtonElement>('[data-testid="form-next-frm_1"]')
+      ?.click();
+
+    panel.update({
+      ...state,
+      messages: [
+        {
+          id: "assistant:msg_next",
+          role: "assistant",
+          parts: [{ type: "text", ordinal: 0, text: "Sigo esperando." }],
+        },
+      ],
+    });
+
+    expect(panel.element.textContent).toContain("Pregunta 2 de 2");
+    expect(
+      panel.element.querySelector('[data-testid="form-input-frm_1-q1"]'),
+    ).not.toBeNull();
   });
 
   it("accepts a free-text answer and shows answered forms", () => {
