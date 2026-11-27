@@ -143,6 +143,7 @@ export class ChatPanel {
   private drafts = new Map<string, string>();
   private draftSessionId: string | null = null;
   private formDrafts = new Map<string, Record<string, unknown>>();
+  private formSteps = new Map<string, number>();
   private collapsedModelProviders = new Set<string>();
   private modelCollapseInitialized = false;
 
@@ -2129,6 +2130,9 @@ export class ChatPanel {
     for (const id of [...this.formDrafts.keys()]) {
       if (!pendingFormIds.has(id)) this.formDrafts.delete(id);
     }
+    for (const id of [...this.formSteps.keys()]) {
+      if (!pendingFormIds.has(id)) this.formSteps.delete(id);
+    }
 
     if (pendingPermissions.length === 0 && forms.length === 0) {
       this.requestsEl.hidden = true;
@@ -2223,18 +2227,55 @@ export class ChatPanel {
     return answer;
   }
 
-  private formReady(form: ChatForm): boolean {
-    for (const field of form.fields) {
-      if (!field.required || field.hidden || field.type === "external") {
-        continue;
-      }
-      if (field.type === "boolean") continue;
-      const value = this.formValue(form.id, field);
-      if (value === undefined || value === null) return false;
-      if (typeof value === "string" && !value.trim()) return false;
-      if (Array.isArray(value) && value.length === 0) return false;
+  private formFieldReady(
+    form: ChatForm,
+    field: OpenCodeFormField,
+  ): boolean {
+    if (
+      !field.required ||
+      field.hidden ||
+      field.type === "external" ||
+      field.type === "boolean"
+    ) {
+      return true;
     }
+    const value = this.formValue(form.id, field);
+    if (value === undefined || value === null) return false;
+    if (typeof value === "string" && !value.trim()) return false;
+    if (Array.isArray(value) && value.length === 0) return false;
     return true;
+  }
+
+  private formReady(form: ChatForm): boolean {
+    return form.fields.every((field) => this.formFieldReady(form, field));
+  }
+
+  private formReviewValue(form: ChatForm, field: OpenCodeFormField): string {
+    const lang = this.options.language;
+    const value = this.formValue(form.id, field);
+    if (
+      value === undefined ||
+      value === null ||
+      (typeof value === "string" && !value.trim()) ||
+      (Array.isArray(value) && value.length === 0)
+    ) {
+      return t(lang, "chatFormNoAnswer");
+    }
+    if (typeof value === "boolean") {
+      return value ? t(lang, "chatFormYes") : t(lang, "chatFormNo");
+    }
+    if (Array.isArray(value)) {
+      return value
+        .map((entry) => this.formOptionLabel(field, String(entry)))
+        .join(", ");
+    }
+    return this.formOptionLabel(field, String(value));
+  }
+
+  private formOptionLabel(field: OpenCodeFormField, value: string): string {
+    return (
+      field.options?.find((option) => option.value === value)?.label ?? value
+    );
   }
 
   private renderForm(form: ChatForm): HTMLElement {
@@ -2280,6 +2321,10 @@ export class ChatPanel {
       return card;
     }
 
+    if (fields.length > 1) {
+      return this.renderFormWizard(form, fields, card, title);
+    }
+
     const submit = document.createElement("button");
     submit.type = "button";
     submit.className = "chat-request-btn primary";
@@ -2302,6 +2347,149 @@ export class ChatPanel {
     actions.appendChild(submit);
     card.appendChild(actions);
     return card;
+  }
+
+  private renderFormWizard(
+    form: ChatForm,
+    fields: OpenCodeFormField[],
+    card: HTMLElement,
+    title: HTMLElement,
+  ): HTMLElement {
+    const lang = this.options.language;
+    const total = fields.length;
+    const paint = () => {
+      card.replaceChildren(title);
+      const step = Math.max(
+        0,
+        Math.min(total, this.formSteps.get(form.id) ?? 0),
+      );
+      const progress = document.createElement("div");
+      progress.className = "chat-form-progress";
+      progress.dataset.testid = `form-progress-${form.id}`;
+      progress.textContent = t(lang, "chatFormStep", {
+        current: String(Math.min(step + 1, total)),
+        total: String(total),
+      });
+      card.appendChild(progress);
+
+      const body = document.createElement("div");
+      body.className = "chat-form-wizard-body";
+      card.appendChild(body);
+
+      if (step >= total) {
+        this.paintFormReview(form, fields, card, body, paint);
+        return;
+      }
+
+      const field = fields[step];
+      const actions = document.createElement("div");
+      actions.className = "chat-request-actions";
+      const next = document.createElement("button");
+      next.type = "button";
+      next.className = "chat-request-btn primary";
+      next.dataset.testid = `form-next-${form.id}`;
+      next.textContent =
+        step === total - 1
+          ? t(lang, "chatFormReview")
+          : t(lang, "chatFormNext");
+      const refresh = () => {
+        next.disabled = !this.formFieldReady(form, field);
+      };
+      body.appendChild(this.renderFormField(form, field, refresh));
+
+      if (step > 0) {
+        const back = document.createElement("button");
+        back.type = "button";
+        back.className = "chat-request-btn";
+        back.dataset.testid = `form-back-${form.id}`;
+        back.textContent = t(lang, "chatFormBack");
+        back.onclick = () => {
+          this.formSteps.set(form.id, step - 1);
+          paint();
+          this.pinToBottom();
+        };
+        actions.appendChild(back);
+      }
+      next.onclick = () => {
+        if (!this.formFieldReady(form, field)) return;
+        this.formSteps.set(form.id, step + 1);
+        paint();
+        this.pinToBottom();
+      };
+      refresh();
+      actions.appendChild(next);
+      card.appendChild(actions);
+    };
+    paint();
+    return card;
+  }
+
+  private paintFormReview(
+    form: ChatForm,
+    fields: OpenCodeFormField[],
+    card: HTMLElement,
+    body: HTMLElement,
+    paint: () => void,
+  ): void {
+    const lang = this.options.language;
+    const heading = document.createElement("div");
+    heading.className = "chat-form-review-title";
+    heading.textContent = t(lang, "chatFormReviewTitle");
+    body.appendChild(heading);
+
+    const list = document.createElement("div");
+    list.className = "chat-form-review-list";
+    fields.forEach((field, index) => {
+      const item = document.createElement("div");
+      item.className = "chat-form-review-item";
+      item.dataset.testid = `form-review-${form.id}-${field.key}`;
+      const copy = document.createElement("div");
+      copy.className = "chat-form-review-copy";
+      const label = document.createElement("div");
+      label.className = "chat-form-review-label";
+      label.textContent = field.title || field.key;
+      const value = document.createElement("div");
+      value.className = "chat-form-review-value";
+      value.textContent = this.formReviewValue(form, field);
+      copy.append(label, value);
+      const edit = document.createElement("button");
+      edit.type = "button";
+      edit.className = "chat-request-btn";
+      edit.dataset.testid = `form-edit-${form.id}-${field.key}`;
+      edit.textContent = t(lang, "chatFormEdit");
+      edit.onclick = () => {
+        this.formSteps.set(form.id, index);
+        paint();
+        this.pinToBottom();
+      };
+      item.append(copy, edit);
+      list.appendChild(item);
+    });
+    body.appendChild(list);
+
+    const actions = document.createElement("div");
+    actions.className = "chat-request-actions";
+    const back = document.createElement("button");
+    back.type = "button";
+    back.className = "chat-request-btn";
+    back.dataset.testid = `form-back-${form.id}`;
+    back.textContent = t(lang, "chatFormBack");
+    back.onclick = () => {
+      this.formSteps.set(form.id, fields.length - 1);
+      paint();
+      this.pinToBottom();
+    };
+    const submit = document.createElement("button");
+    submit.type = "button";
+    submit.className = "chat-request-btn primary";
+    submit.dataset.testid = `form-submit-${form.id}`;
+    submit.textContent = t(lang, "chatFormSubmitAll");
+    submit.disabled = !this.formReady(form);
+    submit.onclick = () => {
+      this.options.onFormReply(form.id, this.formAnswer(form));
+    };
+    actions.append(back, submit);
+    card.appendChild(actions);
   }
 
   private renderFormField(
