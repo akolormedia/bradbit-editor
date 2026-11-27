@@ -117,6 +117,47 @@ describe("chat panel (T-2.1.1)", () => {
     expect(panel.element.classList.contains("chat-panel-welcome")).toBe(true);
   });
 
+  it("shows the welcome template control and action", () => {
+    const onWelcomeTemplateClick = vi.fn();
+    const panel = new ChatPanel(
+      options({
+        variant: "welcome",
+        welcomeTemplateLabel: "Guion Audiovisual",
+        onWelcomeTemplateClick,
+      }),
+    );
+    const button = panel.element.querySelector<HTMLButtonElement>(
+      '[data-testid="welcome-template-button"]',
+    )!;
+    expect(button.hidden).toBe(false);
+    expect(button.textContent).toContain("Guion Audiovisual");
+    button.click();
+    expect(onWelcomeTemplateClick).toHaveBeenCalledOnce();
+
+    const session = new ChatPanel(options());
+    expect(
+      session.element.querySelector<HTMLButtonElement>(
+        '[data-testid="welcome-template-button"]',
+      )!.hidden,
+    ).toBe(true);
+  });
+
+  it("shows a welcome prompt above the composer", () => {
+    const panel = new ChatPanel(options({ variant: "welcome" }));
+    const prompt = document.createElement("div");
+    prompt.textContent = "¿Plantilla o proyecto en blanco?";
+    panel.setWelcomePrompt(prompt);
+    const host = panel.element.querySelector<HTMLElement>(
+      ".chat-welcome-prompt-host",
+    )!;
+    expect(host.hidden).toBe(false);
+    expect(host.textContent).toContain("¿Plantilla o proyecto en blanco?");
+
+    panel.setWelcomePrompt(null);
+    expect(host.hidden).toBe(true);
+    expect(host.childElementCount).toBe(0);
+  });
+
   it("renames a session from the tab with Enter and cancels with Escape (T-2.5.3)", () => {
     const onRenameSession = vi.fn();
     const panel = new ChatPanel(options({ onRenameSession }));
@@ -934,6 +975,61 @@ describe("chat panel (T-2.1.1)", () => {
       "hy4",
       "high",
     );
+  });
+
+  it("groups models by provider and collapses secondary providers", () => {
+    const panel = new ChatPanel(
+      options({
+        models: [
+          {
+            id: "deepseek-flash",
+            name: "DeepSeek Flash",
+            providerId: "deepseek",
+            variants: [],
+          },
+          {
+            id: "deepseek-chat",
+            name: "DeepSeek Chat",
+            providerId: "deepseek",
+            variants: [],
+          },
+          {
+            id: "free-model",
+            name: "Free Model",
+            providerId: "openrouter",
+            variants: [],
+          },
+        ],
+      }),
+    );
+    panel.update({
+      ...readyState(),
+      model: "deepseek/deepseek-flash",
+    });
+    panel.element
+      .querySelector<HTMLButtonElement>('[data-testid="chat-model-button"]')
+      ?.click();
+
+    expect(
+      panel.element.querySelector(
+        '[data-testid="chat-model-row-deepseek-deepseek-flash"]',
+      ),
+    ).not.toBeNull();
+    expect(
+      panel.element.querySelector(
+        '[data-testid="chat-model-row-openrouter-free-model"]',
+      ),
+    ).toBeNull();
+    const openrouter = panel.element.querySelector<HTMLButtonElement>(
+      '[data-testid="chat-model-provider-openrouter"]',
+    )!;
+    expect(openrouter.textContent).toContain("1");
+    openrouter.click();
+    expect(
+      panel.element.querySelector(
+        '[data-testid="chat-model-row-openrouter-free-model"]',
+      ),
+    ).not.toBeNull();
   });
 
   it("hides disabled models and shows recent models (T-2.2.3)", () => {

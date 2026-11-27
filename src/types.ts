@@ -436,6 +436,7 @@ export interface WelcomeTemplate {
   id: string;
   name: string;
   description: string;
+  source?: string;
 }
 
 export interface WelcomeWorkspace {

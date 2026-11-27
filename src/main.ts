@@ -127,7 +127,12 @@ import { openContextMenu, type ContextMenuItem } from "./ui/contextMenu";
 import { convertDocxToMarkdown, type DocxImportWarning } from "./import/docx";
 import { folderPdfErrorCopy } from "./export/folderPdfError";
 import { createIcon } from "./ui/icons";
+import { filterChatModelsByKeys } from "./session/chatModels";
 import { filterWelcomeProjects } from "./welcome/welcomeProjects";
+import {
+  welcomeTemplateLabel,
+  welcomeTemplateSourceLabel,
+} from "./welcome/templates";
 import { createIconButton } from "./ui/iconButton";
 import { createFountainToolbar } from "./editor/fountainToolbar";
 import {
@@ -360,6 +365,9 @@ class BradbitApp {
   private welcomeLocationLabelEl: HTMLElement | null = null;
   private welcomeSwitcherOpen = false;
   private welcomeSwitcherQuery = "";
+  private welcomeTemplateId = "";
+  private welcomeTemplatePickerOpen = false;
+  private welcomeTemplatePromptDismissed = false;
   private byokStatus: ByokProviderStatus[] = [];
   private byokKeyDrafts: Record<string, string> = {};
   private byokBusyId: string | null = null;
@@ -2340,6 +2348,8 @@ class BradbitApp {
     if (!this.welcomeChatPanel) {
       this.welcomeChatPanel = new ChatPanel({
         variant: "welcome",
+        welcomeTemplateLabel: this.welcomeSelectedTemplateLabel(),
+        onWelcomeTemplateClick: () => this.openWelcomeTemplatePicker(),
         language: this.settings.language,
         projectName: t(this.settings.language, "welcomeChatTitle"),
         projectRoot: this.welcomeWorkspacePath ?? "",
@@ -2376,6 +2386,8 @@ class BradbitApp {
 
   private updateWelcomeChatPanel(): void {
     this.welcomeChatPanel?.update(this.welcomeChatState, {
+      welcomeTemplateLabel: this.welcomeSelectedTemplateLabel(),
+      onWelcomeTemplateClick: () => this.openWelcomeTemplatePicker(),
       language: this.settings.language,
       projectName: t(this.settings.language, "welcomeChatTitle"),
       projectRoot: this.welcomeWorkspacePath ?? "",
@@ -2388,6 +2400,9 @@ class BradbitApp {
       hiddenModels: this.settings.hiddenModels,
       recentModels: this.settings.recentModels,
     });
+    this.welcomeChatPanel?.setWelcomePrompt(
+      this.renderWelcomeTemplatePrompt(this.settings.language),
+    );
     this.updateWelcomeChatStatus();
   }
 
@@ -2404,6 +2419,7 @@ class BradbitApp {
         id: template.id,
         name: template.name,
         description: template.description,
+        source: template.source,
       }));
       const workspace = await backend.welcomePrepareWorkspace(
         this.welcomeTemplates,
@@ -2420,7 +2436,11 @@ class BradbitApp {
       await backend.opencodeStart(workspace.path);
       if (generation !== this.welcomeGeneration || this.folder) return;
       try {
-        this.welcomeModels = await backend.opencodeListModels();
+        await this.refreshByokStatus();
+        this.welcomeModels = filterChatModelsByKeys(
+          await backend.opencodeListModels(),
+          this.byokStatus,
+        );
       } catch (err) {
         console.error("Could not list OpenCode models", err);
         this.welcomeModels = [];
@@ -2467,6 +2487,9 @@ class BradbitApp {
     this.welcomeModels = [];
     this.welcomeSwitcherOpen = false;
     this.welcomeSwitcherQuery = "";
+    this.welcomeTemplateId = "";
+    this.welcomeTemplatePickerOpen = false;
+    this.welcomeTemplatePromptDismissed = false;
     if (streaming && sessionId) {
       void backend.opencodeAbort(sessionId).catch(() => {});
     }
@@ -2492,8 +2515,14 @@ class BradbitApp {
     this.welcomeChatState = appendUserMessage(this.welcomeChatState, text);
     this.welcomeChatPanel?.clearDraft();
     this.updateWelcomeChatPanel();
+    const templateNote = this.welcomeTemplateId
+      ? `[Plantilla: ${this.welcomeSelectedTemplateLabel()}]`
+      : this.welcomeTemplatePromptDismissed
+        ? `[Plantilla: ${t(this.settings.language, "welcomeTemplateDecide")}]`
+        : "";
+    const payload = templateNote ? `${text}\n\n${templateNote}` : text;
     try {
-      await backend.opencodeSend(sessionId, text);
+      await backend.opencodeSend(sessionId, payload);
     } catch (err) {
       this.welcomeChatState = chatSendFailed(
         this.welcomeChatState,
@@ -2625,6 +2654,7 @@ class BradbitApp {
   private toggleWelcomeSwitcher(): void {
     this.welcomeSwitcherOpen = !this.welcomeSwitcherOpen;
     this.welcomeSwitcherQuery = "";
+    this.welcomeTemplatePickerOpen = false;
     this.render();
   }
 
@@ -2649,6 +2679,171 @@ class BradbitApp {
 
   private welcomeProjectRows(): RecentProject[] {
     return filterWelcomeProjects(this.recents, this.welcomeSwitcherQuery);
+  }
+
+  private welcomeSelectedTemplateLabel(): string {
+    return welcomeTemplateLabel(
+      this.settings.language,
+      this.welcomeTemplateId,
+      this.welcomeTemplates,
+    );
+  }
+
+  private openWelcomeTemplatePicker(): void {
+    this.welcomeSwitcherOpen = false;
+    this.welcomeTemplatePickerOpen = true;
+    this.render();
+  }
+
+  private closeWelcomeTemplatePicker(): void {
+    if (!this.welcomeTemplatePickerOpen) return;
+    this.welcomeTemplatePickerOpen = false;
+    this.render();
+  }
+
+  private chooseWelcomeTemplate(templateId: string): void {
+    this.welcomeTemplateId = templateId;
+    this.welcomeTemplatePromptDismissed = templateId === "";
+    this.welcomeTemplatePickerOpen = false;
+    this.render();
+  }
+
+  private renderWelcomeTemplatePrompt(
+    lang: AppSettings["language"],
+  ): HTMLElement | null {
+    if (
+      this.welcomeTemplateId ||
+      this.welcomeTemplatePromptDismissed ||
+      this.welcomeTemplates.length === 0
+    ) {
+      return null;
+    }
+    const prompt = document.createElement("div");
+    prompt.className = "welcome-template-prompt";
+    prompt.dataset.testid = "welcome-template-prompt";
+    const icon = document.createElement("span");
+    icon.className = "welcome-template-prompt-icon";
+    icon.appendChild(createIcon("sparkles", 15));
+    const copy = document.createElement("div");
+    copy.className = "welcome-template-prompt-copy";
+    const title = document.createElement("strong");
+    title.textContent = t(lang, "welcomeTemplatePromptTitle");
+    const hint = document.createElement("span");
+    hint.textContent = t(lang, "welcomeTemplatePromptHint");
+    copy.append(title, hint);
+    const actions = document.createElement("div");
+    actions.className = "welcome-template-prompt-actions";
+    const seeAll = document.createElement("button");
+    seeAll.type = "button";
+    seeAll.className = "welcome-template-prompt-btn";
+    seeAll.dataset.testid = "welcome-template-see-all";
+    seeAll.textContent = t(lang, "welcomeTemplateSeeAll");
+    seeAll.onclick = () => this.openWelcomeTemplatePicker();
+    const blank = document.createElement("button");
+    blank.type = "button";
+    blank.className = "welcome-template-prompt-btn";
+    blank.dataset.testid = "welcome-template-blank";
+    blank.textContent = t(lang, "welcomeTemplateBlank");
+    blank.onclick = () => this.chooseWelcomeTemplate("blank");
+    const decide = document.createElement("button");
+    decide.type = "button";
+    decide.className = "welcome-template-prompt-link";
+    decide.dataset.testid = "welcome-template-decide";
+    decide.textContent = t(lang, "welcomeTemplateDecideAction");
+    decide.onclick = () => {
+      this.welcomeTemplatePromptDismissed = true;
+      this.render();
+    };
+    actions.append(seeAll, blank, decide);
+    prompt.append(icon, copy, actions);
+    return prompt;
+  }
+
+  private renderWelcomeTemplatePicker(
+    lang: AppSettings["language"],
+  ): HTMLElement {
+    const backdrop = document.createElement("div");
+    backdrop.className = "welcome-switcher-backdrop";
+    backdrop.dataset.testid = "welcome-template-backdrop";
+    backdrop.onclick = () => this.closeWelcomeTemplatePicker();
+
+    const panel = document.createElement("section");
+    panel.className = "welcome-switcher welcome-template-picker";
+    panel.dataset.testid = "welcome-template-picker";
+    panel.onclick = (event) => event.stopPropagation();
+
+    const header = document.createElement("div");
+    header.className = "welcome-template-picker-header";
+    const copy = document.createElement("div");
+    const title = document.createElement("h3");
+    title.textContent = t(lang, "welcomeTemplatePickerTitle");
+    const hint = document.createElement("p");
+    hint.textContent = t(lang, "welcomeTemplatePickerHint");
+    copy.append(title, hint);
+    const close = createIconButton({
+      icon: "x",
+      label: t(lang, "close"),
+      className: "welcome-template-close",
+      testId: "welcome-template-close",
+      onClick: () => this.closeWelcomeTemplatePicker(),
+    });
+    header.append(copy, close);
+
+    const list = document.createElement("div");
+    list.className = "welcome-template-list";
+    const addRow = (
+      id: string,
+      name: string,
+      description: string,
+      source: string | null,
+    ) => {
+      const row = document.createElement("button");
+      row.type = "button";
+      row.className = "welcome-template-row";
+      row.dataset.testid = "welcome-template-row";
+      row.dataset.templateId = id;
+      row.classList.toggle("selected", this.welcomeTemplateId === id);
+      const text = document.createElement("span");
+      text.className = "welcome-template-row-copy";
+      const nameEl = document.createElement("strong");
+      nameEl.textContent = name;
+      const descriptionEl = document.createElement("span");
+      descriptionEl.textContent = description;
+      text.append(nameEl, descriptionEl);
+      const meta = document.createElement("span");
+      meta.className = "welcome-template-row-meta";
+      if (source) {
+        const badge = document.createElement("span");
+        badge.className = "welcome-template-source";
+        badge.textContent = welcomeTemplateSourceLabel(lang, source);
+        meta.appendChild(badge);
+      }
+      if (this.welcomeTemplateId === id) {
+        meta.appendChild(createIcon("check", 14));
+      }
+      row.append(text, meta);
+      row.onclick = () => this.chooseWelcomeTemplate(id);
+      list.appendChild(row);
+    };
+
+    addRow(
+      "",
+      t(lang, "welcomeTemplateDecide"),
+      t(lang, "welcomeTemplateDecideHint"),
+      null,
+    );
+    for (const template of this.welcomeTemplates) {
+      addRow(
+        template.id,
+        template.name,
+        template.description,
+        template.source ?? (template.id === "blank" ? "blank" : "bundled"),
+      );
+    }
+
+    panel.append(header, list);
+    backdrop.appendChild(panel);
+    return backdrop;
   }
 
   private ensureChatPanel(): ChatPanel {
@@ -2776,7 +2971,11 @@ class BradbitApp {
         return;
       }
       try {
-        this.chatModels = await backend.opencodeListModels();
+        await this.refreshByokStatus();
+        this.chatModels = filterChatModelsByKeys(
+          await backend.opencodeListModels(),
+          this.byokStatus,
+        );
       } catch (err) {
         console.error("Could not list the OpenCode models", err);
         this.chatModels = [];
@@ -5370,7 +5569,11 @@ class BradbitApp {
     const chatHost = document.createElement("div");
     chatHost.className = "welcome-chat-host";
     if (isTauriEnvironment()) {
-      chatHost.appendChild(this.ensureWelcomeChatPanel().element);
+      const panel = this.ensureWelcomeChatPanel();
+      chatHost.appendChild(panel.element);
+      panel.setWelcomePrompt(
+        this.renderWelcomeTemplatePrompt(lang),
+      );
     } else {
       const unavailable = document.createElement("p");
       unavailable.className = "welcome-chat-unavailable";
@@ -5403,6 +5606,8 @@ class BradbitApp {
 
     if (this.welcomeSwitcherOpen) {
       container.appendChild(this.renderWelcomeSwitcher(lang));
+    } else if (this.welcomeTemplatePickerOpen) {
+      container.appendChild(this.renderWelcomeTemplatePicker(lang));
     }
 
     this.updateWelcomeChatStatus();
