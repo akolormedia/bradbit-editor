@@ -7740,3 +7740,21 @@ button.project-search-context-line {
     padding: 14px;
   }
 }
+
+
+/* --- AI live preview tab ------------------------------------------------ */
+
+.tab-live-badge {
+  flex-shrink: 0;
+  padding: 0 4px;
+  height: 14px;
+  display: inline-flex;
+  align-items: center;
+  border-radius: 4px;
+  background: var(--bg-hover);
+  color: var(--accent);
+  font-family: var(--font-ui);
+  font-size: 8px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+}

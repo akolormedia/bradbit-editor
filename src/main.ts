@@ -109,6 +109,7 @@ import {
   toolFileActivity,
   ToolFileActivity,
 } from "./session/toolFiles";
+import { readPartialJsonString } from "./session/partialJson";
 import { matchesKitCommand } from "./kit/localize";
 import { configFilesVisible, effectiveGitAuthor } from "./settings/developer";
 import { GENERAL_COMMANDS, mergeGeneralCommands } from "./kit/generalCommands";
@@ -370,6 +371,19 @@ class BradbitApp {
   private githubPrLoading = false;
   private chatState: ChatState = { ...initialChatState };
   private liveToolFile: { toolId: string; path: string } | null = null;
+  private liveWrite: {
+    sessionId: string;
+    toolId: string;
+    path: string | null;
+    raw: string;
+    content: string;
+    originalContent: string;
+    originalSavedContent: string;
+    originalViewMode: OpenTab["viewMode"];
+    wasOpen: boolean;
+    previousActivePath: string | null;
+  } | null = null;
+  private liveWriteFrame: number | null = null;
   private welcomeChatState: ChatState = { ...initialChatState };
   private welcomeChatPanel: ChatPanel | null = null;
   private welcomeSessionId: string | null = null;
@@ -3339,6 +3353,7 @@ class BradbitApp {
   }
 
   private async stopChatSession(): Promise<void> {
+    this.discardLiveWrite();
     this.opencodeUnlisten?.();
     this.opencodeUnlisten = null;
     if (isTauriEnvironment()) {
@@ -3359,6 +3374,9 @@ class BradbitApp {
   private selectChatSession(id: string): void {
     const state = this.chatSessions.get(id);
     if (!state) return;
+    if (this.liveWrite && this.liveWrite.sessionId !== id) {
+      this.discardLiveWrite();
+    }
     this.activeChatSessionId = id;
     this.chatState = state;
     this.updateChatPanel();
@@ -3574,9 +3592,267 @@ class BradbitApp {
     }
   }
 
+  private startLiveWrite(sessionId: string, toolId: string): void {
+    if (this.liveWrite && this.liveWrite.toolId !== toolId) {
+      this.discardLiveWrite();
+    }
+    this.liveToolFile = null;
+    this.liveWrite = {
+      sessionId,
+      toolId,
+      path: null,
+      raw: "",
+      content: "",
+      originalContent: "",
+      originalSavedContent: "",
+      originalViewMode: "edit",
+      wasOpen: false,
+      previousActivePath: this.tabState.activeTabPath,
+    };
+  }
+
+  private appendLiveWriteDelta(
+    sessionId: string,
+    toolId: string,
+    delta: string,
+  ): void {
+    const live = this.liveWrite;
+    if (!live || live.sessionId !== sessionId || live.toolId !== toolId) {
+      return;
+    }
+    live.raw += delta;
+    this.applyLiveWriteRaw(live);
+  }
+
+  private applyLiveWriteRaw(
+    live: NonNullable<BradbitApp["liveWrite"]>,
+  ): void {
+    if (!live.path) {
+      const path = readPartialJsonString(live.raw, "path");
+      if (path) {
+        const relative = projectRelativePath(
+          this.folder?.rootPath ?? null,
+          path,
+        );
+        if (relative) this.openLiveWriteTab(live, relative);
+      }
+    }
+    const content = readPartialJsonString(live.raw, "content");
+    if (content !== null) live.content = content;
+    if (this.liveWrite === live) this.scheduleLiveWritePaint();
+  }
+
+  private applyLiveWriteInput(toolId: string, input: unknown): void {
+    const live = this.liveWrite;
+    if (!live || live.toolId !== toolId) return;
+    const data =
+      input && typeof input === "object" && !Array.isArray(input)
+        ? (input as Record<string, unknown>)
+        : {};
+    if (typeof data.content === "string") live.content = data.content;
+    live.raw = "";
+    if (typeof data.path === "string" && !live.path) {
+      const relative = projectRelativePath(
+        this.folder?.rootPath ?? null,
+        data.path,
+      );
+      if (relative) this.openLiveWriteTab(live, relative);
+    }
+    if (this.liveWrite === live) this.scheduleLiveWritePaint();
+  }
+
+  private openLiveWriteTab(
+    live: NonNullable<BradbitApp["liveWrite"]>,
+    path: string,
+  ): void {
+    if (!this.folder || this.versionOpen) return;
+    const existing = this.tabState.tabs.find((tab) => tab.path === path);
+    if (existing && isTabDirty(existing)) {
+      this.showStatusNotice(
+        t(this.settings.language, "chatFileUnsaved", { path }),
+      );
+      this.liveWrite = null;
+      return;
+    }
+    live.path = path;
+    live.wasOpen = Boolean(existing);
+    live.previousActivePath = this.tabState.activeTabPath;
+    live.originalContent = existing?.content ?? "";
+    live.originalSavedContent = existing?.savedContent ?? "";
+    live.originalViewMode = existing?.viewMode ?? "edit";
+    if (existing) {
+      this.tabState = {
+        ...this.tabState,
+        activeTabPath: path,
+        tabs: this.tabState.tabs.map((tab) =>
+          tab.path === path
+            ? {
+                ...tab,
+                content: live.content,
+                savedContent: live.content,
+                livePreview: true,
+                preview: false,
+                viewMode: "edit",
+              }
+            : tab,
+        ),
+      };
+    } else {
+      this.tabState = openFileInTabs(
+        this.tabState,
+        { path, name: this.fileName(path), content: live.content },
+        true,
+      );
+      this.tabState = {
+        ...this.tabState,
+        tabs: this.tabState.tabs.map((tab) =>
+          tab.path === path
+            ? { ...tab, livePreview: true, viewMode: "edit" }
+            : tab,
+        ),
+      };
+    }
+    this.render();
+  }
+
+  private scheduleLiveWritePaint(): void {
+    if (this.liveWriteFrame !== null) return;
+    const paint = () => {
+      this.liveWriteFrame = null;
+      this.paintLiveWrite();
+    };
+    this.liveWriteFrame =
+      typeof window.requestAnimationFrame === "function"
+        ? window.requestAnimationFrame(paint)
+        : window.setTimeout(paint, 16);
+  }
+
+  private paintLiveWrite(): void {
+    const live = this.liveWrite;
+    if (!live?.path) return;
+    const tab = this.tabState.tabs.find((item) => item.path === live.path);
+    if (!tab) {
+      this.liveWrite = null;
+      return;
+    }
+    if (
+      tab.content !== live.content ||
+      tab.savedContent !== live.content ||
+      !tab.livePreview
+    ) {
+      this.tabState = {
+        ...this.tabState,
+        tabs: this.tabState.tabs.map((item) =>
+          item.path === live.path
+            ? {
+                ...item,
+                content: live.content,
+                savedContent: live.content,
+                livePreview: true,
+              }
+            : item,
+        ),
+      };
+    }
+    if (this.tabState.activeTabPath === live.path) {
+      this.editor?.updateLivePreview(live.path, live.content);
+    }
+  }
+
+  private clearLiveWriteFrame(): void {
+    if (this.liveWriteFrame === null) return;
+    if (typeof window.cancelAnimationFrame === "function") {
+      window.cancelAnimationFrame(this.liveWriteFrame);
+    } else {
+      window.clearTimeout(this.liveWriteFrame);
+    }
+    this.liveWriteFrame = null;
+  }
+
+  private async completeLiveWrite(): Promise<void> {
+    this.clearLiveWriteFrame();
+    const live = this.liveWrite;
+    this.liveWrite = null;
+    if (!live?.path) return;
+    const root = this.folder?.rootPath;
+    let content = live.content;
+    if (root) {
+      try {
+        content = await backend.readTextFile(root, live.path);
+      } catch {
+        content = live.content;
+      }
+      if (!this.folder || this.folder.rootPath !== root) return;
+    }
+    const tab = this.tabState.tabs.find((item) => item.path === live.path);
+    if (tab) {
+      this.tabState = {
+        ...this.tabState,
+        tabs: this.tabState.tabs.map((item) =>
+          item.path === live.path
+            ? {
+                ...item,
+                content,
+                savedContent: content,
+                livePreview: false,
+                externalChange: false,
+              }
+            : item,
+        ),
+      };
+    }
+    this.editor?.finishLivePreview(live.path, content, this.settings);
+    this.refreshOutlineSoon();
+    this.render();
+  }
+
+  private discardLiveWrite(): void {
+    this.clearLiveWriteFrame();
+    const live = this.liveWrite;
+    this.liveWrite = null;
+    if (!live?.path) return;
+    if (!live.wasOpen) {
+      const remaining = this.tabState.tabs.filter(
+        (tab) => tab.path !== live.path,
+      );
+      const nextActive = remaining.some(
+        (tab) => tab.path === live.previousActivePath,
+      )
+        ? live.previousActivePath
+        : remaining[0]?.path ?? null;
+      this.tabState = { tabs: remaining, activeTabPath: nextActive };
+      this.editor?.finishLivePreview(live.path, "", this.settings);
+    } else {
+      this.tabState = {
+        ...this.tabState,
+        tabs: this.tabState.tabs.map((tab) =>
+          tab.path === live.path
+            ? {
+                ...tab,
+                content: live.originalContent,
+                savedContent: live.originalSavedContent,
+                livePreview: false,
+                viewMode: live.originalViewMode,
+              }
+            : tab,
+        ),
+      };
+      this.editor?.finishLivePreview(
+        live.path,
+        live.originalContent,
+        this.settings,
+      );
+    }
+    this.refreshOutlineSoon();
+    this.render();
+  }
+
   private async handleToolFileActivity(
     activity: ToolFileActivity,
   ): Promise<void> {
+    if (this.liveWrite?.toolId === activity.toolId && this.liveWrite.path) {
+      return;
+    }
     if (!this.settings.followActiveFile) return;
     if (!this.folder || this.versionOpen) return;
     const root = this.folder.rootPath;
@@ -3685,6 +3961,18 @@ class BradbitApp {
       typeof data.sessionID === "string" ? data.sessionID : null;
     const targetId = sessionID ?? this.activeChatSessionId;
     if (!targetId || !this.chatSessions.has(targetId)) return;
+
+    if (event.type === "session.tool.input.delta") {
+      if (targetId === this.activeChatSessionId) {
+        const toolId = typeof data.id === "string" ? data.id : "";
+        const delta = typeof data.delta === "string" ? data.delta : "";
+        if (toolId && delta) {
+          this.appendLiveWriteDelta(targetId, toolId, delta);
+        }
+      }
+      return;
+    }
+
     const previous = this.chatSessions.get(targetId)!;
     const next = applyOpenCodeEvent(previous, event);
     this.chatSessions.set(targetId, next);
@@ -3704,13 +3992,41 @@ class BradbitApp {
               )
           : null;
       if (toolPart?.type === "tool") {
+        if (
+          (event.type === "session.tool.input.started" ||
+            event.type === "session.tool.input.ended" ||
+            event.type === "session.tool.called") &&
+          toolPart.tool.name === "write" &&
+          !this.liveWrite &&
+          this.settings.followActiveFile &&
+          !this.versionOpen
+        ) {
+          this.startLiveWrite(targetId, toolPart.tool.id);
+        }
+        if (this.liveWrite?.toolId === toolPart.tool.id) {
+          if (
+            event.type === "session.tool.input.ended" ||
+            event.type === "session.tool.called"
+          ) {
+            this.applyLiveWriteInput(toolPart.tool.id, toolPart.tool.input);
+          } else if (event.type === "session.tool.success") {
+            void this.completeLiveWrite();
+          } else if (event.type === "session.tool.failed") {
+            this.discardLiveWrite();
+          }
+        }
         const activity = toolFileActivity(
           this.folder?.rootPath ?? null,
           event.type,
           { tool: toolPart.tool },
         );
         if (activity) {
-          void this.handleToolFileActivity(activity);
+          const liveOwnsFile =
+            this.liveWrite?.toolId === activity.toolId &&
+            Boolean(this.liveWrite.path);
+          if (!liveOwnsFile) {
+            void this.handleToolFileActivity(activity);
+          }
         }
       }
     }
@@ -3762,6 +4078,7 @@ class BradbitApp {
   private async stopChatGeneration(): Promise<void> {
     const sessionId = this.chatState.sessionId;
     if (!sessionId) return;
+    if (this.liveWrite) this.discardLiveWrite();
     this.chatState = { ...this.chatState, streaming: false };
     this.chatSessions.set(sessionId, this.chatState);
     this.updateChatPanel();
@@ -3975,6 +4292,12 @@ class BradbitApp {
   private async saveActiveTab(): Promise<boolean> {
     const active = this.getActiveTab();
     if (!active || !this.folder) return false;
+    if (active.livePreview) {
+      this.showStatusNotice(
+        t(this.settings.language, "chatFileWriting"),
+      );
+      return false;
+    }
     if (isProjectSearchPath(active.path)) return false;
     if (isUntitledTab(active)) {
       return this.saveUntitledTab(active);
@@ -4201,6 +4524,9 @@ class BradbitApp {
       await this.refreshTree();
     }
     this.editor?.applySettings(this.settings);
+    if (!this.settings.followActiveFile && this.liveWrite) {
+      this.discardLiveWrite();
+    }
     this.render();
     if (
       !this.folder &&
@@ -5828,10 +6154,28 @@ class BradbitApp {
         this.editor.setInlineBlameEnabled(this.inlineBlameEnabled);
       }
       if (activeTab.viewMode !== "diff") {
-        this.editor.openDocument(activeTab.path, activeTab.content, this.settings);
+        if (activeTab.livePreview) {
+          if (this.editor.isLivePreview(activeTab.path)) {
+            this.editor.updateLivePreview(activeTab.path, activeTab.content);
+          } else {
+            this.editor.openLivePreview(
+              activeTab.path,
+              activeTab.content,
+              this.settings,
+            );
+          }
+        } else {
+          this.editor.openDocument(
+            activeTab.path,
+            activeTab.content,
+            this.settings,
+          );
+        }
       }
-      this.syncInlineDiff(activeTab);
-      this.syncInlineBlame(activeTab);
+      if (!activeTab.livePreview) {
+        this.syncInlineDiff(activeTab);
+        this.syncInlineBlame(activeTab);
+      }
       if (this.bufferSearchPending && this.bufferSearchBar) {
         this.bufferSearchPending = false;
         this.applyBufferSearch(this.bufferSearchBar.getQuery());
@@ -7230,6 +7574,14 @@ class BradbitApp {
         });
 
         tabEl.appendChild(title);
+        if (tab.livePreview) {
+          tabEl.classList.add("live-preview");
+          const liveBadge = document.createElement("span");
+          liveBadge.className = "tab-live-badge";
+          liveBadge.textContent = "IA";
+          liveBadge.title = t(lang, "chatFileWriting");
+          tabEl.appendChild(liveBadge);
+        }
         if (badgeEl) {
           tabEl.appendChild(badgeEl);
         }

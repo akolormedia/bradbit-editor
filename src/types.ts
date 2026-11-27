@@ -109,6 +109,8 @@ export interface OpenTab {
   viewMode: TabViewMode;
   /** Set when the file changed on disk while this tab had unsaved edits. */
   externalChange?: boolean;
+  /** Read-only live preview while the AI is writing this file. */
+  livePreview?: boolean;
   /** True for a new, unsaved document that only gets a real path on save. */
   untitled?: boolean;
   /** Relative directory suggested by the Save dialog for an untitled tab. */
