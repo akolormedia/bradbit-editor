@@ -94,6 +94,10 @@ export class SkillsBrowser {
     this.searchInput.spellcheck = false;
     this.searchInput.setAttribute("autocorrect", "off");
     this.searchInput.setAttribute("autocapitalize", "off");
+    this.searchInput.setAttribute(
+      "aria-label",
+      t(options.language, "settingsSkillsSearchLabel"),
+    );
     this.searchInput.placeholder = t(options.language, "settingsSkillsSearch");
     this.searchInput.value = this.localState.query;
     this.searchInput.oninput = () => {

@@ -257,8 +257,9 @@ export const translations = {
     settingsCategorySkills: "Skills",
     settingsSkillsLibrary: "Biblioteca de skills",
     settingsSkillsHint:
-      "Instrucciones que el agente carga cuando las necesita. Vienen de tu biblioteca global y del proyecto; son de solo lectura y nunca se ejecutan.",
+      "Instrucciones que el agente carga cuando las necesita. Vienen de tu biblioteca global y del proyecto; nunca se ejecutan.",
     settingsSkillsSearch: "Buscar skills…",
+    settingsSkillsSearchLabel: "Buscar skills",
     settingsSkillsFilterScope: "Ámbito",
     settingsSkillsFilterSource: "Origen",
     settingsSkillsFilterState: "Estado",
@@ -1160,8 +1161,9 @@ export const translations = {
     settingsCategorySkills: "Skills",
     settingsSkillsLibrary: "Skills library",
     settingsSkillsHint:
-      "Instructions the agent loads when it needs them. They come from your global library and the project; they are read-only and never executed.",
+      "Instructions the agent loads when it needs them. They come from your global library and the project; they are never executed.",
     settingsSkillsSearch: "Search skills…",
+    settingsSkillsSearchLabel: "Search skills",
     settingsSkillsFilterScope: "Scope",
     settingsSkillsFilterSource: "Source",
     settingsSkillsFilterState: "State",
