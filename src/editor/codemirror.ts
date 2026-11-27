@@ -395,7 +395,7 @@ export class BradbitCodeMirror {
     content: string,
     settings: AppSettings,
   ): void {
-    this.livePreviewPath = null;
+    if (this.livePreviewPath === path) this.livePreviewPath = null;
     this.livePreviewUpdating = false;
     if (this.currentPath === path) {
       this.openDocument(path, content, settings);
