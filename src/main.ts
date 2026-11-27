@@ -4051,10 +4051,12 @@ class BradbitApp {
         if (this.liveWrite?.toolId === toolPart.tool.id) {
           if (
             event.type === "session.tool.input.ended" ||
-            event.type === "session.tool.called"
+            event.type === "session.tool.called" ||
+            event.type === "session.tool.success"
           ) {
             this.applyLiveWriteInput(toolPart.tool.id, toolPart.tool.input);
-          } else if (event.type === "session.tool.success") {
+          }
+          if (event.type === "session.tool.success") {
             void this.completeLiveWrite();
           } else if (event.type === "session.tool.failed") {
             this.discardLiveWrite();
