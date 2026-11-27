@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { revealLiveWriteContent } from "./liveWrite";
+import { applyLiveEdit, revealLiveWriteContent } from "./liveWrite";
 
 describe("live write animation", () => {
   it("reveals short content in small steps and finishes", () => {
@@ -18,6 +18,17 @@ describe("live write animation", () => {
     const next = revealLiveWriteContent(target, "");
     expect(next.length).toBe(200);
     expect(next).toBe(target.slice(0, 200));
+  });
+
+  it("applies the first edit or every occurrence", () => {
+    expect(applyLiveEdit("uno dos uno", "uno", "tres", false)).toBe(
+      "tres dos uno",
+    );
+    expect(applyLiveEdit("uno dos uno", "uno", "tres", true)).toBe(
+      "tres dos tres",
+    );
+    expect(applyLiveEdit("uno dos", "falta", "tres", false)).toBe("uno dos");
+    expect(applyLiveEdit("uno", "uno", "", false)).toBe("");
   });
 
   it("keeps a shared prefix when the target changes", () => {

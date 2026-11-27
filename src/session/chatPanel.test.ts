@@ -574,6 +574,43 @@ describe("chat panel (T-2.1.1)", () => {
     ).toBe("Guardado");
   });
 
+  it("shows the patch text while its input streams (T-3.14.4)", () => {
+    const panel = new ChatPanel(options());
+    panel.update({
+      ...readyState(),
+      messages: [
+        {
+          id: "assistant:msg_patch",
+          role: "assistant",
+          parts: [
+            {
+              type: "tool",
+              tool: {
+                id: "tool_patch",
+                name: "patch",
+                status: "running",
+                input: { path: "cap.md" },
+                partialInput:
+                  '{"patchText":"*** Begin Patch\\n*** Update File: cap.md\\n@@\\n-Viejo\\n+Nuevo"}',
+                output: "",
+                error: "",
+                executed: false,
+                files: ["/proyecto/cap.md"],
+                answers: [],
+              },
+            },
+          ],
+        },
+      ],
+    });
+    const preview = panel.element.querySelector<HTMLElement>(
+      '[data-testid="tool-patch-preview-tool_patch"]',
+    )!;
+    expect(preview.textContent).toContain("*** Update File: cap.md");
+    expect(preview.textContent).toContain("+Nuevo");
+    expect(panel.element.textContent).toContain("Parche en vivo");
+  });
+
   it("chooses Markdown, Fountain or plain rendering for tool results", () => {
     const panel = new ChatPanel(options());
     panel.update({

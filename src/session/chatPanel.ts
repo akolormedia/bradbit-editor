@@ -22,6 +22,7 @@ import {
   renderAnsweredForm,
   renderQuestionTool,
 } from "./questionCards";
+import { readPartialJsonString } from "./partialJson";
 import {
   activeCompletion,
   CompletionToken,
@@ -2086,6 +2087,29 @@ export class ChatPanel {
     }
     details.appendChild(body);
     container.append(header);
+    if (
+      tool.name === "patch" &&
+      tool.partialInput &&
+      (tool.status === "streaming" || tool.status === "running")
+    ) {
+      const live = document.createElement("div");
+      live.className = "chat-live-patch";
+      const label = document.createElement("div");
+      label.className = "chat-live-patch-label";
+      label.textContent = t(lang, "chatLivePatch");
+      const patchText = readPartialJsonString(
+        tool.partialInput,
+        "patchText",
+      );
+      if (patchText) {
+        const pre = document.createElement("pre");
+        pre.className = "chat-live-patch-text";
+        pre.dataset.testid = `tool-patch-preview-${tool.id}`;
+        pre.textContent = patchText;
+        live.append(label, pre);
+        container.appendChild(live);
+      }
+    }
     if (tool.files.length > 0) {
       container.appendChild(files);
     }
