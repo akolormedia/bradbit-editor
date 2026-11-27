@@ -8,6 +8,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   wordWrap: true,
   lineNumbers: false,
   fountainAutocomplete: true,
+  followActiveFile: true,
   showConfigFiles: false,
   showDeveloperOptions: false,
   gitDeveloperTerms: false,

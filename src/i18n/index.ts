@@ -243,6 +243,9 @@ export const translations = {
     settingsFountainAutocomplete: "Sugerencias Fountain",
     settingsFountainAutocompleteHint:
       "Abre sugerencias contextuales al escribir guiones. Nunca dentro del diálogo.",
+    settingsFollowActiveFile: "Seguir el archivo activo de la IA",
+    settingsFollowActiveFileHint:
+      "Abre automáticamente el archivo actual mientras la IA trabaja. Desactívalo para que el editor no cambie de pestaña.",
     settingsShowConfigFilesHint:
       "Muestra .opencode, .bradbit, AGENTS.md y otros archivos de configuración.",
     settingsTerminalCommand: "Comando por defecto",
@@ -1064,6 +1067,9 @@ export const translations = {
     settingsFountainAutocomplete: "Fountain suggestions",
     settingsFountainAutocompleteHint:
       "Open contextual suggestions while writing screenplays. Never inside dialogue.",
+    settingsFollowActiveFile: "Follow the AI's active file",
+    settingsFollowActiveFileHint:
+      "Automatically opens the active file while the AI works. Turn it off to keep the editor on your current tab.",
     settingsShowConfigFilesHint:
       "Show .opencode, .bradbit, AGENTS.md and other configuration files.",
     settingsTerminalCommand: "Default command",

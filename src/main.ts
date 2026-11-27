@@ -3577,6 +3577,7 @@ class BradbitApp {
   private async handleToolFileActivity(
     activity: ToolFileActivity,
   ): Promise<void> {
+    if (!this.settings.followActiveFile) return;
     if (!this.folder || this.versionOpen) return;
     const root = this.folder.rootPath;
     if (activity.phase === "running") {

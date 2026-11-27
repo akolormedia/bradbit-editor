@@ -124,6 +124,12 @@ export const SETTINGS_ENTRIES: SettingsEntry[] = [
     descriptionKey: "settingsFountainAutocompleteHint",
   },
   {
+    id: "followActiveFile",
+    category: "editor",
+    labelKey: "settingsFollowActiveFile",
+    descriptionKey: "settingsFollowActiveFileHint",
+  },
+  {
     id: "showConfigFiles",
     category: "files",
     labelKey: "showConfigFiles",

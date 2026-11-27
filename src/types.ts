@@ -47,6 +47,7 @@ export interface AppSettings {
   wordWrap: boolean;
   lineNumbers: boolean;
   fountainAutocomplete: boolean;
+  followActiveFile: boolean;
   showConfigFiles: boolean;
   showDeveloperOptions: boolean;
   gitDeveloperTerms: boolean;

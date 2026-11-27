@@ -464,6 +464,21 @@ export class SettingsPanel {
         ),
       );
     }
+    if (has("followActiveFile")) {
+      this.contentEl.appendChild(
+        this.row(
+          t(this.options.language, "settingsFollowActiveFile"),
+          t(this.options.language, "settingsFollowActiveFileHint"),
+          this.switchControl(
+            "settings-follow-active-file",
+            this.options.settings.followActiveFile,
+            (checked) =>
+              this.options.onUpdateSettings({ followActiveFile: checked }),
+            t(this.options.language, "settingsFollowActiveFile"),
+          ),
+        ),
+      );
+    }
   }
 
   private renderFiles(has: (id: string) => boolean): void {

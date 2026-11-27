@@ -30,6 +30,8 @@ pub struct AppSettings {
     pub line_numbers: bool,
     #[serde(default = "default_true")]
     pub fountain_autocomplete: bool,
+    #[serde(default = "default_true")]
+    pub follow_active_file: bool,
     pub show_config_files: bool,
     #[serde(default)]
     pub show_developer_options: bool,
@@ -79,6 +81,7 @@ impl Default for AppSettings {
             word_wrap: true,
             line_numbers: false,
             fountain_autocomplete: true,
+            follow_active_file: true,
             show_config_files: false,
             show_developer_options: false,
             git_developer_terms: false,
@@ -198,6 +201,7 @@ mod tests {
             word_wrap: false,
             line_numbers: true,
             fountain_autocomplete: false,
+            follow_active_file: false,
             show_config_files: true,
             show_developer_options: true,
             git_developer_terms: true,
