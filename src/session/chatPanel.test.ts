@@ -977,6 +977,61 @@ describe("chat panel (T-2.1.1)", () => {
     );
   });
 
+  it("groups models by provider and collapses secondary providers", () => {
+    const panel = new ChatPanel(
+      options({
+        models: [
+          {
+            id: "deepseek-flash",
+            name: "DeepSeek Flash",
+            providerId: "deepseek",
+            variants: [],
+          },
+          {
+            id: "deepseek-chat",
+            name: "DeepSeek Chat",
+            providerId: "deepseek",
+            variants: [],
+          },
+          {
+            id: "free-model",
+            name: "Free Model",
+            providerId: "openrouter",
+            variants: [],
+          },
+        ],
+      }),
+    );
+    panel.update({
+      ...readyState(),
+      model: "deepseek/deepseek-flash",
+    });
+    panel.element
+      .querySelector<HTMLButtonElement>('[data-testid="chat-model-button"]')
+      ?.click();
+
+    expect(
+      panel.element.querySelector(
+        '[data-testid="chat-model-row-deepseek-deepseek-flash"]',
+      ),
+    ).not.toBeNull();
+    expect(
+      panel.element.querySelector(
+        '[data-testid="chat-model-row-openrouter-free-model"]',
+      ),
+    ).toBeNull();
+    const openrouter = panel.element.querySelector<HTMLButtonElement>(
+      '[data-testid="chat-model-provider-openrouter"]',
+    )!;
+    expect(openrouter.textContent).toContain("1");
+    openrouter.click();
+    expect(
+      panel.element.querySelector(
+        '[data-testid="chat-model-row-openrouter-free-model"]',
+      ),
+    ).not.toBeNull();
+  });
+
   it("hides disabled models and shows recent models (T-2.2.3)", () => {
     const panel = new ChatPanel(
       options({

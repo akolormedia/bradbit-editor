@@ -91,6 +91,7 @@ export class ChatPanel {
   private messagesEl: HTMLElement;
   private requestsEl: HTMLElement;
   private composer: HTMLTextAreaElement;
+  private composerEl: HTMLElement;
   private plusBtn: HTMLButtonElement;
   private modelBtn: HTMLButtonElement;
   private templateBtn: HTMLButtonElement;
@@ -134,6 +135,8 @@ export class ChatPanel {
   private drafts = new Map<string, string>();
   private draftSessionId: string | null = null;
   private formDrafts = new Map<string, Record<string, unknown>>();
+  private collapsedModelProviders = new Set<string>();
+  private modelCollapseInitialized = false;
 
   constructor(options: ChatPanelOptions) {
     this.options = options;
@@ -200,6 +203,7 @@ export class ChatPanel {
 
     const composer = document.createElement("div");
     composer.className = "chat-composer";
+    this.composerEl = composer;
 
     this.composer = document.createElement("textarea");
     this.composer.className = "chat-input";
@@ -358,6 +362,13 @@ export class ChatPanel {
     this.modelSearch.dataset.testid = "chat-model-search";
     this.modelSearch.placeholder = t(options.language, "chatSearchModels");
     this.modelSearch.oninput = () => this.renderModelList();
+    this.modelSearch.onkeydown = (event) => {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        this.hideMenus();
+        this.modelBtn.focus();
+      }
+    };
     const manageBtn = createIconButton({
       icon: "sliders-horizontal",
       label: t(options.language, "chatManageModels"),
@@ -630,9 +641,34 @@ export class ChatPanel {
     }
     this.hideMenus();
     this.modelSearch.value = "";
+    const current = this.currentModel();
+    if (current.providerId) {
+      this.collapsedModelProviders.delete(current.providerId);
+    }
     this.renderModelList();
     this.modelPopover.hidden = false;
+    this.positionModelPopover();
     this.modelSearch.focus();
+  }
+
+  private positionModelPopover(): void {
+    if (this.modelPopover.hidden) return;
+    const clip = (this.element.closest(".welcome-home-screen") ??
+      this.element.closest(".workspace-body")) as HTMLElement | null;
+    const clipRect = clip?.getBoundingClientRect();
+    const composerRect = this.composerEl.getBoundingClientRect();
+    const topBound = clipRect?.top ?? 0;
+    const bottomBound = clipRect?.bottom ?? window.innerHeight;
+    const above = Math.max(0, composerRect.top - topBound - 10);
+    const below = Math.max(0, bottomBound - composerRect.bottom - 10);
+    const openUp = above >= below;
+    const available = Math.max(
+      140,
+      Math.min(420, openUp ? above : below),
+    );
+    this.modelPopover.style.maxHeight = `${available}px`;
+    this.modelPopover.style.bottom = openUp ? "calc(100% + 6px)" : "auto";
+    this.modelPopover.style.top = openUp ? "auto" : "calc(100% + 6px)";
   }
 
   private toggleEffortPopover(): void {
@@ -740,16 +776,54 @@ export class ChatPanel {
       models.push(model);
       byProvider.set(model.providerId, models);
     }
+    const providerIds = [...byProvider.keys()];
+    if (!query && !this.modelCollapseInitialized) {
+      const focus = current.providerId || providerIds[0] || "";
+      this.collapsedModelProviders = new Set(
+        providerIds.filter((provider) => provider !== focus),
+      );
+      this.modelCollapseInitialized = true;
+    }
     const currentProvider = current.providerId || "opencode-go";
-    const providers = [...byProvider.keys()].sort((a, b) => {
+    const providers = providerIds.sort((a, b) => {
       if (a === currentProvider) return -1;
       if (b === currentProvider) return 1;
       if (a === "opencode-go") return -1;
       if (b === "opencode-go") return 1;
       return a.localeCompare(b);
     });
+    const searching = Boolean(query);
     for (const provider of providers) {
-      addSection(this.providerLabel(provider));
+      const expanded =
+        searching || !this.collapsedModelProviders.has(provider);
+      const header = document.createElement("button");
+      header.type = "button";
+      header.className = "chat-model-section chat-model-section-toggle";
+      header.dataset.testid = `chat-model-provider-${provider}`;
+      header.setAttribute("aria-expanded", String(expanded));
+      const chevron = document.createElement("span");
+      chevron.className = "chat-model-section-chevron";
+      chevron.appendChild(
+        createIcon(expanded ? "chevron-down" : "chevron-right", 11),
+      );
+      const label = document.createElement("span");
+      label.className = "chat-model-section-label";
+      label.textContent = this.providerLabel(provider);
+      const count = document.createElement("span");
+      count.className = "chat-model-section-count";
+      count.textContent = String(byProvider.get(provider)!.length);
+      header.append(chevron, label, count);
+      header.onclick = () => {
+        if (searching) return;
+        if (this.collapsedModelProviders.has(provider)) {
+          this.collapsedModelProviders.delete(provider);
+        } else {
+          this.collapsedModelProviders.add(provider);
+        }
+        this.renderModelList();
+      };
+      this.modelListEl.appendChild(header);
+      if (!expanded) continue;
       for (const model of byProvider.get(provider)!.sort((a, b) =>
         a.name.localeCompare(b.name),
       )) {
@@ -759,7 +833,10 @@ export class ChatPanel {
     if (visible.length === 0) {
       const empty = document.createElement("div");
       empty.className = "chat-model-empty";
-      empty.textContent = t(lang, "chatNoModels");
+      empty.textContent = t(
+        lang,
+        query ? "chatNoMatchingModels" : "chatNoModels",
+      );
       this.modelListEl.appendChild(empty);
     }
   }

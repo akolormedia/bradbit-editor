@@ -127,6 +127,7 @@ import { openContextMenu, type ContextMenuItem } from "./ui/contextMenu";
 import { convertDocxToMarkdown, type DocxImportWarning } from "./import/docx";
 import { folderPdfErrorCopy } from "./export/folderPdfError";
 import { createIcon } from "./ui/icons";
+import { filterChatModelsByKeys } from "./session/chatModels";
 import { filterWelcomeProjects } from "./welcome/welcomeProjects";
 import {
   welcomeTemplateLabel,
@@ -2435,7 +2436,11 @@ class BradbitApp {
       await backend.opencodeStart(workspace.path);
       if (generation !== this.welcomeGeneration || this.folder) return;
       try {
-        this.welcomeModels = await backend.opencodeListModels();
+        await this.refreshByokStatus();
+        this.welcomeModels = filterChatModelsByKeys(
+          await backend.opencodeListModels(),
+          this.byokStatus,
+        );
       } catch (err) {
         console.error("Could not list OpenCode models", err);
         this.welcomeModels = [];
@@ -2966,7 +2971,11 @@ class BradbitApp {
         return;
       }
       try {
-        this.chatModels = await backend.opencodeListModels();
+        await this.refreshByokStatus();
+        this.chatModels = filterChatModelsByKeys(
+          await backend.opencodeListModels(),
+          this.byokStatus,
+        );
       } catch (err) {
         console.error("Could not list the OpenCode models", err);
         this.chatModels = [];
