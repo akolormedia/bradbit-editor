@@ -42,6 +42,7 @@ import {
   RecentProject,
   SearchMatch,
   TemplateInfo,
+  WelcomeTemplate,
 } from "./types";
 import { copyTextToClipboard } from "./workspace/clipboard";
 import { createDocumentHeader } from "./workspace/documentHeader";
@@ -117,8 +118,6 @@ import {
 } from "./settings/byok";
 import { TerminalPanel } from "./terminal/terminalPanel";
 import { applyColorTheme, resolveColorMode } from "./theme/palettes";
-import { buildHealthReport, HealthReport } from "./health/health";
-import { createHealthPanel } from "./health/healthPanel";
 import {
   ConnectModelDraft,
   ConnectModelPanel,
@@ -128,6 +127,7 @@ import { openContextMenu, type ContextMenuItem } from "./ui/contextMenu";
 import { convertDocxToMarkdown, type DocxImportWarning } from "./import/docx";
 import { folderPdfErrorCopy } from "./export/folderPdfError";
 import { createIcon } from "./ui/icons";
+import { filterWelcomeProjects } from "./welcome/welcomeProjects";
 import { createIconButton } from "./ui/iconButton";
 import { createFountainToolbar } from "./editor/fountainToolbar";
 import {
@@ -345,9 +345,22 @@ class BradbitApp {
   private githubPullRequests: GitHubPullRequest[] = [];
   private githubPrLoading = false;
   private chatState: ChatState = { ...initialChatState };
+  private welcomeChatState: ChatState = { ...initialChatState };
+  private welcomeChatPanel: ChatPanel | null = null;
+  private welcomeSessionId: string | null = null;
+  private welcomeWorkspacePath: string | null = null;
+  private welcomeDestination = "";
+  private welcomeTemplates: WelcomeTemplate[] = [];
+  private welcomeModels: OpenCodeModel[] = [];
+  private welcomeUnlisten: (() => void) | null = null;
+  private welcomeGeneration = 0;
+  private welcomeStatusEl: HTMLElement | null = null;
+  private welcomeStatusTextEl: HTMLElement | null = null;
+  private welcomeLocationEl: HTMLButtonElement | null = null;
+  private welcomeLocationLabelEl: HTMLElement | null = null;
+  private welcomeSwitcherOpen = false;
+  private welcomeSwitcherQuery = "";
   private byokStatus: ByokProviderStatus[] = [];
-  private healthReport: HealthReport | null = null;
-  private healthLoading = false;
   private byokKeyDrafts: Record<string, string> = {};
   private byokBusyId: string | null = null;
   private byokError = "";
@@ -431,48 +444,7 @@ class BradbitApp {
       console.error("Could not listen for file changes", err);
     }
     this.applyThemeAttribute();
-    this.healthLoading = isTauriEnvironment();
     this.render();
-    if (isTauriEnvironment()) {
-      void this.refreshHealth();
-    }
-  }
-
-  /**
-   * Non-blocking first-run check. It never prevents opening a folder or
-   * writing; a missing AI provider is reported as optional with a shortcut to
-   * Settings.
-   */
-  private async refreshHealth(): Promise<void> {
-    if (!isTauriEnvironment()) return;
-    this.healthLoading = true;
-    if (!this.folder) this.render();
-
-    try {
-      const [runtime, git, templates] = await Promise.allSettled([
-        backend.opencodeStatus(),
-        backend.gitEngineStatus(),
-        backend.listTemplates(),
-      ]);
-      this.healthReport = buildHealthReport({
-        runtime:
-          runtime.status === "fulfilled" ? runtime.value.binaryFound : null,
-        git: git.status === "fulfilled" ? git.value : null,
-        providers: this.settings.byokProviders,
-        templates:
-          templates.status === "fulfilled" ? templates.value : null,
-      });
-    } catch {
-      this.healthReport = buildHealthReport({
-        runtime: null,
-        git: null,
-        providers: this.settings.byokProviders,
-        templates: null,
-      });
-    } finally {
-      this.healthLoading = false;
-      if (!this.folder) this.render();
-    }
   }
 
   private applyThemeAttribute(): void {
@@ -500,6 +472,7 @@ class BradbitApp {
     void backend.stopWatching().catch((err) => {
       console.error("Could not stop the file watcher", err);
     });
+    this.stopWelcomeChat();
     void this.stopChatSession();
     this.stopTerminalSession();
     this.chatPanel = null;
@@ -535,12 +508,12 @@ class BradbitApp {
     this.editor?.destroy();
     this.editor = null;
     this.render();
-    void this.refreshHealth();
   }
 
   public async openFolderByPath(path: string): Promise<void> {
     try {
       const opened = await backend.openFolder(path, configFilesVisible(this.settings));
+      this.stopWelcomeChat();
       await this.stopChatSession();
       this.stopTerminalSession();
       this.chatPanel = null;
@@ -2349,6 +2322,335 @@ class BradbitApp {
     });
   }
 
+  private welcomeSessionTabs(): SessionTabInfo[] {
+    if (!this.welcomeSessionId) return [];
+    return [
+      {
+        id: this.welcomeSessionId,
+        title:
+          this.welcomeChatState.title ||
+          t(this.settings.language, "welcomeChatSessionTitle"),
+        streaming: this.welcomeChatState.streaming,
+        error: this.welcomeChatState.status === "error",
+      },
+    ];
+  }
+
+  private ensureWelcomeChatPanel(): ChatPanel {
+    if (!this.welcomeChatPanel) {
+      this.welcomeChatPanel = new ChatPanel({
+        variant: "welcome",
+        language: this.settings.language,
+        projectName: t(this.settings.language, "welcomeChatTitle"),
+        projectRoot: this.welcomeWorkspacePath ?? "",
+        sessions: this.welcomeSessionTabs(),
+        activeSessionId: this.welcomeSessionId,
+        canCreateSession: false,
+        onSend: (text) => void this.sendWelcomeMessage(text),
+        onStop: () => this.stopWelcomeGeneration(),
+        onRetry: () => void this.retryWelcomeChat(),
+        onOpenSettings: () => this.openSettingsAt("models"),
+        onSelectSession: () => {},
+        onCreateSession: () => {},
+        onCloseSession: () => {},
+        onRenameSession: () => {},
+        onOpenToolFile: () => {},
+        onPermissionReply: (requestId, decision) =>
+          void this.replyWelcomePermission(requestId, decision),
+        onFormReply: (formId, answer) =>
+          void this.replyWelcomeForm(formId, answer),
+        kit: { agents: [], commands: [], skills: [] },
+        models: this.welcomeModels,
+        projectFiles: [],
+        hiddenModels: this.settings.hiddenModels,
+        recentModels: this.settings.recentModels,
+        onAgentChange: () => {},
+        onModelChange: (providerId, modelId, variant) =>
+          void this.changeWelcomeModel(providerId, modelId, variant),
+        onManageModels: () => this.openManageModels(),
+      });
+    }
+    this.updateWelcomeChatPanel();
+    return this.welcomeChatPanel;
+  }
+
+  private updateWelcomeChatPanel(): void {
+    this.welcomeChatPanel?.update(this.welcomeChatState, {
+      language: this.settings.language,
+      projectName: t(this.settings.language, "welcomeChatTitle"),
+      projectRoot: this.welcomeWorkspacePath ?? "",
+      sessions: this.welcomeSessionTabs(),
+      activeSessionId: this.welcomeSessionId,
+      canCreateSession: false,
+      kit: { agents: [], commands: [], skills: [] },
+      models: this.welcomeModels,
+      projectFiles: [],
+      hiddenModels: this.settings.hiddenModels,
+      recentModels: this.settings.recentModels,
+    });
+    this.updateWelcomeChatStatus();
+  }
+
+  private async startWelcomeChat(): Promise<void> {
+    if (this.folder || !isTauriEnvironment()) return;
+    if (this.welcomeChatState.status !== "idle") return;
+    const generation = ++this.welcomeGeneration;
+    this.welcomeChatState = chatStarting(initialChatState);
+    this.updateWelcomeChatPanel();
+    try {
+      const templates = await backend.listTemplates();
+      if (generation !== this.welcomeGeneration || this.folder) return;
+      this.welcomeTemplates = templates.map((template) => ({
+        id: template.id,
+        name: template.name,
+        description: template.description,
+      }));
+      const workspace = await backend.welcomePrepareWorkspace(
+        this.welcomeTemplates,
+      );
+      if (generation !== this.welcomeGeneration || this.folder) return;
+      this.welcomeWorkspacePath = workspace.path;
+      if (!this.welcomeDestination) {
+        this.welcomeDestination = workspace.defaultDestination;
+      }
+      this.updateWelcomeLocation();
+
+      await backend.opencodeStop();
+      if (generation !== this.welcomeGeneration || this.folder) return;
+      await backend.opencodeStart(workspace.path);
+      if (generation !== this.welcomeGeneration || this.folder) return;
+      try {
+        this.welcomeModels = await backend.opencodeListModels();
+      } catch (err) {
+        console.error("Could not list OpenCode models", err);
+        this.welcomeModels = [];
+      }
+      const session = await backend.opencodeCreateSession(
+        t(this.settings.language, "welcomeChatSessionTitle"),
+      );
+      if (generation !== this.welcomeGeneration || this.folder) return;
+      this.welcomeSessionId = session.id;
+      const messages = await backend.opencodeSessionMessages(session.id);
+      const permissions = await backend.opencodePendingPermissions(session.id);
+      const forms = await backend.opencodePendingForms(session.id);
+      if (generation !== this.welcomeGeneration || this.folder) return;
+      this.welcomeChatState = formsLoaded(
+        permissionsLoaded(chatFromHistory(session, messages), permissions),
+        forms,
+      );
+      this.welcomeUnlisten?.();
+      this.welcomeUnlisten = await backend.listenOpenCodeEvents((event) =>
+        this.handleWelcomeOpenCodeEvent(event),
+      );
+      if (generation !== this.welcomeGeneration) return;
+      this.updateWelcomeChatPanel();
+    } catch (err) {
+      if (generation !== this.welcomeGeneration) return;
+      this.welcomeChatState = chatFailed(
+        chatStarting(initialChatState),
+        err instanceof Error ? err.message : String(err),
+      );
+      this.updateWelcomeChatPanel();
+    }
+  }
+
+  private stopWelcomeChat(): void {
+    this.welcomeGeneration += 1;
+    this.welcomeUnlisten?.();
+    this.welcomeUnlisten = null;
+    const sessionId = this.welcomeSessionId;
+    const streaming = this.welcomeChatState.streaming;
+    this.welcomeSessionId = null;
+    this.welcomeWorkspacePath = null;
+    this.welcomeChatState = { ...initialChatState };
+    this.welcomeChatPanel = null;
+    this.welcomeModels = [];
+    this.welcomeSwitcherOpen = false;
+    this.welcomeSwitcherQuery = "";
+    if (streaming && sessionId) {
+      void backend.opencodeAbort(sessionId).catch(() => {});
+    }
+  }
+
+  private async retryWelcomeChat(): Promise<void> {
+    this.stopWelcomeChat();
+    this.render();
+    await this.startWelcomeChat();
+  }
+
+  private async sendWelcomeMessage(rawText: string): Promise<void> {
+    const sessionId = this.welcomeSessionId;
+    if (
+      !sessionId ||
+      this.welcomeChatState.status !== "ready" ||
+      this.welcomeChatState.streaming
+    ) {
+      return;
+    }
+    const text = rawText.trim();
+    if (!text) return;
+    this.welcomeChatState = appendUserMessage(this.welcomeChatState, text);
+    this.welcomeChatPanel?.clearDraft();
+    this.updateWelcomeChatPanel();
+    try {
+      await backend.opencodeSend(sessionId, text);
+    } catch (err) {
+      this.welcomeChatState = chatSendFailed(
+        this.welcomeChatState,
+        err instanceof Error ? err.message : String(err),
+      );
+      this.updateWelcomeChatPanel();
+    }
+  }
+
+  private stopWelcomeGeneration(): void {
+    const sessionId = this.welcomeSessionId;
+    if (!sessionId) return;
+    this.welcomeChatState = { ...this.welcomeChatState, streaming: false };
+    this.updateWelcomeChatPanel();
+    void backend.opencodeAbort(sessionId).catch(() => {});
+  }
+
+  private handleWelcomeOpenCodeEvent(event: OpenCodeEvent): void {
+    this.welcomeChatState = applyOpenCodeEvent(
+      this.welcomeChatState,
+      event,
+      this.settings.language,
+    );
+    this.updateWelcomeChatPanel();
+  }
+
+  private async replyWelcomePermission(
+    requestId: string,
+    decision: "once" | "always" | "reject",
+  ): Promise<void> {
+    const sessionId = this.welcomeSessionId;
+    if (!sessionId) return;
+    this.welcomeChatState = chatPermissionReplied(
+      this.welcomeChatState,
+      requestId,
+      decision,
+    );
+    this.updateWelcomeChatPanel();
+    try {
+      await backend.opencodeReplyPermission(sessionId, requestId, decision);
+    } catch (err) {
+      this.welcomeChatState = chatPermissionFailed(
+        this.welcomeChatState,
+        requestId,
+        err instanceof Error ? err.message : String(err),
+      );
+      this.updateWelcomeChatPanel();
+    }
+  }
+
+  private async replyWelcomeForm(
+    formId: string,
+    answer: Record<string, unknown>,
+  ): Promise<void> {
+    const sessionId = this.welcomeSessionId;
+    if (!sessionId) return;
+    this.welcomeChatState = chatFormAnswered(
+      this.welcomeChatState,
+      formId,
+      answer,
+    );
+    this.updateWelcomeChatPanel();
+    try {
+      await backend.opencodeReplyForm(sessionId, formId, answer);
+    } catch (err) {
+      this.welcomeChatState = chatFormFailed(
+        this.welcomeChatState,
+        formId,
+        err instanceof Error ? err.message : String(err),
+      );
+      this.updateWelcomeChatPanel();
+    }
+  }
+
+  private async changeWelcomeModel(
+    providerId: string,
+    modelId: string,
+    variant?: string,
+  ): Promise<void> {
+    const sessionId = this.welcomeSessionId;
+    if (!sessionId) return;
+    try {
+      await backend.opencodeSwitchModel(
+        sessionId,
+        providerId,
+        modelId,
+        variant,
+      );
+      this.welcomeChatState = {
+        ...this.welcomeChatState,
+        model: `${providerId}/${modelId}${variant ? `#${variant}` : ""}`,
+      };
+      this.updateWelcomeChatPanel();
+    } catch (err) {
+      this.welcomeChatState = chatSendFailed(
+        this.welcomeChatState,
+        err instanceof Error ? err.message : String(err),
+      );
+      this.updateWelcomeChatPanel();
+    }
+  }
+
+  private updateWelcomeChatStatus(): void {
+    if (!this.welcomeStatusEl || !this.welcomeStatusTextEl) return;
+    const state = this.welcomeChatState;
+    const starting = state.status === "idle" || state.status === "starting";
+    this.welcomeStatusEl.hidden = !starting;
+    if (starting) {
+      this.welcomeStatusTextEl.textContent = t(
+        this.settings.language,
+        "welcomeChatStatusStarting",
+      );
+    }
+  }
+
+  private updateWelcomeLocation(): void {
+    if (!this.welcomeLocationLabelEl) return;
+    this.welcomeLocationLabelEl.textContent =
+      this.welcomeDestination ||
+      t(this.settings.language, "welcomeChooseDestination");
+    if (this.welcomeLocationEl) {
+      this.welcomeLocationEl.title = t(
+        this.settings.language,
+        "welcomeProjectsTitle",
+      );
+    }
+  }
+
+  private toggleWelcomeSwitcher(): void {
+    this.welcomeSwitcherOpen = !this.welcomeSwitcherOpen;
+    this.welcomeSwitcherQuery = "";
+    this.render();
+  }
+
+  private closeWelcomeSwitcher(): void {
+    if (!this.welcomeSwitcherOpen) return;
+    this.welcomeSwitcherOpen = false;
+    this.welcomeSwitcherQuery = "";
+    this.render();
+  }
+
+  private async chooseWelcomeDestination(): Promise<void> {
+    try {
+      const picked = await backend.pickFolderDialog();
+      if (!picked) return;
+      this.welcomeDestination = picked;
+      this.welcomeSwitcherOpen = true;
+      this.render();
+    } catch (err) {
+      this.showStatusNotice(err instanceof Error ? err.message : String(err));
+    }
+  }
+
+  private welcomeProjectRows(): RecentProject[] {
+    return filterWelcomeProjects(this.recents, this.welcomeSwitcherQuery);
+  }
+
   private ensureChatPanel(): ChatPanel {
     if (!this.chatPanel) {
       this.chatPanel = new ChatPanel({
@@ -3313,9 +3615,10 @@ class BradbitApp {
     this.render();
     if (
       !this.folder &&
-      prevProviders !== JSON.stringify(this.settings.byokProviders)
+      prevProviders !== JSON.stringify(this.settings.byokProviders) &&
+      this.welcomeChatState.status === "error"
     ) {
-      void this.refreshHealth();
+      void this.retryWelcomeChat();
     }
   }
 
@@ -5041,105 +5344,218 @@ class BradbitApp {
 
   private renderWelcomeScreen(lang: AppSettings["language"]): HTMLElement {
     const container = document.createElement("main");
-    container.className = "welcome-screen";
+    container.className = "welcome-screen welcome-home-screen";
 
-    const card = document.createElement("div");
-    card.className = "welcome-card";
+    const inner = document.createElement("div");
+    inner.className = "welcome-home-inner";
 
-    const header = document.createElement("div");
-    header.className = "welcome-header";
-    const h1 = document.createElement("h1");
-    h1.textContent = t(lang, "welcomeTitle");
-    const p = document.createElement("p");
-    p.textContent = t(lang, "welcomeSubtitle");
-    header.append(h1, p);
+    const wordmark = document.createElement("h1");
+    wordmark.className = "welcome-wordmark";
+    wordmark.textContent = t(lang, "welcomeChatTitle");
 
-    const actions = document.createElement("div");
-    actions.className = "welcome-actions";
+    const chatShell = document.createElement("section");
+    chatShell.className = "welcome-chat-shell";
+    chatShell.dataset.testid = "welcome-chat-shell";
 
-    const openBtn = document.createElement("button");
-    openBtn.className = "toolbar-btn primary";
-    openBtn.dataset.testid = "welcome-open-folder-btn";
-    openBtn.textContent = `${t(lang, "openFolder")} (⌘O)`;
-    openBtn.onclick = () => void this.handleOpenFolderDialog();
+    this.welcomeStatusEl = document.createElement("div");
+    this.welcomeStatusEl.className = "welcome-chat-status";
+    this.welcomeStatusEl.dataset.testid = "welcome-chat-status";
+    const spinner = document.createElement("span");
+    spinner.className = "welcome-chat-spinner";
+    spinner.appendChild(createIcon("refresh-cw", 13));
+    this.welcomeStatusTextEl = document.createElement("span");
+    this.welcomeStatusEl.append(spinner, this.welcomeStatusTextEl);
+    this.welcomeStatusEl.hidden = true;
 
-    actions.append(openBtn);
+    const chatHost = document.createElement("div");
+    chatHost.className = "welcome-chat-host";
     if (isTauriEnvironment()) {
-      const newProjectBtn = document.createElement("button");
-      newProjectBtn.className = "toolbar-btn";
-      newProjectBtn.dataset.testid = "welcome-new-project-btn";
-      newProjectBtn.textContent = t(lang, "newProjectButton");
-      newProjectBtn.onclick = () => void this.openNewProjectModal();
-      actions.appendChild(newProjectBtn);
+      chatHost.appendChild(this.ensureWelcomeChatPanel().element);
+    } else {
+      const unavailable = document.createElement("p");
+      unavailable.className = "welcome-chat-unavailable";
+      unavailable.textContent = t(lang, "chatNoDesktop");
+      chatHost.appendChild(unavailable);
+    }
+    chatShell.append(this.welcomeStatusEl, chatHost);
+
+    const footer = document.createElement("div");
+    footer.className = "welcome-home-footer";
+    const location = document.createElement("button");
+    location.type = "button";
+    location.className = "welcome-location";
+    location.dataset.testid = "welcome-location";
+    location.onclick = () => this.toggleWelcomeSwitcher();
+    const folderIcon = document.createElement("span");
+    folderIcon.className = "welcome-location-icon";
+    folderIcon.appendChild(createIcon("folder", 14));
+    this.welcomeLocationLabelEl = document.createElement("span");
+    this.welcomeLocationLabelEl.className = "welcome-location-label";
+    const chevron = document.createElement("span");
+    chevron.className = "welcome-location-chevron";
+    chevron.appendChild(createIcon("chevron-down", 13));
+    location.append(folderIcon, this.welcomeLocationLabelEl, chevron);
+    this.welcomeLocationEl = location;
+    footer.appendChild(location);
+
+    inner.append(wordmark, chatShell, footer);
+    container.appendChild(inner);
+
+    if (this.welcomeSwitcherOpen) {
+      container.appendChild(this.renderWelcomeSwitcher(lang));
     }
 
-    const recentsSec = document.createElement("div");
-    recentsSec.className = "recents-section";
-    const h3 = document.createElement("h3");
-    h3.textContent = t(lang, "recentProjects");
-    recentsSec.appendChild(h3);
+    this.updateWelcomeChatStatus();
+    this.updateWelcomeLocation();
+    if (!this.folder && isTauriEnvironment()) {
+      void this.startWelcomeChat();
+    }
+    return container;
+  }
 
-    if (this.recents.length === 0) {
-      const empty = document.createElement("p");
-      empty.textContent = t(lang, "noRecentProjects");
-      recentsSec.appendChild(empty);
-    } else {
-      const list = document.createElement("div");
-      list.className = "recents-list";
-      for (const item of this.recents) {
-        const row = document.createElement("div");
-        row.className = "recent-item";
-        row.onclick = () => void this.openFolderByPath(item.path);
+  private renderWelcomeSwitcher(lang: AppSettings["language"]): HTMLElement {
+    const backdrop = document.createElement("div");
+    backdrop.className = "welcome-switcher-backdrop";
+    backdrop.dataset.testid = "welcome-switcher-backdrop";
+    backdrop.onclick = () => this.closeWelcomeSwitcher();
 
-        const info = document.createElement("div");
-        info.className = "recent-info";
-        const nameEl = document.createElement("span");
-        nameEl.className = "recent-name";
-        nameEl.textContent = item.name;
-        const pathEl = document.createElement("span");
-        pathEl.className = "recent-path";
-        pathEl.textContent = item.path;
-        info.append(nameEl, pathEl);
+    const panel = document.createElement("section");
+    panel.className = "welcome-switcher";
+    panel.dataset.testid = "welcome-switcher";
+    panel.onclick = (event) => event.stopPropagation();
 
-        const removeBtn = createIconButton({
+    const searchWrap = document.createElement("div");
+    searchWrap.className = "welcome-switcher-search";
+    const searchIcon = document.createElement("span");
+    searchIcon.className = "welcome-switcher-search-icon";
+    searchIcon.appendChild(createIcon("search", 14));
+    const search = document.createElement("input");
+    search.type = "text";
+    search.className = "welcome-switcher-input";
+    search.dataset.testid = "welcome-switcher-search";
+    search.placeholder = t(lang, "welcomeProjectsSearch");
+    search.spellcheck = false;
+    search.value = this.welcomeSwitcherQuery;
+    search.onkeydown = (event) => {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        this.closeWelcomeSwitcher();
+      }
+    };
+    searchWrap.append(searchIcon, search);
+
+    const destination = document.createElement("div");
+    destination.className = "welcome-switcher-destination";
+    const destinationInfo = document.createElement("div");
+    destinationInfo.className = "welcome-switcher-destination-info";
+    const destinationLabel = document.createElement("span");
+    destinationLabel.className = "welcome-switcher-kicker";
+    destinationLabel.textContent = t(lang, "welcomeProjectDestination");
+    const destinationPath = document.createElement("span");
+    destinationPath.className = "welcome-switcher-path";
+    destinationPath.textContent =
+      this.welcomeDestination || t(lang, "welcomeChooseDestination");
+    destinationInfo.append(destinationLabel, destinationPath);
+    const changeDestination = document.createElement("button");
+    changeDestination.type = "button";
+    changeDestination.className = "welcome-switcher-link";
+    changeDestination.dataset.testid = "welcome-change-destination";
+    changeDestination.textContent = t(lang, "welcomeChangeDestination");
+    changeDestination.onclick = () => void this.chooseWelcomeDestination();
+    destination.append(destinationInfo, changeDestination);
+
+    const list = document.createElement("div");
+    list.className = "welcome-switcher-list";
+
+    const renderRows = () => {
+      list.replaceChildren();
+      const projects = this.welcomeProjectRows();
+      if (projects.length === 0) {
+        const empty = document.createElement("p");
+        empty.className = "welcome-switcher-empty";
+        empty.textContent =
+          this.welcomeSwitcherQuery.trim().length > 0
+            ? t(lang, "quickOpenEmpty")
+            : t(lang, "welcomeProjectsEmpty");
+        list.appendChild(empty);
+        return;
+      }
+      for (const project of projects) {
+        const row = document.createElement("button");
+        row.type = "button";
+        row.className = "welcome-project-row";
+        row.dataset.testid = "welcome-project-row";
+        row.onclick = () => {
+          this.welcomeSwitcherOpen = false;
+          void this.openFolderByPath(project.path);
+        };
+        const initial = document.createElement("span");
+        initial.className = "welcome-project-initial";
+        initial.textContent = (project.name.charAt(0) || "?").toUpperCase();
+        const info = document.createElement("span");
+        info.className = "welcome-project-info";
+        const name = document.createElement("span");
+        name.className = "welcome-project-name";
+        name.textContent = project.name;
+        const path = document.createElement("span");
+        path.className = "welcome-project-path";
+        path.textContent = project.path;
+        info.append(name, path);
+        const remove = createIconButton({
           icon: "x",
           label: t(lang, "removeRecent"),
-          className: "tree-mini-btn",
-          onClick: async (e) => {
-            e.stopPropagation();
-            this.recents = await backend.removeRecentProject(item.path);
-            this.render();
+          className: "welcome-project-remove",
+          testId: "welcome-project-remove",
+          onClick: async (event) => {
+            event.stopPropagation();
+            this.recents = await backend.removeRecentProject(project.path);
+            renderRows();
           },
         });
-
-        row.append(info, removeBtn);
+        row.append(initial, info, remove);
         list.appendChild(row);
       }
-      recentsSec.appendChild(list);
-    }
+    };
+    search.oninput = () => {
+      this.welcomeSwitcherQuery = search.value;
+      renderRows();
+    };
+    renderRows();
 
-    card.append(header, actions);
-    if (isTauriEnvironment()) {
-      card.appendChild(
-        createHealthPanel({
-          language: lang,
-          report: this.healthReport,
-          loading: this.healthLoading,
-          onAction: (action) => {
-            if (action === "models") {
-              this.openConnectModelWizard();
-            } else if (action === "new-project") {
-              void this.openNewProjectModal();
-            } else {
-              void this.refreshHealth();
-            }
-          },
-        }),
-      );
-    }
-    card.appendChild(recentsSec);
-    container.appendChild(card);
-    return container;
+    const actions = document.createElement("div");
+    actions.className = "welcome-switcher-actions";
+    const add = document.createElement("button");
+    add.type = "button";
+    add.className = "welcome-switcher-action";
+    add.dataset.testid = "welcome-add-project";
+    add.appendChild(createIcon("folder-plus", 14));
+    const addLabel = document.createElement("span");
+    addLabel.textContent = t(lang, "welcomeAddProject");
+    const shortcut = document.createElement("kbd");
+    shortcut.textContent = "⌘O";
+    add.append(addLabel, shortcut);
+    add.onclick = () => {
+      this.welcomeSwitcherOpen = false;
+      void this.handleOpenFolderDialog();
+    };
+    const create = document.createElement("button");
+    create.type = "button";
+    create.className = "welcome-switcher-action";
+    create.dataset.testid = "welcome-new-project";
+    create.appendChild(createIcon("plus", 14));
+    const createLabel = document.createElement("span");
+    createLabel.textContent = t(lang, "welcomeNewProject");
+    create.appendChild(createLabel);
+    create.onclick = () => {
+      this.welcomeSwitcherOpen = false;
+      void this.openNewProjectModal();
+    };
+    actions.append(add, create);
+
+    panel.append(searchWrap, destination, list, actions);
+    backdrop.appendChild(panel);
+    window.setTimeout(() => search.focus(), 10);
+    return backdrop;
   }
 
   private renderSidebar(lang: AppSettings["language"]): HTMLElement {

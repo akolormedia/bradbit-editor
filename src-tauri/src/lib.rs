@@ -20,6 +20,7 @@ pub mod search;
 pub mod settings;
 pub mod templates;
 pub mod watcher;
+pub mod welcome;
 pub mod workspace_state;
 
 use line_diff::diff_line_hunks;
@@ -169,6 +170,18 @@ fn create_project_from_template(
     destination: String,
 ) -> Result<templates::CreatedProject, String> {
     templates::create_project_from_template(&template_id, &name, &destination)
+}
+
+#[tauri::command]
+fn welcome_prepare_workspace(
+    templates: Vec<welcome::WelcomeTemplate>,
+) -> Result<welcome::WelcomeWorkspace, String> {
+    welcome::prepare_workspace(&templates)
+}
+
+#[tauri::command]
+fn welcome_read_project_request() -> Result<Option<welcome::WelcomeProjectRequest>, String> {
+    welcome::read_project_request()
 }
 
 #[tauri::command]
@@ -969,6 +982,8 @@ pub fn run() {
             search_in_folder,
             list_templates,
             create_project_from_template,
+            welcome_prepare_workspace,
+            welcome_read_project_request,
             save_current_as_template,
             open_templates_folder,
             reveal_in_finder,
