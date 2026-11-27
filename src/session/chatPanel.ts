@@ -35,6 +35,11 @@ function setCheckIcon(element: HTMLElement, active: boolean): void {
   if (active) element.appendChild(createIcon("check", 13));
 }
 
+export interface ChatScrollState {
+  top: number;
+  following: boolean;
+}
+
 export interface ChatPanelOptions {
   variant?: "session" | "welcome";
   welcomeTemplateLabel?: string;
@@ -1323,6 +1328,31 @@ export class ChatPanel {
     input.onclick = (event) => event.stopPropagation();
     input.ondblclick = (event) => event.stopPropagation();
     input.onblur = () => finish(true);
+  }
+
+  public getScrollState(): ChatScrollState {
+    const following = this.isNearBottom();
+    return {
+      top: following
+        ? this.messagesEl.scrollHeight
+        : this.messagesEl.scrollTop,
+      following,
+    };
+  }
+
+  public restoreScrollState(state: ChatScrollState): void {
+    const apply = () => {
+      if (!this.messagesEl.isConnected) return;
+      this.messagesEl.scrollTop = state.following
+        ? this.messagesEl.scrollHeight
+        : state.top;
+      this.updateFollowButton();
+    };
+    this.forceScrollToBottom = state.following;
+    apply();
+    if (typeof window.requestAnimationFrame === "function") {
+      window.requestAnimationFrame(apply);
+    }
   }
 
   private updateFollowButton(): void {

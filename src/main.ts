@@ -83,7 +83,7 @@ import {
   replaceSearchInTextAtLine,
 } from "./workspace/projectSearch";
 import { ProjectSearchView } from "./workspace/projectSearchView";
-import { ChatPanel } from "./session/chatPanel";
+import { ChatPanel, ChatScrollState } from "./session/chatPanel";
 import {
   appendUserMessage,
   applyOpenCodeEvent,
@@ -5614,6 +5614,8 @@ class BradbitApp {
 
     const previousTree = this.rootEl.querySelector<HTMLElement>(".tree-container");
     if (previousTree) this.treeScrollTop = previousTree.scrollTop;
+    const chatScroll: ChatScrollState | null =
+      this.chatPanel?.getScrollState() ?? null;
 
     this.rootEl.innerHTML = "";
     const shell = document.createElement("div");
@@ -5664,6 +5666,7 @@ class BradbitApp {
     this.rootEl.appendChild(shell);
     this.startOpeningAnimation();
 
+    if (chatScroll) this.chatPanel?.restoreScrollState(chatScroll);
     if (versionScroll) this.restoreVersionScroll(versionScroll);
     if (focusedComposer) {
       const input = this.rootEl.querySelector<HTMLTextAreaElement>(

@@ -1496,6 +1496,32 @@ describe("chat panel (T-2.1.1)", () => {
     expect(button.hidden).toBe(true);
   });
 
+  it("restores the scroll position when the chat panel is reattached (T-3.14.1)", () => {
+    const panel = new ChatPanel(options());
+    document.body.appendChild(panel.element);
+    panel.update(streamingAssistant("Hola"));
+    const messages = panel.element.querySelector<HTMLElement>(".chat-messages")!;
+    const metrics = mockScrollMetrics(messages, {
+      scrollHeight: 2000,
+      clientHeight: 400,
+      scrollTop: 200,
+    });
+
+    const paused = panel.getScrollState();
+    expect(paused).toEqual({ top: 200, following: false });
+    metrics.scrollTop = 0;
+    panel.restoreScrollState(paused);
+    expect(metrics.scrollTop).toBe(200);
+
+    metrics.scrollTop = 1600;
+    const following = panel.getScrollState();
+    expect(following).toEqual({ top: 2000, following: true });
+    metrics.scrollTop = 0;
+    panel.restoreScrollState(following);
+    expect(metrics.scrollTop).toBe(1600);
+    panel.element.remove();
+  });
+
   it("keeps the chat pinned to the bottom while it was already there (T-3.10.9)", () => {
     const panel = new ChatPanel(options());
     panel.update(streamingAssistant("Hola"));
