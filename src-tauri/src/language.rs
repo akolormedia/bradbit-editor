@@ -25,12 +25,20 @@ fn language_name(language: &str) -> &'static str {
 pub fn policy_text(language: &str) -> String {
     let name = language_name(language);
     format!(
-        "# Output language\n\n\
+        "# Agent guidance\n\n\
+         ## Output language\n\
          - The Bradbit app is configured in {name}.\n\
          - Always reply in {name}.\n\
          - Write every deliverable in {name}: premises, character sheets, outlines, scenes, dialogue, notes, and summaries.\n\
          - Keep command names, file paths, code, and identifiers exactly as they are.\n\
-         - If the user explicitly asks for another language for a specific deliverable, follow that request and then return to {name}.\n"
+         - If the user explicitly asks for another language for a specific deliverable, follow that request and then return to {name}.\n\
+         \n\
+         ## Questions\n\
+         - When you need the author to choose, use the `question` tool instead of listing the options in prose.\n\
+         - Ask one decision at a time unless the questions are closely related.\n\
+         - Use a single-choice question by default; enable multiple selection only when more than one answer makes sense.\n\
+         - Always leave the free-form answer available so the author can reply in their own words.\n\
+         - Use a short header and explain the tradeoffs in the question description.\n"
     )
 }
 
@@ -66,6 +74,9 @@ mod tests {
         assert!(policy.contains("configured in Spanish"));
         assert!(policy.contains("Always reply in Spanish"));
         assert!(policy.contains("Keep command names, file paths, code, and identifiers"));
+        assert!(policy.contains("`question` tool"));
+        assert!(policy.contains("single-choice question"));
+        assert!(policy.contains("free-form answer"));
     }
 
     #[test]

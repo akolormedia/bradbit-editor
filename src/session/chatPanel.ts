@@ -2263,30 +2263,55 @@ export class ChatPanel {
 
     if (field.type === "multiselect") {
       const selected = Array.isArray(value) ? value.map(String) : [];
+      const known = new Set((field.options ?? []).map((option) => option.value));
+      let custom: HTMLInputElement | null = null;
+      const optionsWrap = document.createElement("div");
+      optionsWrap.className = "chat-form-options";
+      const checkboxes: Array<{
+        input: HTMLInputElement;
+        row: HTMLElement;
+      }> = [];
+      const sync = () => {
+        const next = checkboxes
+          .filter(({ input }) => input.checked)
+          .map(({ input }) => input.value);
+        const customText = custom?.value.trim() ?? "";
+        if (customText) next.push(customText);
+        this.setFormValue(form.id, field.key, next);
+        for (const { input, row } of checkboxes) {
+          row.classList.toggle("selected", input.checked);
+        }
+        changed();
+      };
       for (const option of field.options ?? []) {
         const row = document.createElement("label");
-        row.className = "chat-form-check";
+        row.className = "chat-form-option";
+        row.classList.toggle("selected", selected.includes(option.value));
         const input = document.createElement("input");
         input.type = "checkbox";
         input.dataset.testid = `form-input-${form.id}-${field.key}-${option.value}`;
+        input.value = option.value;
         input.checked = selected.includes(option.value);
-        input.onchange = () => {
-          const next = new Set(
-            Array.isArray(this.formValue(form.id, field))
-              ? (this.formValue(form.id, field) as string[]).map(String)
-              : [],
-          );
-          if (input.checked) next.add(option.value);
-          else next.delete(option.value);
-          this.setFormValue(form.id, field.key, [...next]);
-          changed();
-        };
+        input.onchange = sync;
         const text = document.createElement("span");
+        text.className = "chat-form-option-text";
         text.textContent = option.description
           ? `${option.label} — ${option.description}`
           : option.label;
         row.append(input, text);
-        wrapper.appendChild(row);
+        optionsWrap.appendChild(row);
+        checkboxes.push({ input, row });
+      }
+      wrapper.appendChild(optionsWrap);
+      if (field.custom) {
+        custom = document.createElement("input");
+        custom.type = "text";
+        custom.className = "chat-form-input chat-form-custom";
+        custom.dataset.testid = `form-input-${form.id}-${field.key}-custom`;
+        custom.placeholder = t(lang, "chatFormOther");
+        custom.value = selected.find((entry) => !known.has(entry)) ?? "";
+        custom.oninput = sync;
+        wrapper.appendChild(custom);
       }
       return wrapper;
     }
@@ -2304,32 +2329,45 @@ export class ChatPanel {
 
     if (field.options && field.options.length > 0) {
       const selected = typeof value === "string" ? value : "";
-      const radios: HTMLInputElement[] = [];
+      const optionsWrap = document.createElement("div");
+      optionsWrap.className = "chat-form-options";
+      const radios: Array<{
+        input: HTMLInputElement;
+        row: HTMLElement;
+      }> = [];
+      const syncRows = () => {
+        for (const { input, row } of radios) {
+          row.classList.toggle("selected", input.checked);
+        }
+      };
       for (const option of field.options) {
         const row = document.createElement("label");
-        row.className = "chat-form-check";
+        row.className = "chat-form-option";
+        row.classList.toggle("selected", selected === option.value);
         const input = document.createElement("input");
         input.type = "radio";
         input.name = `form-${form.id}-${field.key}`;
         input.dataset.testid = `form-input-${form.id}-${field.key}-${option.value}`;
         input.value = option.value;
         input.checked = selected === option.value;
-        radios.push(input);
         input.onchange = () => {
           custom.value = "";
+          syncRows();
           this.setFormValue(form.id, field.key, option.value);
           changed();
         };
         const text = document.createElement("span");
+        text.className = "chat-form-option-text";
         text.textContent = option.description
           ? `${option.label} — ${option.description}`
           : option.label;
         row.append(input, text);
-        wrapper.appendChild(row);
+        optionsWrap.appendChild(row);
+        radios.push({ input, row });
       }
       const custom = document.createElement("input");
       custom.type = "text";
-      custom.className = "chat-form-input";
+      custom.className = "chat-form-input chat-form-custom";
       custom.dataset.testid = `form-input-${form.id}-${field.key}-custom`;
       custom.placeholder = t(lang, "chatFormOther");
       custom.value =
@@ -2339,11 +2377,15 @@ export class ChatPanel {
           : "";
       custom.hidden = !field.custom;
       custom.oninput = () => {
-        for (const radio of radios) radio.checked = false;
+        for (const { input } of radios) input.checked = false;
+        syncRows();
         this.setFormValue(form.id, field.key, custom.value);
         changed();
       };
-      wrapper.appendChild(custom);
+      wrapper.appendChild(optionsWrap);
+      if (field.custom) {
+        wrapper.appendChild(custom);
+      }
       return wrapper;
     }
 
