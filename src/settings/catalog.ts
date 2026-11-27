@@ -10,7 +10,8 @@ export type SettingsCategoryId =
   | "terminal"
   | "git"
   | "github"
-  | "models";
+  | "models"
+  | "skills";
 
 export interface SettingsCategory {
   id: SettingsCategoryId;
@@ -65,6 +66,11 @@ export const SETTINGS_CATEGORIES: SettingsCategory[] = [
     id: "models",
     labelKey: "settingsCategoryModels",
     icon: "sliders-horizontal",
+  },
+  {
+    id: "skills",
+    labelKey: "settingsCategorySkills",
+    icon: "sparkles",
   },
 ];
 
@@ -193,6 +199,12 @@ export const SETTINGS_ENTRIES: SettingsEntry[] = [
     category: "models",
     labelKey: "chatModelsTitle",
     descriptionKey: "chatModelsHint",
+  },
+  {
+    id: "skills",
+    category: "skills",
+    labelKey: "settingsSkillsLibrary",
+    descriptionKey: "settingsSkillsHint",
   },
 ];
 

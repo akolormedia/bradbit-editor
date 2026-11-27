@@ -4,6 +4,8 @@ import {
   ByokProviderStatus,
   Language,
   SearchAiEffort,
+  SkillCatalog,
+  SkillDocument,
 } from "../types";
 import { COLOR_THEMES, ColorThemeId } from "../theme/palettes";
 import { createIcon } from "../ui/icons";
@@ -21,6 +23,7 @@ import {
 } from "./catalog";
 import { SearchAiModelOption } from "./searchAi";
 import { isSettingsCategoryVisible } from "./developer";
+import { SettingsSkillsState, SkillsBrowser } from "./skillsPanel";
 
 const TERMINAL_PRESETS = ["shell", "opencode", "claude"] as const;
 
@@ -43,11 +46,22 @@ export interface SettingsByokState {
   error: string;
 }
 
+export interface SettingsSkillsOptions {
+  catalog: SkillCatalog | null;
+  loading: boolean;
+  error: string;
+  state: SettingsSkillsState;
+  onChange: (patch: Partial<SettingsSkillsState>) => void;
+  onRefresh: () => void;
+  loadSkill: (path: string) => Promise<SkillDocument>;
+}
+
 export interface SettingsPanelOptions {
   language: Language;
   settings: AppSettings;
   github: SettingsGithubState;
   byok: SettingsByokState;
+  skills: SettingsSkillsOptions;
   searchAiModels: SearchAiModelOption[];
   searchAiDefaultModel: string;
   initialCategory: SettingsCategoryId;
@@ -290,6 +304,9 @@ export class SettingsPanel {
         break;
       case "models":
         this.renderModels(has);
+        break;
+      case "skills":
+        this.renderSkills();
         break;
     }
   }
@@ -790,6 +807,14 @@ export class SettingsPanel {
       );
     }
     if (has("byok")) this.renderByok();
+  }
+
+  private renderSkills(): void {
+    const browser = new SkillsBrowser({
+      language: this.options.language,
+      ...this.options.skills,
+    });
+    this.contentEl.appendChild(browser.element);
   }
 
   private renderSearchAiModel(): void {

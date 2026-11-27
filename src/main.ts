@@ -41,6 +41,7 @@ import {
   ProjectWorkspaceState,
   RecentProject,
   SearchMatch,
+  SkillCatalog,
   TemplateInfo,
   WelcomeProjectRequest,
   WelcomeTemplate,
@@ -121,6 +122,10 @@ import { GENERAL_COMMANDS, mergeGeneralCommands } from "./kit/generalCommands";
 import { SessionView, toggleSessionView } from "./session/sessionView";
 import { SettingsPanel } from "./settings/settingsPanel";
 import type { SettingsCategoryId } from "./settings/catalog";
+import {
+  DEFAULT_SKILLS_STATE,
+  SettingsSkillsState,
+} from "./settings/skillsPanel";
 import {
   byokProviderFromDraft,
   ByokDraft,
@@ -338,6 +343,11 @@ class BradbitApp {
   private modal: ModalState = { kind: "none" };
   private settingsCategory: SettingsCategoryId = "general";
   private settingsQuery = "";
+  private skillsCatalog: SkillCatalog | null = null;
+  private skillsLoading = false;
+  private skillsError = "";
+  private skillsState: SettingsSkillsState = { ...DEFAULT_SKILLS_STATE };
+  private skillsRequest = 0;
   private statusNotice = "";
   private gitStatus: GitStatus | null = null;
   private gitHistory: GitCommit[] = [];
@@ -1869,6 +1879,9 @@ class BradbitApp {
     this.githubTokenDraft = "";
     this.githubAccountError = "";
     this.render();
+    if (this.settingsCategory === "skills") {
+      void this.refreshSkills();
+    }
     void this.ensureGitHubAccount(true).then(() => {
       if (this.modal.kind === "settings") {
         this.render();
@@ -1880,6 +1893,46 @@ class BradbitApp {
           this.render();
         }
       });
+    }
+  }
+
+  private renderSettingsIfOpen(): void {
+    if (this.modal.kind === "settings" && this.settingsCategory === "skills") {
+      this.render();
+    }
+  }
+
+  /**
+   * Rebuilds the skills inventory for the open folder (or the global library
+   * when there is no folder). Stale requests are discarded so quickly
+   * switching projects never leaves an older catalog on screen.
+   */
+  private async refreshSkills(): Promise<void> {
+    const request = ++this.skillsRequest;
+    const root = this.folder?.rootPath ?? null;
+    this.skillsLoading = true;
+    this.skillsError = "";
+    this.renderSettingsIfOpen();
+    try {
+      const catalog = await backend.skillsList(root);
+      if (request !== this.skillsRequest) return;
+      this.skillsCatalog = catalog;
+      if (
+        this.skillsState.selectedPath &&
+        !catalog.skills.some(
+          (skill) => skill.path === this.skillsState.selectedPath,
+        )
+      ) {
+        this.skillsState = { ...this.skillsState, selectedPath: null };
+      }
+    } catch (error) {
+      if (request !== this.skillsRequest) return;
+      this.skillsError = error instanceof Error ? error.message : String(error);
+    } finally {
+      if (request === this.skillsRequest) {
+        this.skillsLoading = false;
+        this.renderSettingsIfOpen();
+      }
     }
   }
 
@@ -9009,6 +9062,18 @@ class BradbitApp {
           busyId: this.byokBusyId,
           error: this.byokError,
         },
+        skills: {
+          catalog: this.skillsCatalog,
+          loading: this.skillsLoading,
+          error: this.skillsError,
+          state: this.skillsState,
+          onChange: (patch) => {
+            this.skillsState = { ...this.skillsState, ...patch };
+          },
+          onRefresh: () => void this.refreshSkills(),
+          loadSkill: (path) =>
+            backend.skillsRead(this.folder?.rootPath ?? null, path),
+        },
         searchAiModels: buildSearchAiModelOptions(
           this.byokStatus,
           this.chatModels,
@@ -9020,6 +9085,9 @@ class BradbitApp {
         modalError: this.modal.error,
         onCategoryChange: (category) => {
           this.settingsCategory = category;
+          if (category === "skills") {
+            void this.refreshSkills();
+          }
         },
         onQueryChange: (query) => {
           this.settingsQuery = query;

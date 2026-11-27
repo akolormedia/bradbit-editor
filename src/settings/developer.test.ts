@@ -13,6 +13,7 @@ describe("developer options", () => {
     expect(isSettingsCategoryVisible("git", DEFAULT_SETTINGS)).toBe(false);
     expect(isSettingsCategoryVisible("general", DEFAULT_SETTINGS)).toBe(true);
     expect(isSettingsCategoryVisible("models", DEFAULT_SETTINGS)).toBe(true);
+    expect(isSettingsCategoryVisible("skills", DEFAULT_SETTINGS)).toBe(true);
 
     const developer = { ...DEFAULT_SETTINGS, showDeveloperOptions: true };
     expect(isSettingsCategoryVisible("terminal", developer)).toBe(true);

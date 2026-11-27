@@ -17,6 +17,7 @@ describe("settings catalog (T-2.4.4)", () => {
       "git",
       "github",
       "models",
+      "skills",
     ]);
     expect(new Set(SETTINGS_CATEGORIES.map((category) => category.id)).size).toBe(
       SETTINGS_CATEGORIES.length,
@@ -46,6 +47,7 @@ describe("settings catalog (T-2.4.4)", () => {
       "searchAiModel",
       "searchAiEffort",
       "models",
+      "skills",
     ]) {
       expect(ids).toContain(id);
     }
@@ -63,6 +65,7 @@ describe("settings catalog (T-2.4.4)", () => {
     expect(matchingCategoryIds("es", "autor")).toEqual(["git"]);
     expect(matchingCategoryIds("es", "token")).toEqual(["github"]);
     expect(matchingCategoryIds("es", "modelo")).toEqual(["models"]);
+    expect(matchingCategoryIds("es", "skill")).toEqual(["skills"]);
     expect(matchingCategoryIds("es", "")).toEqual(
       SETTINGS_CATEGORIES.map((category) => category.id),
     );

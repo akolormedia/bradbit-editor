@@ -2,6 +2,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { DEFAULT_SETTINGS } from "../workspace/state";
 import { SettingsPanel, SettingsPanelOptions } from "./settingsPanel";
+import { DEFAULT_SKILLS_STATE } from "./skillsPanel";
 
 function options(
   overrides: Partial<SettingsPanelOptions> = {},
@@ -21,6 +22,15 @@ function options(
       keyDrafts: {},
       busyId: null,
       error: "",
+    },
+    skills: {
+      catalog: { skills: [], warnings: [] },
+      loading: false,
+      error: "",
+      state: { ...DEFAULT_SKILLS_STATE },
+      onChange: vi.fn(),
+      onRefresh: vi.fn(),
+      loadSkill: vi.fn(),
     },
     searchAiModels: [],
     searchAiDefaultModel: "DeepSeek · DeepSeek Flash",
@@ -61,7 +71,7 @@ describe("settings panel (T-2.4.4)", () => {
     const panel = mount(options());
     expect(
       panel.element.querySelectorAll(".settings-nav-item"),
-    ).toHaveLength(5);
+    ).toHaveLength(6);
     expect(
       panel.element.querySelector('[data-testid="settings-language"]'),
     ).not.toBeNull();
@@ -190,12 +200,26 @@ describe("settings panel (T-2.4.4)", () => {
     );
     expect(
       visible.element.querySelectorAll(".settings-nav-item"),
-    ).toHaveLength(8);
+    ).toHaveLength(9);
     expect(
       visible.element.querySelector('[data-testid="settings-nav-terminal"]'),
     ).not.toBeNull();
     expect(
       visible.element.querySelector('[data-testid="settings-nav-git"]'),
+    ).not.toBeNull();
+  });
+
+  it("renders the read-only skills inventory", () => {
+    const panel = mount(options({ initialCategory: "skills" }));
+    expect(panel.element.querySelector("h4")?.textContent).toBe("Skills");
+    expect(
+      panel.element.querySelector('[data-testid="settings-skills"]'),
+    ).not.toBeNull();
+    expect(
+      panel.element.querySelector('[data-testid="skills-search"]'),
+    ).not.toBeNull();
+    expect(
+      panel.element.querySelector('[data-testid="skills-empty"]'),
     ).not.toBeNull();
   });
 
