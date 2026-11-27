@@ -110,7 +110,10 @@ import {
   ToolFileActivity,
 } from "./session/toolFiles";
 import { readPartialJsonString } from "./session/partialJson";
-import { revealLiveWriteContent } from "./session/liveWrite";
+import {
+  applyLiveEdit,
+  revealLiveWriteContent,
+} from "./session/liveWrite";
 import { matchesKitCommand } from "./kit/localize";
 import { configFilesVisible, effectiveGitAuthor } from "./settings/developer";
 import { GENERAL_COMMANDS, mergeGeneralCommands } from "./kit/generalCommands";
@@ -375,10 +378,16 @@ class BradbitApp {
   private liveWrite: {
     sessionId: string;
     toolId: string;
+    mode: "write" | "edit";
     path: string | null;
     raw: string;
     content: string;
     revealed: string;
+    revealedNewString: number;
+    oldString: string;
+    newString: string;
+    replaceAll: boolean;
+    opening: boolean;
     pendingCompletion: boolean;
     originalContent: string;
     originalSavedContent: string;
@@ -3595,7 +3604,11 @@ class BradbitApp {
     }
   }
 
-  private startLiveWrite(sessionId: string, toolId: string): void {
+  private startLiveWrite(
+    sessionId: string,
+    toolId: string,
+    mode: "write" | "edit",
+  ): void {
     if (this.liveWrite && this.liveWrite.toolId !== toolId) {
       this.liveWrite.revealed = this.liveWrite.content;
       this.liveWrite.pendingCompletion = true;
@@ -3605,10 +3618,16 @@ class BradbitApp {
     this.liveWrite = {
       sessionId,
       toolId,
+      mode,
       path: null,
       raw: "",
       content: "",
       revealed: "",
+      revealedNewString: 0,
+      oldString: "",
+      newString: "",
+      replaceAll: false,
+      opening: false,
       pendingCompletion: false,
       originalContent: "",
       originalSavedContent: "",
@@ -3634,6 +3653,7 @@ class BradbitApp {
   private applyLiveWriteRaw(
     live: NonNullable<BradbitApp["liveWrite"]>,
   ): void {
+    if (live.mode === "edit") return;
     if (!live.path) {
       const path = readPartialJsonString(live.raw, "path");
       if (path) {
@@ -3656,6 +3676,23 @@ class BradbitApp {
       input && typeof input === "object" && !Array.isArray(input)
         ? (input as Record<string, unknown>)
         : {};
+    if (live.mode === "edit") {
+      const path = typeof data.path === "string" ? data.path : "";
+      const oldString =
+        typeof data.oldString === "string" ? data.oldString : "";
+      const newString =
+        typeof data.newString === "string" ? data.newString : "";
+      if (path && oldString) {
+        void this.openLiveEdit(
+          live,
+          path,
+          oldString,
+          newString,
+          data.replaceAll === true,
+        );
+      }
+      return;
+    }
     if (typeof data.content === "string") live.content = data.content;
     live.raw = "";
     if (typeof data.path === "string" && !live.path) {
@@ -3722,6 +3759,106 @@ class BradbitApp {
     this.render();
   }
 
+  private async openLiveEdit(
+    live: NonNullable<BradbitApp["liveWrite"]>,
+    rawPath: string,
+    oldString: string,
+    newString: string,
+    replaceAll: boolean,
+  ): Promise<void> {
+    if (!this.folder || this.versionOpen || !this.settings.followActiveFile) {
+      return;
+    }
+    if (live.path || live.opening) return;
+    const relative = projectRelativePath(this.folder.rootPath, rawPath);
+    if (!relative) return;
+    live.opening = true;
+    live.path = relative;
+    const root = this.folder.rootPath;
+    const existing = this.tabState.tabs.find(
+      (tab) => tab.path === relative,
+    );
+    if (existing && isTabDirty(existing)) {
+      live.opening = false;
+      this.liveWrite = null;
+      this.showStatusNotice(
+        t(this.settings.language, "chatFileUnsaved", { path: relative }),
+      );
+      return;
+    }
+    let original = existing?.content ?? "";
+    if (!existing) {
+      try {
+        original = await backend.readTextFile(root, relative);
+      } catch {
+        original = "";
+      }
+    }
+    if (this.liveWrite !== live || !this.folder || this.folder.rootPath !== root) {
+      live.opening = false;
+      return;
+    }
+    live.opening = false;
+    live.oldString = oldString;
+    live.newString = newString;
+    live.replaceAll = replaceAll;
+    live.originalContent = original;
+    live.originalSavedContent = existing?.savedContent ?? original;
+    live.originalViewMode = existing?.viewMode ?? "edit";
+    live.wasOpen = Boolean(existing);
+    live.previousActivePath = this.tabState.activeTabPath;
+    live.content = applyLiveEdit(original, oldString, newString, replaceAll);
+    live.revealedNewString = 0;
+    live.revealed = newString.length === 0 ? live.content : original;
+
+    if (existing) {
+      this.tabState = {
+        ...this.tabState,
+        activeTabPath: relative,
+        tabs: this.tabState.tabs.map((tab) =>
+          tab.path === relative
+            ? {
+                ...tab,
+                content: live.revealed,
+                savedContent: live.revealed,
+                livePreview: true,
+                preview: false,
+                viewMode: "edit",
+              }
+            : tab,
+        ),
+      };
+    } else {
+      this.tabState = openFileInTabs(
+        this.tabState,
+        {
+          path: relative,
+          name: this.fileName(relative),
+          content: live.revealed,
+        },
+        true,
+      );
+      this.tabState = {
+        ...this.tabState,
+        tabs: this.tabState.tabs.map((tab) =>
+          tab.path === relative
+            ? { ...tab, livePreview: true, viewMode: "edit" }
+            : tab,
+        ),
+      };
+    }
+    this.render();
+    this.editor?.setGitOriginal(relative, original);
+    if (newString.length > 0) {
+      const index = original.indexOf(oldString);
+      if (index >= 0) this.editor?.scrollToIndex(index);
+    }
+    this.scheduleLiveWriteAnimation();
+    if (live.pendingCompletion && live.revealed === live.content) {
+      void this.completeLiveWrite();
+    }
+  }
+
   private scheduleLiveWriteAnimation(): void {
     if (this.liveWriteFrame !== null) return;
     const step = () => {
@@ -3737,6 +3874,31 @@ class BradbitApp {
   private advanceLiveWrite(): void {
     const live = this.liveWrite;
     if (!live?.path) return;
+    if (live.mode === "edit") {
+      const total = live.newString.length;
+      if (live.revealedNewString < total) {
+        const chunk = Math.max(4, Math.ceil(total / 120));
+        live.revealedNewString = Math.min(
+          total,
+          live.revealedNewString + chunk,
+        );
+        live.revealed = applyLiveEdit(
+          live.originalContent,
+          live.oldString,
+          live.newString.slice(0, live.revealedNewString),
+          live.replaceAll,
+        );
+        this.updateLiveWritePreview(live);
+      }
+      if (live.revealedNewString < total) {
+        this.scheduleLiveWriteAnimation();
+        return;
+      }
+      if (live.pendingCompletion) {
+        void this.completeLiveWrite();
+      }
+      return;
+    }
     const target = live.content;
     if (!target.startsWith(live.revealed)) {
       live.revealed = "";
@@ -3784,6 +3946,12 @@ class BradbitApp {
     }
     if (this.tabState.activeTabPath === live.path) {
       this.editor?.updateLivePreview(live.path, live.revealed);
+      if (live.mode === "edit") {
+        const index = live.originalContent.indexOf(live.oldString);
+        if (index >= 0) {
+          this.editor?.scrollToIndex(index + live.revealedNewString);
+        }
+      }
     }
   }
 
@@ -3799,7 +3967,12 @@ class BradbitApp {
 
   private async completeLiveWrite(): Promise<void> {
     const live = this.liveWrite;
-    if (!live?.path) {
+    if (!live) return;
+    if (live.opening) {
+      live.pendingCompletion = true;
+      return;
+    }
+    if (!live.path) {
       this.clearLiveWriteFrame();
       this.liveWrite = null;
       return;
@@ -4000,14 +4173,22 @@ class BradbitApp {
     if (!targetId || !this.chatSessions.has(targetId)) return;
 
     if (event.type === "session.tool.input.delta") {
-      if (targetId === this.activeChatSessionId) {
-        const toolId = typeof data.id === "string" ? data.id : "";
-        const delta = typeof data.delta === "string" ? data.delta : "";
-        if (toolId && delta) {
+      if (targetId !== this.activeChatSessionId) return;
+      const toolId = typeof data.id === "string" ? data.id : "";
+      const delta = typeof data.delta === "string" ? data.delta : "";
+      if (!toolId || !delta) return;
+      const current = this.chatSessions.get(targetId)!;
+      const toolPart = current.messages
+        .flatMap((message) => message.parts)
+        .find(
+          (part) => part.type === "tool" && part.tool.id === toolId,
+        );
+      if (toolPart?.type !== "tool" || toolPart.tool.name !== "patch") {
+        if (toolPart?.type === "tool" && toolPart.tool.name === "write") {
           this.appendLiveWriteDelta(targetId, toolId, delta);
         }
+        return;
       }
-      return;
     }
 
     const previous = this.chatSessions.get(targetId)!;
@@ -4041,12 +4222,18 @@ class BradbitApp {
           (event.type === "session.tool.input.started" ||
             event.type === "session.tool.input.ended" ||
             event.type === "session.tool.called") &&
-          toolPart.tool.name === "write" &&
-          !this.liveWrite &&
+          (toolPart.tool.name === "write" ||
+            toolPart.tool.name === "edit") &&
+          (!this.liveWrite ||
+            this.liveWrite.toolId !== toolPart.tool.id) &&
           this.settings.followActiveFile &&
           !this.versionOpen
         ) {
-          this.startLiveWrite(targetId, toolPart.tool.id);
+          this.startLiveWrite(
+            targetId,
+            toolPart.tool.id,
+            toolPart.tool.name === "edit" ? "edit" : "write",
+          );
         }
         if (this.liveWrite?.toolId === toolPart.tool.id) {
           if (
@@ -6209,7 +6396,21 @@ class BradbitApp {
               activeTab.path,
               activeTab.content,
               this.settings,
+              { scrollToEnd: this.liveWrite?.mode !== "edit" },
             );
+            if (
+              this.liveWrite?.mode === "edit" &&
+              this.liveWrite.path === activeTab.path
+            ) {
+              const index = this.liveWrite.originalContent.indexOf(
+                this.liveWrite.oldString,
+              );
+              if (index >= 0) {
+                this.editor.scrollToIndex(
+                  index + this.liveWrite.revealedNewString,
+                );
+              }
+            }
           }
         } else {
           this.editor.openDocument(

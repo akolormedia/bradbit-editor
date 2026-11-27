@@ -14,3 +14,20 @@ export function revealLiveWriteContent(
   const chunk = Math.max(4, Math.ceil(target.length / 120));
   return target.slice(0, Math.min(target.length, revealed.length + chunk));
 }
+
+
+/** Applies the edit tool's old/new text to the pre-edit file content. */
+export function applyLiveEdit(
+  original: string,
+  oldString: string,
+  newString: string,
+  replaceAll: boolean,
+): string {
+  if (!oldString) return original;
+  if (replaceAll) return original.split(oldString).join(newString);
+  const index = original.indexOf(oldString);
+  if (index < 0) return original;
+  return (
+    original.slice(0, index) + newString + original.slice(index + oldString.length)
+  );
+}

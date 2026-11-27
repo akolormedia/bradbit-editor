@@ -26,6 +26,8 @@ export interface ChatToolCall {
   name: string;
   status: "streaming" | "running" | "completed" | "error";
   input: unknown;
+  /** Raw JSON fragments while a tool input is streaming (patch previews). */
+  partialInput?: string;
   output: string;
   error: string;
   executed: boolean;
@@ -449,7 +451,7 @@ function upsertTextPart(
 function toolFromEvent(data: Record<string, unknown>): ChatToolCall | null {
   const raw = data.tool;
   if (!raw || typeof raw !== "object") return null;
-  const tool = raw as Partial<OpenCodeToolCall>;
+  const tool = raw as Partial<ChatToolCall>;
   if (!textOf(tool.id)) return null;
   return {
     id: textOf(tool.id),
@@ -462,6 +464,7 @@ function toolFromEvent(data: Record<string, unknown>): ChatToolCall | null {
         ? tool.status
         : "running",
     input: tool.input ?? null,
+    partialInput: textOf(tool.partialInput) || undefined,
     output: textOf(tool.output),
     error: textOf(tool.error),
     executed: Boolean(tool.executed),
@@ -478,6 +481,38 @@ function toolFromEvent(data: Record<string, unknown>): ChatToolCall | null {
         )
       : [],
   };
+}
+
+function appendToolInputDelta(
+  state: ChatState,
+  data: Record<string, unknown>,
+): ChatState {
+  const id = textOf(data.id);
+  const delta = textOf(data.delta);
+  if (!id || !delta) return state;
+  const assistantID = assistantIDOf(state, data);
+  const located = findOrCreateAssistant(state, assistantID);
+  const message = located.state.messages[located.index];
+  const toolIndex = message.parts.findIndex(
+    (part) => part.type === "tool" && part.tool.id === id,
+  );
+  if (toolIndex === -1) return state;
+  const parts = message.parts.map((part, index) => {
+    if (index !== toolIndex || part.type !== "tool") return part;
+    if (part.tool.name !== "patch") return part;
+    return {
+      type: "tool" as const,
+      tool: {
+        ...part.tool,
+        partialInput: `${part.tool.partialInput ?? ""}${delta}`,
+      },
+    };
+  });
+  return replaceMessage(located.state, located.index, {
+    ...message,
+    parts,
+    streaming: true,
+  });
 }
 
 function upsertToolPart(
@@ -509,6 +544,8 @@ function upsertToolPart(
             incoming.input === null || incoming.input === undefined
               ? part.tool.input
               : incoming.input,
+          partialInput:
+            incoming.partialInput ?? part.tool.partialInput,
           output: incoming.output || part.tool.output,
           error: incoming.error || part.tool.error,
           executed: incoming.executed || part.tool.executed,
@@ -718,6 +755,9 @@ export function applyOpenCodeEvent(
 
     case "session.text.ended":
       return upsertTextPart(state, data, "ended", textOf(data.text));
+
+    case "session.tool.input.delta":
+      return appendToolInputDelta(state, data);
 
     case "session.tool.input.started":
     case "session.tool.input.ended":

@@ -312,6 +312,48 @@ describe("chat tools and permissions (T-2.1.3)", () => {
     });
   });
 
+  it("accumulates streamed patch text while the tool input arrives", () => {
+    let state = appendUserMessage(ready(), "Aplica el parche");
+    state = applyOpenCodeEvent(state, {
+      type: "session.tool.input.started",
+      data: {
+        sessionID: "ses_test",
+        assistantMessageID: "msg_patch",
+        tool: {
+          id: "tool_patch",
+          name: "patch",
+          status: "streaming",
+          input: null,
+          output: "",
+          error: "",
+          executed: false,
+          files: [],
+        },
+      },
+    });
+    for (const delta of ["*** Begin Patch\n", "*** Update File: cap.md\n"]) {
+      state = applyOpenCodeEvent(state, {
+        type: "session.tool.input.delta",
+        data: {
+          sessionID: "ses_test",
+          assistantMessageID: "msg_patch",
+          id: "tool_patch",
+          delta,
+        },
+      });
+    }
+    const tool = state.messages
+      .flatMap((message) => message.parts)
+      .find((part) => part.type === "tool" && part.tool.id === "tool_patch");
+    expect(tool).toMatchObject({
+      type: "tool",
+      tool: {
+        name: "patch",
+        partialInput: "*** Begin Patch\n*** Update File: cap.md\n",
+      },
+    });
+  });
+
   it("keeps the chosen answers of question tool calls", () => {
     let state = appendUserMessage(ready(), "Pregunta");
     state = applyOpenCodeEvent(state, {

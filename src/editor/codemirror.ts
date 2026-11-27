@@ -294,6 +294,7 @@ export class BradbitCodeMirror {
   private readOnlyCompartment = new Compartment();
   private livePreviewPath: string | null = null;
   private livePreviewUpdating = false;
+  private liveScrollToEnd = true;
 
   constructor(
     private parent: HTMLElement,
@@ -360,11 +361,13 @@ export class BradbitCodeMirror {
     path: string,
     content: string,
     settings: AppSettings,
+    options?: { scrollToEnd?: boolean },
   ): void {
     this.livePreviewPath = path;
+    this.liveScrollToEnd = options?.scrollToEnd ?? true;
     this.openDocument(path, content, settings);
     this.applyReadOnly(true);
-    this.scrollPreviewToEnd();
+    if (this.liveScrollToEnd) this.scrollPreviewToEnd();
   }
 
   public isLivePreview(path: string): boolean {
@@ -387,7 +390,19 @@ export class BradbitCodeMirror {
       annotations: Transaction.addToHistory.of(false),
     });
     this.livePreviewUpdating = false;
-    this.scrollPreviewToEnd();
+    if (this.gitOriginals.has(path)) this.scheduleInlineDiff();
+    if (this.liveScrollToEnd) this.scrollPreviewToEnd();
+  }
+
+  public scrollToIndex(index: number): void {
+    if (!this.view) return;
+    const position = Math.max(
+      0,
+      Math.min(index, this.view.state.doc.length),
+    );
+    this.view.dispatch({
+      effects: EditorView.scrollIntoView(position, { y: "center" }),
+    });
   }
 
   public finishLivePreview(
@@ -397,6 +412,7 @@ export class BradbitCodeMirror {
   ): void {
     if (this.livePreviewPath === path) this.livePreviewPath = null;
     this.livePreviewUpdating = false;
+    this.liveScrollToEnd = true;
     if (this.currentPath === path) {
       this.openDocument(path, content, settings);
       this.applyReadOnly(false);
